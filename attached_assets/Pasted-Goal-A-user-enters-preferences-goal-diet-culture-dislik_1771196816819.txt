@@ -1,0 +1,223 @@
+Goal
+
+A user enters preferences (goal, diet/culture, dislikes, household size, prep style, budget mode, cooking time). The app generates a 7-day meal plan (3 meals/day) with step-by-step cooking instructions for every meal and a single grocery list for the week. Almost all output should come from OpenAI gpt-4.1-mini.
+
+Tech Stack
+
+Frontend: React + Vite (TypeScript)
+
+Backend: Express (TypeScript)
+
+Database: SQLite using Prisma (so we can deploy easily)
+
+Styling: simple clean UI (Tailwind if available; otherwise plain CSS)
+
+Do not put OpenAI calls in the browser; all AI calls must be server-side.
+
+Key Requirements
+
+Auth
+
+MVP-simple email/password auth (can be basic).
+
+Store user account + their generated plans.
+
+Core Pages
+
+/ Landing page (simple)
+
+/login and /signup
+
+/new-plan Preference form
+
+/plan/:id View generated plan nicely (7 days, 3 meals/day, each meal has steps, plus grocery list)
+
+Include buttons:
+
+“Regenerate Day” (regenerates only that day)
+
+“Swap Meal” (regenerate only that meal: breakfast/lunch/dinner on a chosen day)
+
+“Regenerate Grocery List” (rebuild list from saved meals; no AI if possible)
+
+“Export to PDF” (server-side or client-side; simple printable view is acceptable for MVP)
+
+Caching + Cost Control
+
+When a plan is generated, store the full JSON output in the DB.
+
+Re-opening a plan must never call OpenAI again.
+
+Enforce limits per user per plan:
+
+Max 3 swaps per plan
+
+Max 1 regenerate-day per plan
+
+Store counts in DB.
+
+Add basic rate limiting per user (e.g., 10 AI calls/day).
+
+OpenAI Integration
+
+Use an environment secret OPENAI_API_KEY.
+
+Use model: gpt-4.1-mini.
+
+Use structured output:
+
+The model must return JSON only.
+
+Validate JSON server-side using Zod (or similar). If invalid, retry once with a repair prompt.
+
+If OpenAI fails, show a helpful error state in the UI.
+
+Data Model (Prisma)
+
+Create these tables:
+
+User: id, email, passwordHash, createdAt
+
+MealPlan: id, userId, createdAt, preferencesJson, planJson, swapCount, regenDayCount
+
+MealPlanDay: id, mealPlanId, dayIndex(1-7), dayJson (optional but helpful)
+Optional:
+
+AuditLog: id, userId, action, createdAt, metaJson (for debugging)
+
+Preference Form Fields
+
+goal: (fat_loss | muscle_gain | energy | maintenance | performance)
+
+dietStyle: free text + common options (Nigerian, Vegetarian, Mediterranean, etc.)
+
+foodsToAvoid: checkbox list + free text
+
+householdSize: integer 1–8
+
+prepStyle: (cook_daily | batch_2day | batch_3to4day)
+
+budgetMode: (normal | budget_friendly)
+
+cookingTime: (quick | normal)
+
+allergies: free text (optional)
+
+Output JSON Contract
+
+The OpenAI response for full plan MUST match this shape:
+
+title: string
+
+summary: string (2–4 sentences, practical)
+
+preferencesEcho: object (copy of normalized preferences)
+
+days: array of 7 items
+
+dayIndex: 1–7
+
+dayName: string (e.g., "Day 1")
+
+meals: object
+
+breakfast: meal object
+
+lunch: meal object
+
+dinner: meal object
+
+groceryList:
+
+sections: array
+
+name: string (Produce, Pantry, Protein, Spices, etc.)
+
+items: array
+
+item: string
+
+quantity: string (human readable)
+
+notes: string (optional)
+
+batchPrepPlan: optional object (only if prepStyle is batch)
+
+prepDay: string
+
+steps: array of strings
+
+storageTips: array of strings
+
+nutritionNotes:
+
+dailyMacroTargetsRange: { calories: string, protein_g: string, carbs_g: string, fat_g: string }
+
+howThisSupportsGoal: array of strings
+
+Meal object shape:
+
+name: string
+
+cuisineTag: string (e.g., Nigerian)
+
+prepTimeMinutes: number
+
+servings: number (scaled to householdSize)
+
+ingredients: array of strings
+
+steps: array of strings (5–10 steps max)
+
+nutritionEstimateRange: { calories: string, protein_g: string, carbs_g: string, fat_g: string }
+
+whyItHelpsGoal: string (1–2 sentences)
+
+Prompting Rules (Very Important)
+
+Always respect foodsToAvoid and allergies.
+
+Keep ingredients realistic and accessible.
+
+Budget mode should reduce specialty ingredients and keep meals simple.
+
+Family mode (householdSize > 2) should avoid overly spicy options by default, unless dietStyle explicitly implies spice.
+
+Return JSON only. No markdown. No commentary.
+
+API Endpoints
+
+POST /api/plan → generate full 7-day plan via OpenAI and store it
+
+POST /api/plan/:id/swap → swap a single meal (dayIndex + mealType). Only regenerate that meal using OpenAI.
+
+POST /api/plan/:id/regenerate-day → regenerate day meals using OpenAI.
+
+POST /api/plan/:id/grocery/regenerate → rebuild grocery list from saved meals (no OpenAI if feasible)
+
+GET /api/plan/:id → fetch saved plan
+
+GET /api/plans → list user plans
+
+UI Expectations
+
+Clean, readable layout.
+
+Week view: show Day 1–7 with 3 meals each.
+
+Clicking a meal expands to show ingredients + steps + nutrition.
+
+Grocery list grouped by section with checkboxes.
+
+Add “Print” friendly CSS for PDF export if actual PDF generation is too much for MVP.
+
+Delivery
+
+Implement everything in the Replit project so it runs and deploys.
+Include a short README with:
+
+how to set OPENAI_API_KEY
+
+how to run dev server
+
+how to deploy
