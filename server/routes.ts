@@ -58,7 +58,13 @@ export async function registerRoutes(
       const user = await storage.createUser(parsed.data.email, passwordHash);
 
       req.session.userId = user.id;
-      return res.json({ id: user.id, email: user.email });
+      req.session.save((err) => {
+        if (err) {
+          log(`Session save error on signup: ${err}`, "auth");
+          return res.status(500).json({ message: "Internal server error" });
+        }
+        return res.json({ id: user.id, email: user.email });
+      });
     } catch (err) {
       log(`Signup error: ${err}`, "auth");
       return res.status(500).json({ message: "Internal server error" });
@@ -83,7 +89,13 @@ export async function registerRoutes(
       }
 
       req.session.userId = user.id;
-      return res.json({ id: user.id, email: user.email });
+      req.session.save((err) => {
+        if (err) {
+          log(`Session save error on login: ${err}`, "auth");
+          return res.status(500).json({ message: "Internal server error" });
+        }
+        return res.json({ id: user.id, email: user.email });
+      });
     } catch (err) {
       log(`Login error: ${err}`, "auth");
       return res.status(500).json({ message: "Internal server error" });
