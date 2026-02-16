@@ -1,0 +1,131 @@
+Calendar Upgrade: True Month + Week Views (All meals visible), Workout Days as Day-of-Week (Used in plan)
+1) Workout Days: replace 0–7 with day-of-week selector AND use it in plan generation
+
+UI change
+
+Replace Workout Days Per Week (0–7) with a multi-select day picker:
+
+Sun Mon Tue Wed Thu Fri Sat (chips/buttons)
+
+Persist as workoutDays: ("Sun"|"Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat")[]
+
+Remove / deprecate workoutDaysPerWeek.
+
+For old saved prefs, migrate: if workoutDaysPerWeek exists and workoutDays missing, auto-fill a default pattern (e.g., Mon/Wed/Fri for 3, Tue/Thu/Sat for 3 alternative, etc.) but allow user to edit.
+
+Generation logic (required)
+
+The meal plan must explicitly consider workout days:
+
+On workout days: bias toward higher protein + higher carbs around the day (not medical, just “fuel/recovery-friendly”).
+
+On rest days: slightly lighter carbs or more veggies/fats depending on goal.
+
+For weight loss: still keep within calorie range; for muscle gain/performance: include adequate carbs on workout days.
+
+Add a short “Fueling logic” line in the rationale (collapsed section):
+
+Example: “Higher-carb dinners on Mon/Wed/Fri to support training recovery.”
+
+2) Calendar: rename “Agenda” to “Week View” and design it like the screenshot (entire week visible at once)
+
+Navigation
+
+Calendar page has two tabs:
+
+Month
+
+Week (NOT “Agenda”)
+
+Week View layout requirements (match screenshot style)
+
+Show the full week on one screen:
+
+Left side: day badges (e.g., 25 Sun, 26 Mon…) vertically
+
+Main area: 3 columns (Breakfast / Lunch / Dinner) (or only selected mealSlots)
+
+Each row = a day
+
+Meal titles must use small, compact font and truncated lines so the whole week remains visible.
+
+Each meal cell shows:
+
+meal title (tiny)
+
+optional 👍/👎 icon if liked/disliked (tiny, right side)
+
+If mealsPerDay=2 with selected slots, only render those columns (e.g., Breakfast + Dinner).
+
+Week navigation
+
+Buttons to go previous/next week
+
+A small date range label (e.g., “Jan 25 – Jan 31”)
+
+3) Month View layout requirements (all month visible with meals inside days)
+
+The month view must prioritize “see the whole month + meals in the cells” like screenshot:
+
+7-column grid with the full month visible (no scrolling needed on mobile beyond normal page)
+
+Each day cell can display up to 3 lines:
+
+B: <short title>
+
+L: <short title>
+
+D: <short title>
+(Use tiny font + truncation)
+
+If more content, show “+1” indicator.
+
+Tapping a day opens a bottom sheet modal with full meal titles and actions.
+
+Start of week setting
+
+Add a settings modal (gear icon) on Calendar page:
+
+Start of week: Sunday or Monday (persist per user)
+
+(Public holidays toggle can remain a placeholder)
+
+4) Plan start date (required for calendar correctness)
+
+Add planStartDate to MealPlan.
+
+Calendar page must include “Start plan on:” date picker.
+
+Changing this updates the plan mapping immediately (API patch) and re-renders Month/Week views.
+
+API:
+
+PATCH /api/plans/:id/start-date { startDate }
+
+GET /api/plans/:id/calendar?view=month|week&weekStart=Sun|Mon
+
+Mapping:
+
+Day 1..7 map to consecutive dates starting at planStartDate.
+
+For month view, display meals on their mapped dates; other days empty.
+
+5) Performance + usability
+
+Calendar loads fast: precompute calendar mapping server-side.
+
+In week view, keep the entire week visible without heavy scrolling.
+
+Use CSS that prioritizes density (tiny font, compact padding) to match the reference UI.
+
+Acceptance tests
+
+Workout days selector shows day chips and saves to preferencesJson.
+
+Generated plan rationale references the workout days.
+
+Week View shows all 7 days and all meals in one screen (dense layout).
+
+Month View shows the full month with meal lines inside day cells (dense layout).
+
+Start plan on date changes the mapping and updates both views.

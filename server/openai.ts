@@ -102,7 +102,12 @@ function buildPersonalizationBlock(prefs: Preferences): string {
   if (prefs.targetWeight) {
     parts.push(`Target Weight: ${prefs.targetWeight} ${prefs.weightUnit || "lb"}`);
   }
-  if (prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek !== null) {
+  const workoutDays = prefs.workoutDays || [];
+  const workoutCount = workoutDays.length || prefs.workoutDaysPerWeek || 0;
+
+  if (workoutDays.length > 0) {
+    parts.push(`Workout Days: ${workoutDays.join(", ")}`);
+  } else if (prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek !== null) {
     parts.push(`Workout Days/Week: ${prefs.workoutDaysPerWeek}`);
   }
 
@@ -112,9 +117,22 @@ function buildPersonalizationBlock(prefs: Preferences): string {
   block += `\n\nADAPTATION GUIDELINES:`;
   block += `\n- Adjust portion sizes and macro ranges based on the user's weight, goal, and activity level.`;
 
-  if (prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek >= 4) {
-    block += `\n- This user is active (${prefs.workoutDaysPerWeek} workout days/week). Increase protein portions and overall calories slightly.`;
-  } else if (prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek <= 1) {
+  if (workoutDays.length > 0) {
+    const dayMap: Record<string, number> = { Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6, Sat: 7 };
+    const workoutDayIndices = workoutDays.map(d => dayMap[d]).filter(Boolean);
+    block += `\n\nWORKOUT-DAY FUELING LOGIC:`;
+    block += `\n- The user works out on: ${workoutDays.join(", ")} (Day indices: ${workoutDayIndices.join(", ")}).`;
+    block += `\n- On workout days (${workoutDays.join("/")}): bias toward higher protein and slightly higher carbs to support training and recovery. Include carb-rich sides or grains, and ensure adequate protein in every meal.`;
+    block += `\n- On rest days: slightly lighter carbs, emphasize vegetables, healthy fats, and lean proteins. Keep within the calorie range for the user's goal.`;
+    if (prefs.goal === "weight_loss") {
+      block += `\n- For weight loss: still keep within calorie range on all days. On workout days, shift macros toward more carbs/protein rather than adding extra calories.`;
+    } else if (prefs.goal === "muscle_gain" || prefs.goal === "performance") {
+      block += `\n- For ${prefs.goal}: include adequate carbs on workout days to fuel performance and recovery. Post-workout friendly meals encouraged.`;
+    }
+    block += `\n- In whyItHelpsGoal for workout-day meals, briefly mention the fueling rationale (e.g., "Higher-carb dinner to support training recovery").`;
+  } else if (workoutCount >= 4) {
+    block += `\n- This user is active (${workoutCount} workout days/week). Increase protein portions and overall calories slightly.`;
+  } else if (workoutCount <= 1 && workoutCount >= 0 && prefs.workoutDaysPerWeek !== undefined) {
     block += `\n- This user is mostly sedentary. Keep portions moderate and focus on nutrient-dense foods.`;
   }
 

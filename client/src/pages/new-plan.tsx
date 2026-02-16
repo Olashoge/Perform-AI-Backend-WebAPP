@@ -60,6 +60,7 @@ export default function NewPlan() {
       targetWeight: undefined,
       weightUnit: "lb",
       workoutDaysPerWeek: undefined,
+      workoutDays: undefined,
       spiceLevel: "medium",
       authenticityMode: "mixed",
     },
@@ -71,6 +72,10 @@ export default function NewPlan() {
     submittedRef.current = true;
     setIsPending(true);
     const idempotencyKey = crypto.randomUUID();
+
+    if (data.workoutDays && data.workoutDays.length > 0) {
+      data.workoutDaysPerWeek = data.workoutDays.length;
+    }
 
     try {
       const res = await apiRequest("POST", "/api/plan", { ...data, idempotencyKey });
@@ -514,24 +519,36 @@ export default function NewPlan() {
 
                 <FormField
                   control={form.control}
-                  name="workoutDaysPerWeek"
+                  name="workoutDays"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Workout Days Per Week (optional)</FormLabel>
+                      <FormLabel>Workout Days (optional)</FormLabel>
+                      <FormDescription>Select the days you work out</FormDescription>
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
-                          <Button
-                            key={n}
-                            type="button"
-                            variant={field.value === n ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => field.onChange(field.value === n ? undefined : n)}
-                            disabled={isPending}
-                            data-testid={`button-workout-${n}`}
-                          >
-                            {n}
-                          </Button>
-                        ))}
+                        {(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const).map((day) => {
+                          const selected = (field.value || []).includes(day);
+                          return (
+                            <Button
+                              key={day}
+                              type="button"
+                              variant={selected ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                const current = field.value || [];
+                                if (selected) {
+                                  const next = current.filter((d: string) => d !== day);
+                                  field.onChange(next.length > 0 ? next : undefined);
+                                } else {
+                                  field.onChange([...current, day]);
+                                }
+                              }}
+                              disabled={isPending}
+                              data-testid={`button-workout-${day.toLowerCase()}`}
+                            >
+                              {day}
+                            </Button>
+                          );
+                        })}
                       </div>
                       <FormMessage />
                     </FormItem>

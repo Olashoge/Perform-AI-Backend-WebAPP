@@ -24,7 +24,7 @@ client/src/
     plan-view.tsx  - View generated plan (meals + grocery list)
     plans-list.tsx - List of user's saved plans
     preferences.tsx - Manage liked/disliked meals and ingredient preferences
-    plan-calendar.tsx - Calendar view (month + agenda) with date picker, plan selector, feedback icons
+    plan-calendar.tsx - Calendar view (dense month + week) with date picker, plan selector, feedback icons, settings modal
 
 server/
   index.ts         - Express server setup (connect-pg-simple session store)
@@ -72,7 +72,7 @@ shared/
 - `dietStyles` is a string array (replaced old `dietStyle` string field)
 - `mealsPerDay` is 2 or 3 (default 3)
 - `mealSlots` is optional string array; when mealsPerDay=2, stores exactly 2 of ["breakfast","lunch","dinner"]
-- `age`, `currentWeight`, `targetWeight` (optional numbers), `weightUnit` ("lb"|"kg"), `workoutDaysPerWeek` (0-7)
+- `age`, `currentWeight`, `targetWeight` (optional numbers), `weightUnit` ("lb"|"kg"), `workoutDaysPerWeek` (0-7), `workoutDays` (optional string array of "Sun"|"Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat")
 - `spiceLevel` ("none"|"mild"|"medium"|"hot"), default "medium" — applied independently of cuisine
 - `authenticityMode` ("traditional"|"weeknight"|"mixed"), default "mixed" — controls recipe complexity
 - `pricingStatus` column on mealPlans tracks grocery pricing independently (pending/ready/failed)

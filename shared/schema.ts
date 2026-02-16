@@ -104,6 +104,7 @@ export const preferencesSchema = z.object({
   targetWeight: z.number().min(1).max(1000).optional(),
   weightUnit: z.enum(["lb", "kg"]).default("lb"),
   workoutDaysPerWeek: z.number().int().min(0).max(7).optional(),
+  workoutDays: z.array(z.enum(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"])).optional(),
   spiceLevel: z.enum(["none", "mild", "medium", "hot"]).default("medium"),
   authenticityMode: z.enum(["traditional", "weeknight", "mixed"]).default("mixed"),
 }).refine((data) => {
