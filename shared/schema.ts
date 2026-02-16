@@ -25,6 +25,26 @@ export const mealPlans = pgTable("meal_plans", {
   regenDayCount: integer("regen_day_count").default(0).notNull(),
 });
 
+export const mealFeedback = pgTable("meal_feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  mealPlanId: varchar("meal_plan_id"),
+  mealFingerprint: varchar("meal_fingerprint").notNull(),
+  mealName: text("meal_name").notNull(),
+  cuisineTag: text("cuisine_tag").notNull(),
+  feedback: varchar("feedback", { length: 10 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const ingredientPreferences = pgTable("ingredient_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  ingredientKey: varchar("ingredient_key").notNull(),
+  preference: varchar("preference", { length: 10 }).notNull(),
+  source: varchar("source", { length: 10 }).notNull().default("derived"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const auditLogs = pgTable("audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
@@ -117,12 +137,32 @@ export const planOutputSchema = z.object({
   }),
 });
 
+export const mealFeedbackSchema = z.object({
+  planId: z.string().optional(),
+  dayIndex: z.number().optional(),
+  mealType: z.string().optional(),
+  mealFingerprint: z.string(),
+  mealName: z.string(),
+  cuisineTag: z.string(),
+  feedback: z.enum(["like", "dislike"]),
+  ingredients: z.array(z.string()).optional(),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type MealPlan = typeof mealPlans.$inferSelect;
+export type MealFeedbackRecord = typeof mealFeedback.$inferSelect;
+export type IngredientPreferenceRecord = typeof ingredientPreferences.$inferSelect;
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type PlanOutput = z.infer<typeof planOutputSchema>;
 export type Meal = z.infer<typeof mealSchema>;
 export type Day = z.infer<typeof daySchema>;
 export type GrocerySection = z.infer<typeof grocerySectionSchema>;
 export type GroceryItem = z.infer<typeof groceryItemSchema>;
+
+export interface UserPreferenceContext {
+  likedMeals: { name: string; cuisineTag: string }[];
+  dislikedMeals: { name: string; cuisineTag: string }[];
+  avoidIngredients: string[];
+  preferIngredients: string[];
+}

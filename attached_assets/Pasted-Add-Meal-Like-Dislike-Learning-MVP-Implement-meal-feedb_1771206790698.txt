@@ -1,0 +1,85 @@
+Add Meal Like/Dislike Learning (MVP)
+
+Implement meal feedback so the app learns user preferences and uses them in future plan generation and swaps.
+
+DB / Prisma
+Add new tables:
+
+MealFeedback: id, userId, mealPlanId (nullable), mealFingerprint (string), mealName, cuisineTag, feedback ("like"|"dislike"), createdAt
+
+IngredientPreference: id, userId, ingredientKey (string), preference ("avoid"|"prefer"), source ("user"|"derived"), createdAt
+
+Also add helper fields to MealPlan JSON storage if needed, but preferences must be user-level so they persist across plans.
+
+Meal fingerprinting
+Create a deterministic mealFingerprint generated from normalized fields, e.g.:
+slug(mealName) + "|" + slug(cuisineTag) + "|" + topProteinIngredient
+so duplicates across plans are recognized.
+
+API endpoints
+
+POST /api/feedback/meal body: { planId?, dayIndex?, mealType?, mealFingerprint, mealName, cuisineTag, feedback: "like"|"dislike" }
+
+store/update feedback (one record per userId+mealFingerprint)
+
+if dislike, also derive ingredient avoids: extract likely proteins/flag ingredients from meal ingredients list and upsert into IngredientPreference as avoid (keep a small list; avoid over-deriving)
+
+GET /api/preferences returns:
+
+last 20 disliked mealFingerprints / names
+
+last 10 liked mealFingerprints / names
+
+top avoided ingredients
+
+top preferred ingredients
+
+Frontend UI
+On the plan page, for each meal card add buttons:
+
+👍 Like
+
+👎 Dislike
+Show current state (highlight if already liked/disliked).
+On click, call POST /api/feedback/meal and update UI immediately (optimistic).
+
+Prompt wiring
+Update the OpenAI generation prompts for:
+
+full plan generation
+
+swap meal
+
+regenerate day
+so they include a userPreferenceContext block built server-side from DB:
+
+likedMeals (names + cuisine tags)
+
+dislikedMeals (names + cuisine tags)
+
+avoidIngredients (ingredient keys)
+
+preferIngredients (ingredient keys)
+
+Add strict instructions:
+
+Never suggest meals matching disliked meal fingerprints/names (best-effort)
+
+Never include avoidIngredients
+
+Prefer patterns similar to liked meals (cuisine, proteins, cooking method)
+
+Constraints
+Keep it lightweight and robust:
+
+do not require perfect ingredient NLP; simple keyword extraction is fine (e.g., chicken, beef, fish, egg, beans, milk)
+
+always respect the existing “foodsToAvoid” and allergies from the plan preferences
+
+Testing
+
+Like a meal → generate a new plan → it should suggest similar meals
+
+Dislike fish-based meal → next plan should avoid fish
+
+Swap meal should also respect preferences
