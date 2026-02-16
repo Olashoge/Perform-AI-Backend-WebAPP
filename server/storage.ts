@@ -1,6 +1,6 @@
 import { eq, desc, and, gte } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, auditLogs, type User, type MealPlan } from "@shared/schema";
+import { users, mealPlans, auditLogs, mealFeedback, ingredientPreferences, type User, type MealPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type UserPreferenceContext } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -18,6 +18,10 @@ export interface IStorage {
   incrementRegenDayCount(id: string): Promise<MealPlan | undefined>;
   logAction(userId: string, action: string, meta?: any): Promise<void>;
   getAiCallCountToday(userId: string): Promise<number>;
+  upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" }): Promise<MealFeedbackRecord>;
+  getMealFeedbackForPlan(userId: string, planId: string): Promise<MealFeedbackRecord[]>;
+  upsertIngredientPreference(userId: string, ingredientKey: string, preference: "avoid" | "prefer", source: "user" | "derived"): Promise<void>;
+  getUserPreferenceContext(userId: string): Promise<UserPreferenceContext>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -146,6 +150,78 @@ export class DatabaseStorage implements IStorage {
     return logs.filter(l =>
       l.action.startsWith("ai_call") && new Date(l.createdAt) >= today
     ).length;
+  }
+
+  async upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" }): Promise<MealFeedbackRecord> {
+    const existing = await db.select().from(mealFeedback)
+      .where(and(eq(mealFeedback.userId, userId), eq(mealFeedback.mealFingerprint, data.mealFingerprint)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const [updated] = await db.update(mealFeedback)
+        .set({ feedback: data.feedback, mealPlanId: data.mealPlanId || null, createdAt: new Date() })
+        .where(eq(mealFeedback.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+
+    const [record] = await db.insert(mealFeedback).values({
+      userId,
+      mealPlanId: data.mealPlanId || null,
+      mealFingerprint: data.mealFingerprint,
+      mealName: data.mealName,
+      cuisineTag: data.cuisineTag,
+      feedback: data.feedback,
+    }).returning();
+    return record;
+  }
+
+  async getMealFeedbackForPlan(userId: string, planId: string): Promise<MealFeedbackRecord[]> {
+    return db.select().from(mealFeedback)
+      .where(eq(mealFeedback.userId, userId));
+  }
+
+  async upsertIngredientPreference(userId: string, ingredientKey: string, preference: "avoid" | "prefer", source: "user" | "derived"): Promise<void> {
+    const existing = await db.select().from(ingredientPreferences)
+      .where(and(eq(ingredientPreferences.userId, userId), eq(ingredientPreferences.ingredientKey, ingredientKey)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db.update(ingredientPreferences)
+        .set({ preference, source, createdAt: new Date() })
+        .where(eq(ingredientPreferences.id, existing[0].id));
+    } else {
+      await db.insert(ingredientPreferences).values({
+        userId,
+        ingredientKey,
+        preference,
+        source,
+      });
+    }
+  }
+
+  async getUserPreferenceContext(userId: string): Promise<UserPreferenceContext> {
+    const allFeedback = await db.select().from(mealFeedback)
+      .where(eq(mealFeedback.userId, userId))
+      .orderBy(desc(mealFeedback.createdAt));
+
+    const likedMeals = allFeedback
+      .filter(f => f.feedback === "like")
+      .slice(0, 10)
+      .map(f => ({ name: f.mealName, cuisineTag: f.cuisineTag }));
+
+    const dislikedMeals = allFeedback
+      .filter(f => f.feedback === "dislike")
+      .slice(0, 20)
+      .map(f => ({ name: f.mealName, cuisineTag: f.cuisineTag }));
+
+    const allIngPrefs = await db.select().from(ingredientPreferences)
+      .where(eq(ingredientPreferences.userId, userId));
+
+    const avoidIngredients = allIngPrefs.filter(p => p.preference === "avoid").map(p => p.ingredientKey);
+    const preferIngredients = allIngPrefs.filter(p => p.preference === "prefer").map(p => p.ingredientKey);
+
+    return { likedMeals, dislikedMeals, avoidIngredients, preferIngredients };
   }
 }
 

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -34,7 +34,9 @@ export const mealFeedback = pgTable("meal_feedback", {
   cuisineTag: text("cuisine_tag").notNull(),
   feedback: varchar("feedback", { length: 10 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex("meal_feedback_user_fingerprint_idx").on(table.userId, table.mealFingerprint),
+]);
 
 export const ingredientPreferences = pgTable("ingredient_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -43,7 +45,9 @@ export const ingredientPreferences = pgTable("ingredient_preferences", {
   preference: varchar("preference", { length: 10 }).notNull(),
   source: varchar("source", { length: 10 }).notNull().default("derived"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex("ingredient_pref_user_key_idx").on(table.userId, table.ingredientKey),
+]);
 
 export const auditLogs = pgTable("audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

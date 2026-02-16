@@ -3,8 +3,9 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, type PlanOutput, type Preferences } from "@shared/schema";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, type PlanOutput, type Preferences } from "@shared/schema";
 import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList } from "./openai";
+import { generateMealFingerprint, extractKeyIngredients } from "./meal-utils";
 import { log } from "./index";
 import createMemoryStore from "memorystore";
 
@@ -152,8 +153,9 @@ export async function registerRoutes(
 
       (async () => {
         try {
+          const prefCtx = await storage.getUserPreferenceContext(userId);
           log(`Generating full plan for user ${userId} (plan ${pendingPlan.id})`, "openai");
-          const planJson = await generateFullPlan(parsed.data);
+          const planJson = await generateFullPlan(parsed.data, prefCtx);
           await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
@@ -221,7 +223,8 @@ export async function registerRoutes(
       const existingMeal = day.meals[mealType as keyof typeof day.meals];
       log(`Swapping ${mealType} on day ${dayIndex} for plan ${plan.id}`, "openai");
 
-      const newMeal = await generateSwapMeal(prefs, mealType, dayIndex, existingMeal.name);
+      const prefCtx = await storage.getUserPreferenceContext(userId);
+      const newMeal = await generateSwapMeal(prefs, mealType, dayIndex, existingMeal.name, prefCtx);
 
       day.meals[mealType as keyof typeof day.meals] = newMeal;
       const updated = await storage.updateMealPlanJson(plan.id, planJson);
@@ -260,7 +263,8 @@ export async function registerRoutes(
       const prefs = plan.preferencesJson as Preferences;
 
       log(`Regenerating day ${dayIndex} for plan ${plan.id}`, "openai");
-      const newDay = await generateDayMeals(prefs, dayIndex);
+      const prefCtx = await storage.getUserPreferenceContext(userId);
+      const newDay = await generateDayMeals(prefs, dayIndex, prefCtx);
 
       const dayIdx = planJson.days.findIndex(d => d.dayIndex === dayIndex);
       if (dayIdx >= 0) {
@@ -275,6 +279,71 @@ export async function registerRoutes(
     } catch (err) {
       log(`Regen day error: ${err}`, "openai");
       return res.status(500).json({ message: "Failed to regenerate day" });
+    }
+  });
+
+  app.post("/api/feedback/meal", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const parsed = mealFeedbackSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid feedback data" });
+      }
+
+      const userId = req.session.userId!;
+      const { planId, mealFingerprint, mealName, cuisineTag, feedback, ingredients } = parsed.data;
+
+      const record = await storage.upsertMealFeedback(userId, {
+        mealPlanId: planId,
+        mealFingerprint,
+        mealName,
+        cuisineTag,
+        feedback,
+      });
+
+      if (feedback === "dislike" && ingredients && ingredients.length > 0) {
+        const keyIngredients = extractKeyIngredients(ingredients);
+        for (const ing of keyIngredients) {
+          await storage.upsertIngredientPreference(userId, ing, "avoid", "derived");
+        }
+      }
+
+      if (feedback === "like" && ingredients && ingredients.length > 0) {
+        const keyIngredients = extractKeyIngredients(ingredients);
+        for (const ing of keyIngredients) {
+          await storage.upsertIngredientPreference(userId, ing, "prefer", "derived");
+        }
+      }
+
+      return res.json(record);
+    } catch (err) {
+      log(`Feedback error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to save feedback" });
+    }
+  });
+
+  app.get("/api/preferences", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const context = await storage.getUserPreferenceContext(userId);
+      return res.json(context);
+    } catch (err) {
+      log(`Preferences fetch error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to load preferences" });
+    }
+  });
+
+  app.get("/api/feedback/plan/:planId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const feedbacks = await storage.getMealFeedbackForPlan(userId, req.params.planId as string);
+      const feedbackMap: Record<string, "like" | "dislike"> = {};
+      for (const f of feedbacks) {
+        feedbackMap[f.mealFingerprint] = f.feedback as "like" | "dislike";
+      }
+      return res.json(feedbackMap);
+    } catch (err) {
+      log(`Feedback fetch error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to load feedback" });
     }
   });
 

@@ -30,6 +30,7 @@ server/
   storage.ts       - Database storage layer (IStorage interface)
   db.ts            - PostgreSQL connection
   openai.ts        - OpenAI integration (plan generation, swap, regen)
+  meal-utils.ts    - Meal fingerprinting and ingredient keyword extraction
 
 shared/
   schema.ts        - Drizzle schema + Zod validation schemas
@@ -45,6 +46,10 @@ shared/
 - Rebuild grocery list from current meals (no AI needed)
 - Rate limiting: 10 AI calls per user per day
 - Print-friendly layout
+- Meal feedback learning: like/dislike meals to improve future AI suggestions
+  - MealFeedback table stores per-meal feedback with fingerprinting
+  - IngredientPreference table tracks derived ingredient avoids/prefers
+  - Preferences wired into all OpenAI prompts (plan gen, swap, regen day)
 
 ## API Endpoints
 - `POST /api/auth/signup` - Create account
@@ -58,6 +63,9 @@ shared/
 - `POST /api/plan/:id/swap` - Swap a meal
 - `POST /api/plan/:id/regenerate-day` - Regenerate a day
 - `POST /api/plan/:id/grocery/regenerate` - Rebuild grocery list
+- `POST /api/feedback/meal` - Like/dislike a meal (upserts feedback + derives ingredient prefs)
+- `GET /api/feedback/plan/:planId` - Get feedback map for all meals (by fingerprint)
+- `GET /api/preferences` - Get user's learned preference context
 
 ## Environment Variables
 - `DATABASE_URL` - PostgreSQL connection string

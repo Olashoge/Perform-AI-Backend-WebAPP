@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { planOutputSchema, mealSchema, daySchema, type Preferences, type PlanOutput, type Meal, type Day } from "@shared/schema";
+import { planOutputSchema, mealSchema, daySchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext } from "@shared/schema";
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn("WARNING: OPENAI_API_KEY is not set. AI features will not work.");
@@ -21,7 +21,28 @@ RULES:
 - Quick cooking time means each meal should be under 30 minutes.`;
 }
 
-function buildPlanPrompt(prefs: Preferences): string {
+function buildPreferenceContextBlock(ctx?: UserPreferenceContext): string {
+  if (!ctx) return "";
+  const parts: string[] = [];
+
+  if (ctx.dislikedMeals.length > 0) {
+    parts.push(`DISLIKED MEALS (do NOT suggest these or very similar meals):\n${ctx.dislikedMeals.map(m => `- ${m.name} (${m.cuisineTag})`).join("\n")}`);
+  }
+  if (ctx.likedMeals.length > 0) {
+    parts.push(`LIKED MEALS (suggest similar cuisines, cooking styles, and proteins):\n${ctx.likedMeals.map(m => `- ${m.name} (${m.cuisineTag})`).join("\n")}`);
+  }
+  if (ctx.avoidIngredients.length > 0) {
+    parts.push(`INGREDIENTS TO AVOID (never include these): ${ctx.avoidIngredients.join(", ")}`);
+  }
+  if (ctx.preferIngredients.length > 0) {
+    parts.push(`PREFERRED INGREDIENTS (use these more often): ${ctx.preferIngredients.join(", ")}`);
+  }
+
+  if (parts.length === 0) return "";
+  return `\n\n--- USER PREFERENCE LEARNING ---\nThe following preferences were learned from the user's past meal feedback. Respect these strictly:\n${parts.join("\n\n")}\n--- END USER PREFERENCES ---\n`;
+}
+
+function buildPlanPrompt(prefs: Preferences, prefCtx?: UserPreferenceContext): string {
   return `Generate a complete 7-day meal plan based on these preferences:
 
 Goal: ${prefs.goal}
@@ -80,10 +101,10 @@ Meal object structure:
   "steps": ["step 1", ..., max 10 steps],
   "nutritionEstimateRange": { "calories": "string", "protein_g": "string", "carbs_g": "string", "fat_g": "string" },
   "whyItHelpsGoal": "1-2 sentences"
-}`;
+}${buildPreferenceContextBlock(prefCtx)}`;
 }
 
-function buildSwapMealPrompt(prefs: Preferences, mealType: string, dayIndex: number, existingMealName: string): string {
+function buildSwapMealPrompt(prefs: Preferences, mealType: string, dayIndex: number, existingMealName: string, prefCtx?: UserPreferenceContext): string {
   return `Generate a SINGLE replacement ${mealType} meal for Day ${dayIndex} of a meal plan.
 
 The current meal "${existingMealName}" needs to be replaced with something different.
@@ -107,10 +128,10 @@ Return ONLY a JSON meal object:
   "steps": ["step 1", ..., max 10],
   "nutritionEstimateRange": { "calories": "string", "protein_g": "string", "carbs_g": "string", "fat_g": "string" },
   "whyItHelpsGoal": "1-2 sentences"
-}`;
+}${buildPreferenceContextBlock(prefCtx)}`;
 }
 
-function buildRegenDayPrompt(prefs: Preferences, dayIndex: number): string {
+function buildRegenDayPrompt(prefs: Preferences, dayIndex: number, prefCtx?: UserPreferenceContext): string {
   return `Generate meals for a SINGLE day (Day ${dayIndex}) of a meal plan.
 
 Preferences:
@@ -133,7 +154,7 @@ Return ONLY a JSON object:
   }
 }
 
-Meal object: { "name", "cuisineTag", "prepTimeMinutes", "servings": ${prefs.householdSize}, "ingredients": [...], "steps": [...max 10], "nutritionEstimateRange": { "calories", "protein_g", "carbs_g", "fat_g" }, "whyItHelpsGoal" }`;
+Meal object: { "name", "cuisineTag", "prepTimeMinutes", "servings": ${prefs.householdSize}, "ingredients": [...], "steps": [...max 10], "nutritionEstimateRange": { "calories", "protein_g", "carbs_g", "fat_g" }, "whyItHelpsGoal" }${buildPreferenceContextBlock(prefCtx)}`;
 }
 
 async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<string> {
@@ -158,9 +179,9 @@ function cleanJsonString(raw: string): string {
   return cleaned.trim();
 }
 
-export async function generateFullPlan(prefs: Preferences): Promise<PlanOutput> {
+export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext): Promise<PlanOutput> {
   const systemPrompt = buildSystemPrompt();
-  const userPrompt = buildPlanPrompt(prefs);
+  const userPrompt = buildPlanPrompt(prefs, prefCtx);
 
   let raw = await callOpenAI(systemPrompt, userPrompt);
   let cleaned = cleanJsonString(raw);
@@ -181,9 +202,9 @@ ${cleaned}`;
   }
 }
 
-export async function generateSwapMeal(prefs: Preferences, mealType: string, dayIndex: number, existingMealName: string): Promise<Meal> {
+export async function generateSwapMeal(prefs: Preferences, mealType: string, dayIndex: number, existingMealName: string, prefCtx?: UserPreferenceContext): Promise<Meal> {
   const systemPrompt = buildSystemPrompt();
-  const userPrompt = buildSwapMealPrompt(prefs, mealType, dayIndex, existingMealName);
+  const userPrompt = buildSwapMealPrompt(prefs, mealType, dayIndex, existingMealName, prefCtx);
 
   let raw = await callOpenAI(systemPrompt, userPrompt);
   let cleaned = cleanJsonString(raw);
@@ -199,9 +220,9 @@ export async function generateSwapMeal(prefs: Preferences, mealType: string, day
   }
 }
 
-export async function generateDayMeals(prefs: Preferences, dayIndex: number): Promise<Day> {
+export async function generateDayMeals(prefs: Preferences, dayIndex: number, prefCtx?: UserPreferenceContext): Promise<Day> {
   const systemPrompt = buildSystemPrompt();
-  const userPrompt = buildRegenDayPrompt(prefs, dayIndex);
+  const userPrompt = buildRegenDayPrompt(prefs, dayIndex, prefCtx);
 
   let raw = await callOpenAI(systemPrompt, userPrompt);
   let cleaned = cleanJsonString(raw);

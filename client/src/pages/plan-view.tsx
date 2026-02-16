@@ -15,6 +15,7 @@ import {
   UtensilsCrossed, ArrowLeft, ChevronDown, Clock, Users,
   RefreshCw, Loader2, Printer, ShoppingCart, ChefHat, Flame,
   AlertCircle, Zap, Dumbbell, Heart, Trophy, Activity,
+  ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -26,15 +27,33 @@ const GOAL_ICONS: Record<string, typeof Flame> = {
   performance: Trophy,
 };
 
-function MealCard({ meal, dayIndex, mealType, planId, swapCount }: {
+function generateMealFingerprint(mealName: string, cuisineTag: string, ingredients?: string[]): string {
+  const slugify = (str: string) => str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const namePart = slugify(mealName);
+  const cuisinePart = slugify(cuisineTag);
+  const keyIngredients = ["chicken", "beef", "pork", "fish", "salmon", "tuna", "shrimp", "turkey", "lamb", "tofu", "tempeh", "egg", "eggs", "beans", "lentils", "chickpeas", "milk", "cheese", "yogurt", "cream", "rice", "pasta", "bread", "quinoa", "oats", "avocado", "mushroom", "mushrooms"];
+  let proteinPart = "none";
+  if (ingredients && ingredients.length > 0) {
+    const combined = ingredients.join(" ").toLowerCase();
+    for (const key of keyIngredients) {
+      if (combined.includes(key)) { proteinPart = key; break; }
+    }
+  }
+  return `${namePart}|${cuisinePart}|${proteinPart}`;
+}
+
+function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, onFeedback }: {
   meal: Meal;
   dayIndex: number;
   mealType: string;
   planId: string;
   swapCount: number;
+  feedbackState?: "like" | "dislike" | null;
+  onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike", ingredients: string[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
+  const fingerprint = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
 
   const swapMutation = useMutation({
     mutationFn: async () => {
@@ -82,6 +101,32 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount }: {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFeedback(fingerprint, meal.name, meal.cuisineTag, "like", meal.ingredients);
+                  }}
+                  className={feedbackState === "like" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}
+                  title="Like this meal"
+                  data-testid={`button-like-${dayIndex}-${mealType}`}
+                >
+                  <ThumbsUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFeedback(fingerprint, meal.name, meal.cuisineTag, "dislike", meal.ingredients);
+                  }}
+                  className={feedbackState === "dislike" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}
+                  title="Dislike this meal"
+                  data-testid={`button-dislike-${dayIndex}-${mealType}`}
+                >
+                  <ThumbsDown className="h-4 w-4" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -148,11 +193,13 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount }: {
   );
 }
 
-function DayCard({ day, planId, swapCount, regenDayCount }: {
+function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedback }: {
   day: Day;
   planId: string;
   swapCount: number;
   regenDayCount: number;
+  feedbackMap: Record<string, "like" | "dislike">;
+  onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike", ingredients: string[]) => void;
 }) {
   const { toast } = useToast();
 
@@ -191,16 +238,21 @@ function DayCard({ day, planId, swapCount, regenDayCount }: {
         </Button>
       </div>
       <div className="space-y-2">
-        {(["breakfast", "lunch", "dinner"] as const).map((mealType) => (
-          <MealCard
-            key={mealType}
-            meal={day.meals[mealType]}
-            dayIndex={day.dayIndex}
-            mealType={mealType}
-            planId={planId}
-            swapCount={swapCount}
-          />
-        ))}
+        {(["breakfast", "lunch", "dinner"] as const).map((mealType) => {
+          const fp = generateMealFingerprint(day.meals[mealType].name, day.meals[mealType].cuisineTag, day.meals[mealType].ingredients);
+          return (
+            <MealCard
+              key={mealType}
+              meal={day.meals[mealType]}
+              dayIndex={day.dayIndex}
+              mealType={mealType}
+              planId={planId}
+              swapCount={swapCount}
+              feedbackState={feedbackMap[fp] || null}
+              onFeedback={onFeedback}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -313,6 +365,29 @@ export default function PlanView() {
     queryKey: ["/api/plan", params.id],
     enabled: !!user && !!params.id,
   });
+
+  const { data: feedbackMap = {} } = useQuery<Record<string, "like" | "dislike">>({
+    queryKey: ["/api/feedback/plan", params.id],
+    enabled: !!user && !!params.id,
+  });
+
+  const [optimisticFeedback, setOptimisticFeedback] = useState<Record<string, "like" | "dislike">>({});
+  const mergedFeedback: Record<string, "like" | "dislike"> = { ...feedbackMap, ...optimisticFeedback };
+
+  const feedbackMutation = useMutation({
+    mutationFn: async (body: { planId: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike"; ingredients: string[] }) => {
+      const res = await apiRequest("POST", "/api/feedback/meal", body);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/feedback/plan", params.id] });
+    },
+  });
+
+  const handleFeedback = (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike", ingredients: string[]) => {
+    setOptimisticFeedback(prev => ({ ...prev, [fingerprint]: feedback }));
+    feedbackMutation.mutate({ planId: params.id!, mealFingerprint: fingerprint, mealName, cuisineTag, feedback, ingredients });
+  };
 
   useEffect(() => {
     if (data && (data as any).status === "generating") {
@@ -433,6 +508,8 @@ export default function PlanView() {
                     planId={params.id!}
                     swapCount={swapCount}
                     regenDayCount={regenDayCount}
+                    feedbackMap={mergedFeedback}
+                    onFeedback={handleFeedback}
                   />
                 ))}
               </TabsContent>
