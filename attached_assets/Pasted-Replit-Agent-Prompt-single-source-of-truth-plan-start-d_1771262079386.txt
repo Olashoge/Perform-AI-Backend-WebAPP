@@ -1,0 +1,89 @@
+Replit Agent Prompt (single source of truth: plan start date set only on plan page)
+
+Objective: Make the Plan Detail page the only place where a user can assign a meal plan to calendar dates. The calendar must reflect this automatically, and any other assignment pathways must be removed.
+
+1) Add Start Date selector on the Plan Detail page (inside a plan)
+
+On the plan detail page (where Meals + Grocery List are shown), add a field at the top:
+
+“Start plan on:” (date picker)
+
+This updates the plan’s startDate in the database immediately (or via Save button).
+
+Display:
+
+If startDate is not set: show placeholder like “Not scheduled”
+
+If set: show the chosen date clearly.
+
+2) Calendar becomes purely a viewer (no scheduling controls)
+
+Remove any “Start plan on” date picker or scheduling controls from:
+
+Calendar page
+
+My Plans list page
+
+New Plan creation flow (if start date exists there now, remove it)
+
+Calendar page should only:
+
+Select which plan to view
+
+Toggle Week / Month
+
+Navigate weeks/months
+
+Show meals according to that plan’s startDate
+
+3) Remove any other logic that assigns plans to dates
+
+Delete/disable any of these patterns if they exist:
+
+Auto-assigning plans to “today”
+
+“Most recent plan” automatically filling calendar without a startDate
+
+Any fallback mapping like createdAt → calendar start
+
+Any calendar event creation that isn’t strictly derived from plan.startDate
+
+Rule: No startDate = plan shows nothing on calendar (or show an empty calendar with a hint “Schedule this plan from the plan page.”)
+
+4) Calendar rendering rules (strict)
+
+Only render meals on dates:
+
+date = startDate + dayIndex (0..6)
+
+Outside that 7-day window: show empty cells.
+
+If plan has no startDate, calendar shows no meals.
+
+5) API + types
+
+Ensure startDate is included in:
+
+Plan model/schema
+
+Plan fetch endpoints
+
+Plan update endpoint (PATCH/PUT)
+
+Frontend types
+
+6) UX detail
+
+When user sets startDate on Plan Detail page:
+
+Immediately update calendar view (if open) OR next time they open calendar it reflects it.
+
+Optional: toast “Plan scheduled starting Feb 16”.
+
+Acceptance test:
+
+Create a plan → it does NOT appear on calendar.
+
+Open plan detail → set start date → calendar instantly shows the 7-day mapped meals.
+
+There is no other UI anywhere that can schedule/shift a plan.

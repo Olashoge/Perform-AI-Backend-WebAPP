@@ -1,23 +1,19 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import type { MealPlan, Meal } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ArrowLeft, CalendarDays, Rows3, Grid3X3,
   Loader2, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown,
-  CalendarIcon, Settings2, Ban,
+  Settings2, Ban,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, isSameMonth, eachDayOfInterval } from "date-fns";
 
 interface CalendarDay {
@@ -30,7 +26,7 @@ interface CalendarDay {
 
 interface CalendarData {
   planId: string;
-  startDate: string;
+  startDate: string | null;
   mealSlots: string[];
   days: CalendarDay[];
 }
@@ -418,7 +414,6 @@ function SettingsModal({
 export default function PlanCalendar() {
   const { user, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
-  const { toast } = useToast();
 
   const [viewMode, setViewMode] = useState<"month" | "week">("week");
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -433,7 +428,6 @@ export default function PlanCalendar() {
       return stored === "1" ? 1 : 0;
     } catch { return 0; }
   });
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const { data: plans, isLoading: plansLoading } = useQuery<MealPlan[]>({
@@ -480,20 +474,6 @@ export default function PlanCalendar() {
     return (prefsData?.avoidIngredients || []).map(i => i.ingredientKey);
   }, [prefsData]);
 
-  const startDateMutation = useMutation({
-    mutationFn: async (startDate: string) => {
-      await apiRequest("PATCH", `/api/plan/${selectedPlanId}/start-date`, { startDate });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/plan", selectedPlanId, "calendar"] });
-      toast({ title: "Start date updated" });
-      setDatePickerOpen(false);
-    },
-    onError: () => {
-      toast({ title: "Failed to update start date", variant: "destructive" });
-    },
-  });
-
   useEffect(() => {
     if (calendarData?.startDate) {
       const start = new Date(calendarData.startDate + "T00:00:00");
@@ -516,10 +496,6 @@ export default function PlanCalendar() {
     );
   }
 
-  const currentStartDate = calendarData?.startDate
-    ? new Date(calendarData.startDate + "T00:00:00")
-    : undefined;
-
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
@@ -534,24 +510,6 @@ export default function PlanCalendar() {
             <span className="font-semibold text-sm">Calendar</span>
           </div>
           <div className="flex items-center gap-1">
-            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-xs" data-testid="button-start-date-picker">
-                  <CalendarIcon className="h-3.5 w-3.5 mr-1" />
-                  {currentStartDate ? format(currentStartDate, "MMM d") : "Start"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  selected={currentStartDate}
-                  onSelect={(date) => {
-                    if (date) startDateMutation.mutate(format(date, "yyyy-MM-dd"));
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
             <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} data-testid="button-settings">
               <Settings2 className="h-4 w-4" />
             </Button>
@@ -623,6 +581,17 @@ export default function PlanCalendar() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
+        ) : !calendarData.startDate ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <CalendarDays className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <h2 className="font-semibold mb-1" data-testid="text-not-scheduled">Plan not scheduled</h2>
+              <p className="text-xs text-muted-foreground mb-3">Schedule this plan from the plan page to see it on your calendar.</p>
+              <Link href={`/plan/${selectedPlanId}`}>
+                <Button size="sm" data-testid="button-go-to-plan">Open Plan</Button>
+              </Link>
+            </CardContent>
+          </Card>
         ) : viewMode === "month" ? (
           <MonthView
             calendarData={calendarData}

@@ -75,6 +75,7 @@ shared/
 - `age`, `currentWeight`, `targetWeight` (optional numbers), `weightUnit` ("lb"|"kg"), `workoutDaysPerWeek` (0-7), `workoutDays` (optional string array of "Sun"|"Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat")
 - `spiceLevel` ("none"|"mild"|"medium"|"hot"), default "medium" — applied independently of cuisine
 - `authenticityMode` ("traditional"|"weeknight"|"mixed"), default "mixed" — controls recipe complexity
+- `planStartDate` is nullable varchar(10) storing YYYY-MM-DD; plans are created without a start date and must be scheduled from the Plan Detail page
 - `pricingStatus` column on mealPlans tracks grocery pricing independently (pending/ready/failed)
 - Day schema has optional breakfast, lunch, dinner to support dynamic meal slots
 - OpenAI prompts limited to 6-8 steps per meal, shorter summaries and whyItHelpsGoal

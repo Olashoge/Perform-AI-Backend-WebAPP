@@ -11,13 +11,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   UtensilsCrossed, ArrowLeft, ChevronDown, Clock, Users,
   RefreshCw, Loader2, Printer, ShoppingCart, ChefHat, Flame,
   AlertCircle, Zap, Dumbbell, Heart, Trophy, Activity,
-  ThumbsUp, ThumbsDown,
+  ThumbsUp, ThumbsDown, CalendarIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
   weight_loss: Flame,
@@ -489,6 +492,7 @@ export default function PlanView() {
   const params = useParams<{ id: string }>();
   const { user, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
+  const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<MealPlan>({
     queryKey: ["/api/plan", params.id],
@@ -517,6 +521,35 @@ export default function PlanView() {
     setOptimisticFeedback(prev => ({ ...prev, [fingerprint]: feedback }));
     feedbackMutation.mutate({ planId: params.id!, mealFingerprint: fingerprint, mealName, cuisineTag, feedback, ingredients });
   };
+
+  const [startDateOpen, setStartDateOpen] = useState(false);
+
+  const startDateMutation = useMutation({
+    mutationFn: async (startDate: string) => {
+      await apiRequest("PATCH", `/api/plan/${params.id}/start-date`, { startDate });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plan", params.id] });
+      toast({ title: "Plan scheduled", description: "Your calendar has been updated." });
+      setStartDateOpen(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to update start date", variant: "destructive" });
+    },
+  });
+
+  const clearStartDateMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("PATCH", `/api/plan/${params.id}/start-date`, { startDate: null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plan", params.id] });
+      toast({ title: "Schedule removed", description: "This plan is no longer scheduled on your calendar." });
+    },
+    onError: () => {
+      toast({ title: "Failed to clear schedule", variant: "destructive" });
+    },
+  });
 
   useEffect(() => {
     if (data && (data as any).status === "generating") {
@@ -600,6 +633,45 @@ export default function PlanView() {
           </Card>
         ) : plan ? (
           <>
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CalendarIcon className="h-4 w-4" />
+                <span>Start plan on:</span>
+              </div>
+              <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-start-date">
+                    <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
+                    {data?.planStartDate
+                      ? format(new Date(data.planStartDate + "T00:00:00"), "EEEE, MMM d, yyyy")
+                      : "Not scheduled"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={data?.planStartDate ? new Date(data.planStartDate + "T00:00:00") : undefined}
+                    onSelect={(date) => {
+                      if (date) startDateMutation.mutate(format(date, "yyyy-MM-dd"));
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              {data?.planStartDate && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-muted-foreground"
+                  onClick={() => clearStartDateMutation.mutate()}
+                  disabled={clearStartDateMutation.isPending}
+                  data-testid="button-clear-schedule"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+
             <div className="mb-6 space-y-3">
               <p className="text-muted-foreground text-sm leading-relaxed">{plan.summary}</p>
               {plan.nutritionNotes && (

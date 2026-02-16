@@ -30,7 +30,7 @@ export interface IStorage {
   getAllIngredientPreferences(userId: string): Promise<IngredientPreferenceRecord[]>;
   deleteMealFeedback(id: string, userId: string): Promise<boolean>;
   deleteIngredientPreference(id: string, userId: string): Promise<boolean>;
-  updatePlanStartDate(id: string, startDate: string): Promise<MealPlan | undefined>;
+  updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -67,7 +67,7 @@ export class DatabaseStorage implements IStorage {
       planJson: null,
       status: "generating",
       startedAt: new Date(),
-      planStartDate: startDate || new Date().toISOString().slice(0, 10),
+      planStartDate: startDate || null,
     }).returning();
     return plan;
   }
@@ -316,7 +316,7 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  async updatePlanStartDate(id: string, startDate: string): Promise<MealPlan | undefined> {
+  async updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined> {
     const [plan] = await db.update(mealPlans)
       .set({ planStartDate: startDate })
       .where(eq(mealPlans.id, id))

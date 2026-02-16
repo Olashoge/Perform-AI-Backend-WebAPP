@@ -513,6 +513,10 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Plan not found" });
       }
       const { startDate } = req.body;
+      if (startDate === null) {
+        const updated = await storage.updatePlanStartDate(plan.id, null);
+        return res.json(updated);
+      }
       if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
         return res.status(400).json({ message: "startDate must be YYYY-MM-DD format" });
       }
@@ -536,11 +540,20 @@ export async function registerRoutes(
 
       const planJson = plan.planJson as PlanOutput;
       const prefs = plan.preferencesJson as Preferences;
-      const startDate = plan.planStartDate || plan.createdAt.toISOString().slice(0, 10);
+      const startDate = plan.planStartDate || null;
 
       const mealSlots = (prefs.mealsPerDay === 2 && prefs.mealSlots && prefs.mealSlots.length === 2)
         ? prefs.mealSlots
         : (prefs.mealsPerDay === 2 ? ["lunch", "dinner"] : ["breakfast", "lunch", "dinner"]);
+
+      if (!startDate) {
+        return res.json({
+          planId: plan.id,
+          startDate: null,
+          mealSlots,
+          days: [],
+        });
+      }
 
       const calendarDays = planJson.days.map((day, i) => {
         const date = new Date(startDate + "T00:00:00");
