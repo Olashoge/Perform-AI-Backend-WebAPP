@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useForm } from "react-hook-form";
@@ -32,16 +32,11 @@ const GOAL_LABELS: Record<string, string> = {
   performance: "Performance",
 };
 
-function generateUUID(): string {
-  return crypto.randomUUID();
-}
-
 export default function NewPlan() {
   const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
   const [isPending, setIsPending] = useState(false);
   const { toast } = useToast();
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittedRef = useRef(false);
 
   const form = useForm<Preferences>({
@@ -58,52 +53,12 @@ export default function NewPlan() {
     },
   });
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => stopPolling();
-  }, [stopPolling]);
-
-  async function pollPlanStatus(planId: string) {
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/plan/${planId}/status`, { credentials: "include" });
-        if (!res.ok) {
-          stopPolling();
-          setIsPending(false);
-          submittedRef.current = false;
-          toast({ title: "Error checking plan status", variant: "destructive" });
-          return;
-        }
-        const data = await res.json();
-        if (data.status === "ready") {
-          stopPolling();
-          navigate(`/plan/${planId}`);
-        } else if (data.status === "failed") {
-          stopPolling();
-          setIsPending(false);
-          submittedRef.current = false;
-          toast({ title: "Plan generation failed", description: "Something went wrong. Please try again.", variant: "destructive" });
-        }
-      } catch {
-        stopPolling();
-        setIsPending(false);
-        submittedRef.current = false;
-      }
-    }, 3000);
-  }
-
   async function onSubmit(data: Preferences) {
     if (!user || isPending || submittedRef.current) return;
 
     submittedRef.current = true;
     setIsPending(true);
-    const idempotencyKey = generateUUID();
+    const idempotencyKey = crypto.randomUUID();
 
     try {
       const res = await apiRequest("POST", "/api/plan", { ...data, idempotencyKey });
@@ -111,12 +66,8 @@ export default function NewPlan() {
 
       if (plan.status === "ready") {
         navigate(`/plan/${plan.id}`);
-      } else if (plan.status === "generating") {
-        pollPlanStatus(plan.id);
-      } else if (plan.status === "failed") {
-        setIsPending(false);
-        submittedRef.current = false;
-        toast({ title: "Plan generation failed", description: "Please try again.", variant: "destructive" });
+      } else {
+        navigate(`/plan/${plan.id}/generating`);
       }
     } catch (err: any) {
       setIsPending(false);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -307,16 +307,18 @@ function PlanSkeleton() {
 export default function PlanView() {
   const params = useParams<{ id: string }>();
   const { user, isLoading: authLoading } = useAuth();
+  const [, navigate] = useLocation();
 
   const { data, isLoading, error } = useQuery<MealPlan>({
     queryKey: ["/api/plan", params.id],
     enabled: !!user && !!params.id,
-    refetchInterval: (query) => {
-      const plan = query.state.data;
-      if (plan && (plan as any).status === "generating") return 3000;
-      return false;
-    },
   });
+
+  useEffect(() => {
+    if (data && (data as any).status === "generating") {
+      navigate(`/plan/${params.id}/generating`, { replace: true });
+    }
+  }, [data, params.id, navigate]);
 
   if (authLoading) {
     return (
@@ -377,15 +379,9 @@ export default function PlanView() {
             </CardContent>
           </Card>
         ) : planStatus === "generating" ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-              <h2 className="font-semibold text-lg mb-2">Generating your meal plan</h2>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Our AI is crafting your personalized 7-day meal plan. This usually takes 15-30 seconds.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
         ) : planStatus === "failed" ? (
           <Card>
             <CardContent className="p-8 text-center">

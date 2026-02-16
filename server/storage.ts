@@ -12,7 +12,7 @@ export interface IStorage {
   getMealPlansByUser(userId: string): Promise<MealPlan[]>;
   findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined>;
   findGeneratingPlan(userId: string): Promise<MealPlan | undefined>;
-  updatePlanStatus(id: string, status: string, planJson?: any): Promise<MealPlan | undefined>;
+  updatePlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<MealPlan | undefined>;
   updateMealPlanJson(id: string, planJson: any): Promise<MealPlan | undefined>;
   incrementSwapCount(id: string): Promise<MealPlan | undefined>;
   incrementRegenDayCount(id: string): Promise<MealPlan | undefined>;
@@ -53,6 +53,7 @@ export class DatabaseStorage implements IStorage {
       preferencesJson,
       planJson: null,
       status: "generating",
+      startedAt: new Date(),
     }).returning();
     return plan;
   }
@@ -86,10 +87,13 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async updatePlanStatus(id: string, status: string, planJson?: any): Promise<MealPlan | undefined> {
-    const updates: any = { status };
+  async updatePlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<MealPlan | undefined> {
+    const updates: any = { status, completedAt: new Date() };
     if (planJson !== undefined) {
       updates.planJson = planJson;
+    }
+    if (errorMessage !== undefined) {
+      updates.errorMessage = errorMessage;
     }
     const [plan] = await db.update(mealPlans)
       .set(updates)

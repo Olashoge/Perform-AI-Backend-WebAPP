@@ -158,8 +158,9 @@ export async function registerRoutes(
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
         } catch (err) {
-          log(`Plan generation error for ${pendingPlan.id}: ${err}`, "openai");
-          await storage.updatePlanStatus(pendingPlan.id, "failed");
+          const errMsg = err instanceof Error ? err.message : String(err);
+          log(`Plan generation error for ${pendingPlan.id}: ${errMsg}`, "openai");
+          await storage.updatePlanStatus(pendingPlan.id, "failed", undefined, errMsg);
         }
       })();
     } catch (err) {

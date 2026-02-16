@@ -20,6 +20,7 @@ client/src/
     login.tsx      - Login form
     signup.tsx     - Signup form
     new-plan.tsx   - Preference form for generating plans
+    plan-generating.tsx - Dedicated generation progress page (polls, timeout, retry)
     plan-view.tsx  - View generated plan (meals + grocery list)
     plans-list.tsx - List of user's saved plans
 
@@ -37,6 +38,8 @@ shared/
 ## Key Features
 - Email/password authentication with sessions
 - AI-generated 7-day meal plans (3 meals/day)
+- Dedicated generation page (/plan/:id/generating) with 1500ms polling, 2-min timeout safety, retry on failure
+- Idempotency keys prevent duplicate plan generation
 - Swap individual meals (max 3 per plan)
 - Regenerate entire day (max 1 per plan)
 - Rebuild grocery list from current meals (no AI needed)
@@ -48,8 +51,9 @@ shared/
 - `POST /api/auth/login` - Login
 - `POST /api/auth/logout` - Logout
 - `GET /api/auth/me` - Get current user
-- `POST /api/plan` - Generate new meal plan
-- `GET /api/plan/:id` - Get saved plan
+- `POST /api/plan` - Generate new meal plan (async, returns immediately with status)
+- `GET /api/plan/:id` - Get saved plan (includes status, errorMessage)
+- `GET /api/plan/:id/status` - Get plan status only (lightweight polling endpoint)
 - `GET /api/plans` - List user's plans
 - `POST /api/plan/:id/swap` - Swap a meal
 - `POST /api/plan/:id/regenerate-day` - Regenerate a day
