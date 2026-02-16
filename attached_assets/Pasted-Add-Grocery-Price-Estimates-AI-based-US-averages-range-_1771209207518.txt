@@ -1,0 +1,150 @@
+Add Grocery Price Estimates (AI-based, US averages, range-only)
+
+Implement approximate grocery pricing for the weekly grocery list using AI-generated price ranges (not store-specific). Prices must update instantly when a user marks items as “owned”.
+
+UX Requirements
+
+In Grocery List UI, show for each item:
+
+checkbox: Owned
+
+estimated price range (e.g., “$2–$4”) if not owned, otherwise “$0”
+
+At top of grocery list show:
+
+Estimated total (range)
+
+Estimated total after owned items (range)
+
+Add small note: “Estimates vary by brand and store.”
+
+DB / Prisma
+
+Add to MealPlan:
+
+groceryPricingJson (JSON) to store estimated pricing results for that plan
+
+ownedItemsJson (JSON) to store user-owned selections per plan (or create table OwnedGroceryItem with userId+planId+itemKey)
+
+If using a table, create:
+
+OwnedGroceryItem: id, userId, mealPlanId, itemKey, isOwned, updatedAt
+
+Item normalization
+
+Create an itemKey per grocery item:
+
+lowercase, trim, remove punctuation
+
+strip quantity words (e.g., “2 lb”, “1x”, “dozen”) if present
+
+keep a stable key like: "chicken breast", "rice", "tomatoes"
+Use this key to join pricing + owned state.
+
+Pricing generation strategy
+
+Generate pricing once per plan (cached):
+
+When a plan is created (status ready), run pricing estimation on the server:
+
+input: the saved groceryList sections/items + household size + prep style
+
+output: groceryPricingJson
+
+Do NOT re-call the model when a user marks an item owned. Owned toggles should recompute totals locally using stored ranges.
+
+API Endpoints
+
+POST /api/plan/:id/grocery/pricing (server-only/internal; called after plan generation OR on-demand):
+
+If groceryPricingJson exists, return it without calling AI.
+
+Otherwise call OpenAI and store results.
+
+POST /api/plan/:id/grocery/owned body { itemKey, isOwned }
+
+GET /api/plan/:id/grocery returns:
+
+grocery list
+
+pricing json
+
+owned state
+
+computed totals (min/max before and after owned)
+
+OpenAI usage
+
+Model: gpt-4.1-mini
+
+Server-side only, using OPENAI_API_KEY
+
+Must return JSON only.
+
+Must never claim store-specific or live pricing.
+
+Always return a range per item (min/max).
+
+Pricing JSON Contract
+
+Output shape:
+{
+"currency": "USD",
+"assumptions": {
+"region": "USA",
+"pricingType": "estimated_ranges",
+"note": "Estimates vary by brand and store; not real-time."
+},
+"items": [
+{
+"itemKey": "chicken breast",
+"displayName": "Chicken breast",
+"unitHint": "lb|each|dozen|oz|jar|bag",
+"estimatedRange": { "min": 0, "max": 0 },
+"confidence": "low|medium|high"
+}
+]
+}
+
+Prompting rules for AI estimator
+
+Provide the model:
+
+The grocery list items with their human quantity strings (e.g., “Chicken breast — 4 lb”)
+
+Household size
+
+Prep style
+Ask it to:
+
+infer a sensible unitHint
+
+estimate min/max in USD using typical US grocery averages
+
+keep ranges conservative (not too narrow)
+
+set confidence based on how specific the item is (e.g., “salt” high, “spices” low)
+Return JSON only.
+
+Total computation
+
+Compute totals by summing mins and maxes of all non-owned items:
+
+totalMin, totalMax
+
+ownedAdjustedMin, ownedAdjustedMax
+Store totals server-side or compute in API response; update instantly in UI when toggles change.
+
+Frontend changes
+
+On plan view, fetch /api/plan/:id/grocery and render:
+
+list + per-item estimated range
+
+totals
+
+Owned checkbox calls /api/plan/:id/grocery/owned then updates totals without any AI call
+
+Error handling
+
+If pricing estimation fails, show “Pricing unavailable” but keep the grocery list usable.

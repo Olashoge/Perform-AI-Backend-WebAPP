@@ -1,6 +1,6 @@
 import { eq, desc, and, gte } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, auditLogs, mealFeedback, ingredientPreferences, type User, type MealPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type UserPreferenceContext } from "@shared/schema";
+import { users, mealPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, type User, type MealPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -18,6 +18,9 @@ export interface IStorage {
   incrementRegenDayCount(id: string): Promise<MealPlan | undefined>;
   logAction(userId: string, action: string, meta?: any): Promise<void>;
   getAiCallCountToday(userId: string): Promise<number>;
+  updateGroceryPricing(id: string, pricingJson: GroceryPricing | null): Promise<MealPlan | undefined>;
+  getOwnedGroceryItems(userId: string, mealPlanId: string): Promise<OwnedGroceryItem[]>;
+  upsertOwnedGroceryItem(userId: string, mealPlanId: string, itemKey: string, isOwned: boolean): Promise<OwnedGroceryItem>;
   upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" }): Promise<MealFeedbackRecord>;
   getMealFeedbackForPlan(userId: string, planId: string): Promise<MealFeedbackRecord[]>;
   upsertIngredientPreference(userId: string, ingredientKey: string, preference: "avoid" | "prefer", source: "user" | "derived"): Promise<void>;
@@ -150,6 +153,45 @@ export class DatabaseStorage implements IStorage {
     return logs.filter(l =>
       l.action.startsWith("ai_call") && new Date(l.createdAt) >= today
     ).length;
+  }
+
+  async updateGroceryPricing(id: string, pricingJson: GroceryPricing | null): Promise<MealPlan | undefined> {
+    const [plan] = await db.update(mealPlans)
+      .set({ groceryPricingJson: pricingJson })
+      .where(eq(mealPlans.id, id))
+      .returning();
+    return plan;
+  }
+
+  async getOwnedGroceryItems(userId: string, mealPlanId: string): Promise<OwnedGroceryItem[]> {
+    return db.select().from(ownedGroceryItems)
+      .where(and(eq(ownedGroceryItems.userId, userId), eq(ownedGroceryItems.mealPlanId, mealPlanId)));
+  }
+
+  async upsertOwnedGroceryItem(userId: string, mealPlanId: string, itemKey: string, isOwned: boolean): Promise<OwnedGroceryItem> {
+    const existing = await db.select().from(ownedGroceryItems)
+      .where(and(
+        eq(ownedGroceryItems.userId, userId),
+        eq(ownedGroceryItems.mealPlanId, mealPlanId),
+        eq(ownedGroceryItems.itemKey, itemKey),
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const [updated] = await db.update(ownedGroceryItems)
+        .set({ isOwned: isOwned ? 1 : 0, updatedAt: new Date() })
+        .where(eq(ownedGroceryItems.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+
+    const [record] = await db.insert(ownedGroceryItems).values({
+      userId,
+      mealPlanId,
+      itemKey,
+      isOwned: isOwned ? 1 : 0,
+    }).returning();
+    return record;
   }
 
   async upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" }): Promise<MealFeedbackRecord> {

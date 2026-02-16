@@ -27,6 +27,14 @@ export function generateMealFingerprint(mealName: string, cuisineTag: string, in
   return `${namePart}|${cuisinePart}|${proteinPart}`;
 }
 
+export function normalizeItemKey(item: string): string {
+  let key = item.toLowerCase().trim();
+  key = key.replace(/[^\w\s]/g, "");
+  key = key.replace(/^\d+[\s./]*\s*(cup|cups|tbsp|tsp|oz|lb|lbs|g|kg|ml|l|bunch|head|clove|cloves|can|cans|pkg|package|piece|pieces|slice|slices|dozen|x|each)\s*/i, "");
+  key = key.replace(/\s+/g, " ").trim();
+  return key;
+}
+
 export function extractKeyIngredients(ingredients: string[]): string[] {
   const found = new Set<string>();
   const combined = ingredients.join(" ").toLowerCase();

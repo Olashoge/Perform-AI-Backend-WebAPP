@@ -258,9 +258,46 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
   );
 }
 
-function GroceryListView({ plan, planId }: { plan: PlanOutput; planId: string }) {
-  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+interface GroceryData {
+  groceryList: { sections: { name: string; items: { item: string; quantity: string; notes?: string }[] }[] };
+  pricing: { currency: string; assumptions: { note: string }; items: { itemKey: string; displayName: string; unitHint: string; estimatedRange: { min: number; max: number }; confidence: string }[] } | null;
+  ownedItems: Record<string, boolean>;
+  totals: { totalMin: number; totalMax: number; ownedAdjustedMin: number; ownedAdjustedMax: number };
+}
+
+function normalizeItemKeyClient(item: string): string {
+  let key = item.toLowerCase().trim();
+  key = key.replace(/[^\w\s]/g, "");
+  key = key.replace(/^\d+[\s./]*\s*(cup|cups|tbsp|tsp|oz|lb|lbs|g|kg|ml|l|bunch|head|clove|cloves|can|cans|pkg|package|piece|pieces|slice|slices|dozen|x|each)\s*/i, "");
+  key = key.replace(/\s+/g, " ").trim();
+  return key;
+}
+
+function GroceryListView({ planId }: { planId: string }) {
   const { toast } = useToast();
+
+  const { data: groceryData, isLoading: groceryLoading } = useQuery<GroceryData>({
+    queryKey: ["/api/plan", planId, "grocery"],
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && !data.pricing) return 3000;
+      return false;
+    },
+  });
+
+  const [localOwned, setLocalOwned] = useState<Record<string, boolean>>({});
+
+  const mergedOwned: Record<string, boolean> = { ...(groceryData?.ownedItems || {}), ...localOwned };
+
+  const ownedMutation = useMutation({
+    mutationFn: async (body: { itemKey: string; isOwned: boolean }) => {
+      const res = await apiRequest("POST", `/api/plan/${planId}/grocery/owned`, body);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plan", planId, "grocery"] });
+    },
+  });
 
   const regenGroceryMutation = useMutation({
     mutationFn: async () => {
@@ -269,6 +306,7 @@ function GroceryListView({ plan, planId }: { plan: PlanOutput; planId: string })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/plan", planId, "grocery"] });
       toast({ title: "Grocery list updated" });
     },
     onError: () => {
@@ -276,14 +314,50 @@ function GroceryListView({ plan, planId }: { plan: PlanOutput; planId: string })
     },
   });
 
-  const toggleItem = (key: string) => {
-    setCheckedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const toggleOwned = (itemKey: string) => {
+    const current = mergedOwned[itemKey] || false;
+    const newVal = !current;
+    setLocalOwned(prev => ({ ...prev, [itemKey]: newVal }));
+    ownedMutation.mutate({ itemKey, isOwned: newVal });
   };
+
+  const pricingMap: Record<string, { min: number; max: number }> = {};
+  if (groceryData?.pricing?.items) {
+    for (const pi of groceryData.pricing.items) {
+      pricingMap[pi.itemKey] = pi.estimatedRange;
+    }
+  }
+
+  const computedTotals = (() => {
+    if (!groceryData?.pricing?.items) return groceryData?.totals || { totalMin: 0, totalMax: 0, ownedAdjustedMin: 0, ownedAdjustedMax: 0 };
+    let totalMin = 0, totalMax = 0, adjMin = 0, adjMax = 0;
+    for (const pi of groceryData.pricing.items) {
+      totalMin += pi.estimatedRange.min;
+      totalMax += pi.estimatedRange.max;
+      if (!mergedOwned[pi.itemKey]) {
+        adjMin += pi.estimatedRange.min;
+        adjMax += pi.estimatedRange.max;
+      }
+    }
+    return {
+      totalMin: Math.round(totalMin * 100) / 100,
+      totalMax: Math.round(totalMax * 100) / 100,
+      ownedAdjustedMin: Math.round(adjMin * 100) / 100,
+      ownedAdjustedMax: Math.round(adjMax * 100) / 100,
+    };
+  })();
+
+  if (groceryLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  const sections = groceryData?.groceryList?.sections || [];
+  const hasPricing = !!groceryData?.pricing;
 
   return (
     <div className="space-y-4">
@@ -303,7 +377,37 @@ function GroceryListView({ plan, planId }: { plan: PlanOutput; planId: string })
           Rebuild List
         </Button>
       </div>
-      {plan.groceryList.sections.map((section) => (
+
+      {hasPricing ? (
+        <Card data-testid="card-grocery-totals">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-sm font-medium">Estimated Total</span>
+              <span className="text-sm font-semibold" data-testid="text-total-range">
+                ${computedTotals.totalMin.toFixed(2)} – ${computedTotals.totalMax.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-sm font-medium">After Owned Items</span>
+              <span className="text-sm font-semibold text-primary" data-testid="text-adjusted-range">
+                ${computedTotals.ownedAdjustedMin.toFixed(2)} – ${computedTotals.ownedAdjustedMax.toFixed(2)}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground" data-testid="text-pricing-note">
+              {groceryData?.pricing?.assumptions?.note || "Estimates vary by brand and store."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-4 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground" data-testid="text-pricing-loading">Estimating prices...</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {sections.map((section) => (
         <Card key={section.name}>
           <CardHeader className="pb-2">
             <h3 className="font-medium text-sm">{section.name}</h3>
@@ -311,21 +415,25 @@ function GroceryListView({ plan, planId }: { plan: PlanOutput; planId: string })
           <CardContent className="pt-0">
             <ul className="space-y-1.5">
               {section.items.map((item, i) => {
-                const key = `${section.name}-${i}`;
-                const isChecked = checkedItems.has(key);
+                const itemKey = normalizeItemKeyClient(item.item);
+                const isOwned = mergedOwned[itemKey] || false;
+                const priceRange = pricingMap[itemKey];
                 return (
-                  <li key={key} className="flex items-start gap-2">
+                  <li key={`${section.name}-${i}`} className="flex items-start gap-2" data-testid={`grocery-item-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}>
                     <Checkbox
-                      checked={isChecked}
-                      onCheckedChange={() => toggleItem(key)}
+                      checked={isOwned}
+                      onCheckedChange={() => toggleOwned(itemKey)}
                       className="mt-0.5"
-                      data-testid={`checkbox-grocery-${section.name.toLowerCase()}-${i}`}
+                      data-testid={`checkbox-owned-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}
                     />
-                    <div className={`text-sm ${isChecked ? "line-through text-muted-foreground" : ""}`}>
+                    <div className={`flex-1 text-sm ${isOwned ? "line-through text-muted-foreground" : ""}`}>
                       <span className="font-medium">{item.item}</span>
                       <span className="text-muted-foreground"> — {item.quantity}</span>
                       {item.notes && <span className="text-xs text-muted-foreground ml-1">({item.notes})</span>}
                     </div>
+                    <span className="text-xs shrink-0 tabular-nums text-muted-foreground" data-testid={`text-price-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}>
+                      {isOwned ? "$0" : priceRange ? `$${priceRange.min.toFixed(2)}–$${priceRange.max.toFixed(2)}` : ""}
+                    </span>
                   </li>
                 );
               })}
@@ -515,7 +623,7 @@ export default function PlanView() {
               </TabsContent>
 
               <TabsContent value="grocery">
-                <GroceryListView plan={plan} planId={params.id!} />
+                <GroceryListView planId={params.id!} />
               </TabsContent>
             </Tabs>
 

@@ -23,7 +23,19 @@ export const mealPlans = pgTable("meal_plans", {
   planJson: jsonb("plan_json"),
   swapCount: integer("swap_count").default(0).notNull(),
   regenDayCount: integer("regen_day_count").default(0).notNull(),
+  groceryPricingJson: jsonb("grocery_pricing_json"),
 });
+
+export const ownedGroceryItems = pgTable("owned_grocery_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  mealPlanId: varchar("meal_plan_id").notNull().references(() => mealPlans.id),
+  itemKey: varchar("item_key").notNull(),
+  isOwned: integer("is_owned").notNull().default(1),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("owned_grocery_user_plan_item_idx").on(table.userId, table.mealPlanId, table.itemKey),
+]);
 
 export const mealFeedback = pgTable("meal_feedback", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -141,6 +153,24 @@ export const planOutputSchema = z.object({
   }),
 });
 
+export const groceryPricingItemSchema = z.object({
+  itemKey: z.string(),
+  displayName: z.string(),
+  unitHint: z.string(),
+  estimatedRange: z.object({ min: z.number(), max: z.number() }),
+  confidence: z.enum(["low", "medium", "high"]),
+});
+
+export const groceryPricingSchema = z.object({
+  currency: z.string(),
+  assumptions: z.object({
+    region: z.string(),
+    pricingType: z.string(),
+    note: z.string(),
+  }),
+  items: z.array(groceryPricingItemSchema),
+});
+
 export const mealFeedbackSchema = z.object({
   planId: z.string().optional(),
   dayIndex: z.number().optional(),
@@ -157,12 +187,15 @@ export type User = typeof users.$inferSelect;
 export type MealPlan = typeof mealPlans.$inferSelect;
 export type MealFeedbackRecord = typeof mealFeedback.$inferSelect;
 export type IngredientPreferenceRecord = typeof ingredientPreferences.$inferSelect;
+export type OwnedGroceryItem = typeof ownedGroceryItems.$inferSelect;
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type PlanOutput = z.infer<typeof planOutputSchema>;
 export type Meal = z.infer<typeof mealSchema>;
 export type Day = z.infer<typeof daySchema>;
 export type GrocerySection = z.infer<typeof grocerySectionSchema>;
 export type GroceryItem = z.infer<typeof groceryItemSchema>;
+export type GroceryPricing = z.infer<typeof groceryPricingSchema>;
+export type GroceryPricingItem = z.infer<typeof groceryPricingItemSchema>;
 
 export interface UserPreferenceContext {
   likedMeals: { name: string; cuisineTag: string }[];

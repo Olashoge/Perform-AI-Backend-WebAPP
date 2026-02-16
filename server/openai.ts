@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { planOutputSchema, mealSchema, daySchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext } from "@shared/schema";
+import { planOutputSchema, mealSchema, daySchema, groceryPricingSchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext, type GroceryPricing, type GrocerySection } from "@shared/schema";
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn("WARNING: OPENAI_API_KEY is not set. AI features will not work.");
@@ -235,6 +235,65 @@ export async function generateDayMeals(prefs: Preferences, dayIndex: number, pre
     raw = await callOpenAI(systemPrompt, repairPrompt);
     cleaned = cleanJsonString(raw);
     return daySchema.parse(JSON.parse(cleaned));
+  }
+}
+
+export async function generateGroceryPricing(
+  grocerySections: GrocerySection[],
+  householdSize: number,
+  prepStyle: string
+): Promise<GroceryPricing> {
+  const itemsList = grocerySections
+    .flatMap(s => s.items.map(i => `${i.item} — ${i.quantity}`))
+    .join("\n");
+
+  const systemPrompt = `You are a grocery pricing estimator. You estimate US average grocery price ranges.
+
+RULES:
+- Return ONLY valid JSON. No markdown, no commentary, no code fences.
+- Never claim store-specific or live pricing.
+- Always return a min/max range per item in USD.
+- Keep ranges conservative (not too narrow).
+- Set confidence based on how specific the item is (e.g., "salt" = high, "spices" = low).
+- Prices should account for the stated household size and quantities.`;
+
+  const userPrompt = `Estimate grocery prices for the following items. Household size: ${householdSize}. Prep style: ${prepStyle}.
+
+Items:
+${itemsList}
+
+Return JSON with this exact structure:
+{
+  "currency": "USD",
+  "assumptions": {
+    "region": "USA",
+    "pricingType": "estimated_ranges",
+    "note": "Estimates vary by brand and store; not real-time."
+  },
+  "items": [
+    {
+      "itemKey": "lowercase normalized item name",
+      "displayName": "Human readable item name",
+      "unitHint": "lb|each|dozen|oz|jar|bag",
+      "estimatedRange": { "min": 0.00, "max": 0.00 },
+      "confidence": "low|medium|high"
+    }
+  ]
+}
+
+Include one entry per grocery item provided. The itemKey should be the item name lowercased, trimmed, punctuation removed, quantity words stripped.`;
+
+  let raw = await callOpenAI(systemPrompt, userPrompt);
+  let cleaned = cleanJsonString(raw);
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return groceryPricingSchema.parse(parsed);
+  } catch (firstErr) {
+    const repairPrompt = `Fix this JSON grocery pricing object. Return ONLY valid JSON. Error: ${firstErr instanceof Error ? firstErr.message : "Parse error"}\n\n${cleaned}`;
+    raw = await callOpenAI(systemPrompt, repairPrompt);
+    cleaned = cleanJsonString(raw);
+    return groceryPricingSchema.parse(JSON.parse(cleaned));
   }
 }
 

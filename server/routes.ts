@@ -3,9 +3,9 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, type PlanOutput, type Preferences } from "@shared/schema";
-import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList } from "./openai";
-import { generateMealFingerprint, extractKeyIngredients } from "./meal-utils";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, type PlanOutput, type Preferences, type GroceryPricing } from "@shared/schema";
+import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing } from "./openai";
+import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import createMemoryStore from "memorystore";
 
@@ -14,6 +14,21 @@ const MemoryStore = createMemoryStore(session);
 declare module "express-session" {
   interface SessionData {
     userId: string;
+  }
+}
+
+async function runGroceryPricing(planId: string, planJson: PlanOutput, prefs: Preferences): Promise<void> {
+  try {
+    log(`Generating grocery pricing for plan ${planId}`, "openai");
+    const pricing = await generateGroceryPricing(
+      planJson.groceryList.sections,
+      prefs.householdSize,
+      prefs.prepStyle,
+    );
+    await storage.updateGroceryPricing(planId, pricing);
+    log(`Grocery pricing generated for plan ${planId}`, "openai");
+  } catch (err) {
+    log(`Grocery pricing failed for plan ${planId}: ${err instanceof Error ? err.message : String(err)}`, "openai");
   }
 }
 
@@ -159,6 +174,7 @@ export async function registerRoutes(
           await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
+          await runGroceryPricing(pendingPlan.id, planJson, parsed.data);
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           log(`Plan generation error for ${pendingPlan.id}: ${errMsg}`, "openai");
@@ -231,6 +247,9 @@ export async function registerRoutes(
       await storage.incrementSwapCount(plan.id);
       await storage.logAction(userId, "ai_call_swap_meal", { planId: plan.id, dayIndex, mealType });
 
+      await storage.updateGroceryPricing(plan.id, null);
+      runGroceryPricing(plan.id, planJson, prefs).catch(() => {});
+
       return res.json(updated);
     } catch (err) {
       log(`Swap error: ${err}`, "openai");
@@ -274,6 +293,9 @@ export async function registerRoutes(
       const updated = await storage.updateMealPlanJson(plan.id, planJson);
       await storage.incrementRegenDayCount(plan.id);
       await storage.logAction(userId, "ai_call_regen_day", { planId: plan.id, dayIndex });
+
+      await storage.updateGroceryPricing(plan.id, null);
+      runGroceryPricing(plan.id, planJson, prefs).catch(() => {});
 
       return res.json(updated);
     } catch (err) {
@@ -355,13 +377,84 @@ export async function registerRoutes(
       }
 
       const planJson = plan.planJson as PlanOutput;
+      const prefs = plan.preferencesJson as Preferences;
       planJson.groceryList = rebuildGroceryList(planJson);
 
       const updated = await storage.updateMealPlanJson(plan.id, planJson);
+
+      await storage.updateGroceryPricing(plan.id, null);
+      runGroceryPricing(plan.id, planJson, prefs).catch(() => {});
+
       return res.json(updated);
     } catch (err) {
       log(`Grocery rebuild error: ${err}`, "openai");
       return res.status(500).json({ message: "Failed to rebuild grocery list" });
+    }
+  });
+
+  app.get("/api/plan/:id/grocery", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getMealPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+
+      const userId = req.session.userId!;
+      const planJson = plan.planJson as PlanOutput;
+      const pricing = plan.groceryPricingJson as GroceryPricing | null;
+      const ownedItems = await storage.getOwnedGroceryItems(userId, plan.id);
+      const ownedMap: Record<string, boolean> = {};
+      for (const item of ownedItems) {
+        ownedMap[item.itemKey] = item.isOwned === 1;
+      }
+
+      let totalMin = 0, totalMax = 0, ownedAdjustedMin = 0, ownedAdjustedMax = 0;
+      if (pricing?.items) {
+        for (const pi of pricing.items) {
+          totalMin += pi.estimatedRange.min;
+          totalMax += pi.estimatedRange.max;
+          if (!ownedMap[pi.itemKey]) {
+            ownedAdjustedMin += pi.estimatedRange.min;
+            ownedAdjustedMax += pi.estimatedRange.max;
+          }
+        }
+      }
+
+      return res.json({
+        groceryList: planJson?.groceryList || { sections: [] },
+        pricing: pricing || null,
+        ownedItems: ownedMap,
+        totals: {
+          totalMin: Math.round(totalMin * 100) / 100,
+          totalMax: Math.round(totalMax * 100) / 100,
+          ownedAdjustedMin: Math.round(ownedAdjustedMin * 100) / 100,
+          ownedAdjustedMax: Math.round(ownedAdjustedMax * 100) / 100,
+        },
+      });
+    } catch (err) {
+      log(`Grocery fetch error: ${err}`, "openai");
+      return res.status(500).json({ message: "Failed to load grocery data" });
+    }
+  });
+
+  app.post("/api/plan/:id/grocery/owned", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getMealPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+
+      const { itemKey, isOwned } = req.body;
+      if (!itemKey || typeof isOwned !== "boolean") {
+        return res.status(400).json({ message: "itemKey and isOwned (boolean) are required" });
+      }
+
+      const userId = req.session.userId!;
+      await storage.upsertOwnedGroceryItem(userId, plan.id, itemKey, isOwned);
+      return res.json({ ok: true });
+    } catch (err) {
+      log(`Owned grocery update error: ${err}`, "openai");
+      return res.status(500).json({ message: "Failed to update owned item" });
     }
   });
 
