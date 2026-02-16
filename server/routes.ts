@@ -7,9 +7,9 @@ import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, type 
 import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
-import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
 
-const MemoryStore = createMemoryStore(session);
+const PgStore = connectPgSimple(session);
 
 declare module "express-session" {
   interface SessionData {
@@ -47,12 +47,16 @@ export async function registerRoutes(
 ): Promise<Server> {
   app.use(
     session({
-      store: new MemoryStore({ checkPeriod: 86400000 }),
+      store: new PgStore({
+        conString: process.env.DATABASE_URL,
+        createTableIfMissing: true,
+        tableName: "user_sessions",
+      }),
       secret: process.env.SESSION_SECRET || "meal-plan-default-session-secret",
       resave: false,
       saveUninitialized: false,
       cookie: {
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
@@ -140,6 +144,9 @@ export async function registerRoutes(
   app.post("/api/plan", requireAuth, async (req: Request, res: Response) => {
     try {
       const { idempotencyKey, ...prefsBody } = req.body;
+      if (prefsBody.goal === "fat_loss") {
+        prefsBody.goal = "weight_loss";
+      }
       const parsed = preferencesSchema.safeParse(prefsBody);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid preferences" });
@@ -239,12 +246,15 @@ export async function registerRoutes(
       }
 
       const existingMeal = day.meals[mealType as keyof typeof day.meals];
+      if (!existingMeal) {
+        return res.status(400).json({ message: "No meal found at that slot" });
+      }
       log(`Swapping ${mealType} on day ${dayIndex} for plan ${plan.id}`, "openai");
 
       const prefCtx = await storage.getUserPreferenceContext(userId);
       const newMeal = await generateSwapMeal(prefs, mealType, dayIndex, existingMeal.name, prefCtx);
 
-      day.meals[mealType as keyof typeof day.meals] = newMeal;
+      (day.meals as any)[mealType] = newMeal;
       const updated = await storage.updateMealPlanJson(plan.id, planJson);
       await storage.incrementSwapCount(plan.id);
       await storage.logAction(userId, "ai_call_swap_meal", { planId: plan.id, dayIndex, mealType });
@@ -348,11 +358,46 @@ export async function registerRoutes(
   app.get("/api/preferences", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.session.userId!;
-      const context = await storage.getUserPreferenceContext(userId);
-      return res.json(context);
+      const allFeedback = await storage.getAllMealFeedback(userId);
+      const allIngPrefs = await storage.getAllIngredientPreferences(userId);
+
+      const likedMeals = allFeedback.filter(f => f.feedback === "like");
+      const dislikedMeals = allFeedback.filter(f => f.feedback === "dislike");
+      const avoidIngredients = allIngPrefs.filter(p => p.preference === "avoid");
+      const preferIngredients = allIngPrefs.filter(p => p.preference === "prefer");
+
+      return res.json({ likedMeals, dislikedMeals, avoidIngredients, preferIngredients });
     } catch (err) {
       log(`Preferences fetch error: ${err}`, "feedback");
       return res.status(500).json({ message: "Failed to load preferences" });
+    }
+  });
+
+  app.delete("/api/preferences/meal/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const deleted = await storage.deleteMealFeedback(req.params.id as string, userId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Meal feedback not found" });
+      }
+      return res.json({ ok: true });
+    } catch (err) {
+      log(`Delete meal feedback error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to delete meal feedback" });
+    }
+  });
+
+  app.delete("/api/preferences/ingredient/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const deleted = await storage.deleteIngredientPreference(req.params.id as string, userId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Ingredient preference not found" });
+      }
+      return res.json({ ok: true });
+    } catch (err) {
+      log(`Delete ingredient preference error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to delete ingredient preference" });
     }
   });
 

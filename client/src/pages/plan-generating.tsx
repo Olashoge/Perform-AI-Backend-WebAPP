@@ -32,7 +32,8 @@ const TIPS = [
 ];
 
 const GOAL_LABELS: Record<string, string> = {
-  fat_loss: "Fat Loss",
+  weight_loss: "Weight Loss",
+  fat_loss: "Weight Loss",
   muscle_gain: "Muscle Gain",
   energy: "Energy & Focus",
   maintenance: "Maintenance",
@@ -41,8 +42,8 @@ const GOAL_LABELS: Record<string, string> = {
 
 const PREP_LABELS: Record<string, string> = {
   cook_daily: "Cook Daily",
-  batch_2day: "Batch Cook (2-day)",
-  batch_3to4day: "Batch Cook (3-4 day)",
+  batch_2day: "Meal Prep (2-day)",
+  batch_3to4day: "Meal Prep (3-4 day)",
 };
 
 function PreferenceSummary({ prefs }: { prefs: Preferences | null }) {
@@ -88,6 +89,36 @@ function PreferenceSummary({ prefs }: { prefs: Preferences | null }) {
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <span className="text-muted-foreground shrink-0">Avoiding:</span>
               <span className="font-medium text-right">{prefs.foodsToAvoid.join(", ")}</span>
+            </div>
+          )}
+          {prefs.mealsPerDay === 2 && prefs.mealSlots && prefs.mealSlots.length > 0 && (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-muted-foreground">Meal Slots:</span>
+              <span className="font-medium capitalize">{prefs.mealSlots.join(", ")}</span>
+            </div>
+          )}
+          {prefs.age && (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-muted-foreground">Age:</span>
+              <span className="font-medium">{prefs.age}</span>
+            </div>
+          )}
+          {prefs.currentWeight && (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-muted-foreground">Current Weight:</span>
+              <span className="font-medium">{prefs.currentWeight} {prefs.weightUnit || "lb"}</span>
+            </div>
+          )}
+          {prefs.targetWeight && (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-muted-foreground">Target Weight:</span>
+              <span className="font-medium">{prefs.targetWeight} {prefs.weightUnit || "lb"}</span>
+            </div>
+          )}
+          {prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek !== null && (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-muted-foreground">Workouts/Week:</span>
+              <span className="font-medium">{prefs.workoutDaysPerWeek} days</span>
             </div>
           )}
         </div>

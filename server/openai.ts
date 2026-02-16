@@ -7,13 +7,16 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "missing" });
 
-function buildSystemPrompt(): string {
-  return `You are a professional meal planning nutritionist. You generate detailed, practical 7-day meal plans.
+function buildSystemPrompt(prefs: Preferences): string {
+  const isMinor = prefs.age !== undefined && prefs.age < 18;
+
+  let base = `You are a professional meal planning nutritionist. You generate detailed, practical 7-day meal plans.
 
 RULES:
 - Return ONLY valid JSON. No markdown, no commentary, no code fences.
 - Always respect foodsToAvoid and allergies — never include them as ingredients or feature them in meals.
-- Keep ingredients realistic and accessible.
+- Keep ingredients realistic and accessible at US grocery stores.
+- When using culturally-specific ingredients (e.g., Nigerian, Indian, Thai), ensure they are available at most US grocery stores or suggest a common US substitution in parentheses.
 - Budget mode: reduce specialty ingredients, keep meals simple.
 - Family mode (householdSize > 2): avoid overly spicy options unless diet styles explicitly imply spice.
 - Each meal must have 6-8 steps maximum. Keep steps concise.
@@ -23,6 +26,12 @@ RULES:
 - Keep summary to 2-3 sentences.
 - Keep whyItHelpsGoal to 1 brief sentence.
 - Keep nutrition explanation concise (2-3 reasons max).`;
+
+  if (isMinor) {
+    base += `\n\nIMPORTANT: This user is under 18 years old. Use only supportive, non-prescriptive language about nutrition. Avoid terms like "diet", "restrict", "cut", "deficit". Focus on balanced growth, energy for activities, and healthy habits. Never suggest calorie restriction.`;
+  }
+
+  return base;
 }
 
 function buildPreferenceContextBlock(ctx?: UserPreferenceContext): string {
@@ -52,31 +61,82 @@ function formatDietStyles(prefs: Preferences): string {
   return styles.join(", ");
 }
 
-function getMealTypesForPrefs(prefs: Preferences): string[] {
+function getMealSlotsForPrefs(prefs: Preferences): string[] {
+  if (prefs.mealsPerDay === 2 && prefs.mealSlots && prefs.mealSlots.length === 2) {
+    return prefs.mealSlots;
+  }
   if (prefs.mealsPerDay === 2) return ["lunch", "dinner"];
   return ["breakfast", "lunch", "dinner"];
 }
 
 function buildMealsStructure(prefs: Preferences): string {
-  const types = getMealTypesForPrefs(prefs);
-  return types.map(t => `"${t}": { meal object }`).join(",\n        ");
+  const slots = getMealSlotsForPrefs(prefs);
+  return slots.map(t => `"${t}": { meal object }`).join(",\n        ");
+}
+
+function buildPersonalizationBlock(prefs: Preferences): string {
+  const parts: string[] = [];
+
+  if (prefs.age) {
+    parts.push(`Age: ${prefs.age}`);
+  }
+  if (prefs.currentWeight) {
+    parts.push(`Current Weight: ${prefs.currentWeight} ${prefs.weightUnit || "lb"}`);
+  }
+  if (prefs.targetWeight) {
+    parts.push(`Target Weight: ${prefs.targetWeight} ${prefs.weightUnit || "lb"}`);
+  }
+  if (prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek !== null) {
+    parts.push(`Workout Days/Week: ${prefs.workoutDaysPerWeek}`);
+  }
+
+  if (parts.length === 0) return "";
+
+  let block = `\nPersonalization:\n${parts.join("\n")}`;
+  block += `\n\nADAPTATION GUIDELINES:`;
+  block += `\n- Adjust portion sizes and macro ranges based on the user's weight, goal, and activity level.`;
+
+  if (prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek >= 4) {
+    block += `\n- This user is active (${prefs.workoutDaysPerWeek} workout days/week). Increase protein portions and overall calories slightly.`;
+  } else if (prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek <= 1) {
+    block += `\n- This user is mostly sedentary. Keep portions moderate and focus on nutrient-dense foods.`;
+  }
+
+  if (prefs.currentWeight && prefs.targetWeight) {
+    const diff = prefs.currentWeight - prefs.targetWeight;
+    if (diff > 0 && prefs.goal === "weight_loss") {
+      block += `\n- User wants to lose weight. Focus on satisfying, lower-calorie meals with adequate protein. Keep estimated calorie ranges appropriate.`;
+    } else if (diff < 0 && prefs.goal === "muscle_gain") {
+      block += `\n- User wants to gain muscle. Increase protein and overall calorie content. Include post-workout friendly meals.`;
+    }
+  }
+
+  block += `\n- All nutrition values are estimates and ranges, not medical advice.`;
+  return block;
 }
 
 function buildPlanPrompt(prefs: Preferences, prefCtx?: UserPreferenceContext): string {
-  const mealTypes = getMealTypesForPrefs(prefs);
-  const mealsPerDayNote = prefs.mealsPerDay === 2 ? "Generate only lunch and dinner (2 meals per day). Do NOT include breakfast." : "Generate breakfast, lunch, and dinner (3 meals per day).";
+  const mealSlots = getMealSlotsForPrefs(prefs);
+  const slotsLabel = mealSlots.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ");
+  const mealsNote = `Generate only ${slotsLabel} (${prefs.mealsPerDay} meals per day). Do NOT include any other meal slots.`;
 
   return `Generate a complete 7-day meal plan based on these preferences:
 
-Goal: ${prefs.goal}
+Goal: ${prefs.goal === "weight_loss" ? "Weight Loss" : prefs.goal}
 Diet/Cuisine Styles: ${formatDietStyles(prefs)} (Prefer meals that fit ANY of these cuisines/styles, and blend them sensibly)
 Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") : "None"}
 Household Size: ${prefs.householdSize}
 Prep Style: ${prefs.prepStyle}
 Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
-Meals Per Day: ${prefs.mealsPerDay || 3} — ${mealsPerDayNote}
+Meals Per Day: ${prefs.mealsPerDay || 3} — ${mealsNote}
 Allergies: ${prefs.allergies || "None"}
+${buildPersonalizationBlock(prefs)}
+
+INGREDIENT GUIDELINES:
+- Use ingredients readily available at US grocery stores.
+- For culturally-specific cuisines, prefer ingredients found in well-stocked US supermarkets. If an ingredient is uncommon, add a parenthetical substitute (e.g., "scotch bonnet pepper (or habanero)").
+- Include local greens, seasonal vegetables, and culturally appropriate spice blends where possible.
 
 Return a JSON object with this exact structure:
 {
@@ -132,13 +192,18 @@ function buildSwapMealPrompt(prefs: Preferences, mealType: string, dayIndex: num
 The current meal "${existingMealName}" needs to be replaced with something different.
 
 Preferences:
-Goal: ${prefs.goal}
+Goal: ${prefs.goal === "weight_loss" ? "Weight Loss" : prefs.goal}
 Diet/Cuisine Styles: ${formatDietStyles(prefs)}
 Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") : "None"}
 Household Size: ${prefs.householdSize}
 Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
 Allergies: ${prefs.allergies || "None"}
+${buildPersonalizationBlock(prefs)}
+
+INGREDIENT GUIDELINES:
+- Use ingredients readily available at US grocery stores.
+- For culturally-specific cuisines, prefer ingredients found in well-stocked US supermarkets.
 
 Return ONLY a JSON meal object:
 {
@@ -154,19 +219,21 @@ Return ONLY a JSON meal object:
 }
 
 function buildRegenDayPrompt(prefs: Preferences, dayIndex: number, prefCtx?: UserPreferenceContext): string {
-  const mealTypes = getMealTypesForPrefs(prefs);
-  const mealsNote = prefs.mealsPerDay === 2 ? "Generate only lunch and dinner." : "Generate breakfast, lunch, and dinner.";
+  const mealSlots = getMealSlotsForPrefs(prefs);
+  const slotsLabel = mealSlots.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ");
+  const mealsNote = `Generate only ${slotsLabel}.`;
 
   return `Generate meals for a SINGLE day (Day ${dayIndex}) of a meal plan. ${mealsNote}
 
 Preferences:
-Goal: ${prefs.goal}
+Goal: ${prefs.goal === "weight_loss" ? "Weight Loss" : prefs.goal}
 Diet/Cuisine Styles: ${formatDietStyles(prefs)}
 Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") : "None"}
 Household Size: ${prefs.householdSize}
 Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
 Allergies: ${prefs.allergies || "None"}
+${buildPersonalizationBlock(prefs)}
 
 Return ONLY a JSON object:
 {
@@ -203,7 +270,7 @@ function cleanJsonString(raw: string): string {
 }
 
 export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext): Promise<PlanOutput> {
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(prefs);
   const userPrompt = buildPlanPrompt(prefs, prefCtx);
 
   let raw = await callOpenAI(systemPrompt, userPrompt);
@@ -226,7 +293,7 @@ ${cleaned}`;
 }
 
 export async function generateSwapMeal(prefs: Preferences, mealType: string, dayIndex: number, existingMealName: string, prefCtx?: UserPreferenceContext): Promise<Meal> {
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(prefs);
   const userPrompt = buildSwapMealPrompt(prefs, mealType, dayIndex, existingMealName, prefCtx);
 
   let raw = await callOpenAI(systemPrompt, userPrompt);
@@ -244,7 +311,7 @@ export async function generateSwapMeal(prefs: Preferences, mealType: string, day
 }
 
 export async function generateDayMeals(prefs: Preferences, dayIndex: number, prefCtx?: UserPreferenceContext): Promise<Day> {
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(prefs);
   const userPrompt = buildRegenDayPrompt(prefs, dayIndex, prefCtx);
 
   let raw = await callOpenAI(systemPrompt, userPrompt);

@@ -1,0 +1,103 @@
+Implement New Personalization Inputs + Preference Management + Copy Updates + Session Duration
+1) Add new user inputs on New Plan form
+
+Add fields:
+
+age (number, optional but encouraged)
+
+currentWeight (number, optional; include unit selector lb/kg default lb)
+
+targetWeight (number, optional; same unit)
+
+workoutDaysPerWeek (0–7) OR workoutDays (multi-select days). Choose simplest: workoutDaysPerWeek.
+
+Persist these into preferencesJson and show them in “Your Inputs” panel.
+
+2) Use these inputs in generation prompt (guardrails)
+
+Update prompt logic so:
+
+portion sizes and macro ranges adapt based on householdSize + weight + workoutDaysPerWeek + goal
+
+keep nutrition output as estimated ranges (no medical claims)
+
+if age < 18 or user indicates a medical condition (only if they type it), show safer phrasing and avoid prescriptive dieting language.
+
+3) Ensure ingredients are culturally consistent (e.g., pepper mix, onions, garlic/ginger, local greens where possible) while still being US-available.
+
+Keep it realistic for US grocery stores (offer substitutions if needed).
+
+4) Likes/Dislikes management page
+
+Add route: /preferences
+
+Show tabs:
+
+Liked meals
+
+Disliked meals
+
+Avoided ingredients (derived)
+
+Each item has a “Remove” button to delete that preference.
+
+Provide API endpoints:
+
+GET /api/preferences (already exists) — ensure it returns full lists with IDs
+
+DELETE /api/preferences/meal/:id
+
+DELETE /api/preferences/ingredient/:id
+Update UI buttons on meal cards to reflect current state.
+
+5) Copy changes
+
+Primary Goal label: change “Fat Loss” to “Weight Loss” everywhere (UI + enums if present).
+
+Prep style: rename “Batch Cook” to “Meal Prep” (UI labels). Keep underlying values stable or migrate safely.
+
+6) Meals per day = 2: allow user to choose which 2 meals
+
+When user selects mealsPerDay=2, show a required selector:
+
+mealSlots: checkboxes Breakfast / Lunch / Dinner
+
+must pick exactly 2
+Save as mealSlots: ("breakfast"|"lunch"|"dinner")[]
+Generation + rendering rules:
+
+Only generate/render selected meal slots.
+
+Update JSON schema and UI to handle dynamic meal keys based on mealSlots.
+
+7) Session should stay logged in longer
+
+The app logs out after some time. Update session/cookie settings:
+
+Increase session cookie maxAge to at least 14 days (or 30 days).
+
+Ensure session store persists (SQLite/Prisma-backed or compatible store). If using memory store, replace it with a persistent store.
+
+Cookie settings:
+
+sameSite: "lax"
+
+secure: true only in production/https; ensure it works on Replit deployment
+
+Confirm /api/auth/me stays authenticated after extended idle and browser refresh.
+
+8) Update “Your Inputs” panel
+
+Include:
+
+age
+
+currentWeight + unit
+
+targetWeight + unit
+
+workoutDaysPerWeek
+
+mealSlots (if mealsPerDay=2)
+
+Implement and test all flows.

@@ -11,6 +11,7 @@ import NewPlan from "@/pages/new-plan";
 import PlanView from "@/pages/plan-view";
 import PlanGenerating from "@/pages/plan-generating";
 import PlansList from "@/pages/plans-list";
+import PreferencesPage from "@/pages/preferences";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/plan/:id/generating" component={PlanGenerating} />
       <Route path="/plan/:id" component={PlanView} />
       <Route path="/plans" component={PlansList} />
+      <Route path="/preferences" component={PreferencesPage} />
       <Route component={NotFound} />
     </Switch>
   );

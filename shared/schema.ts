@@ -85,8 +85,10 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+const mealSlotEnum = z.enum(["breakfast", "lunch", "dinner"]);
+
 export const preferencesSchema = z.object({
-  goal: z.enum(["fat_loss", "muscle_gain", "energy", "maintenance", "performance"]),
+  goal: z.enum(["weight_loss", "muscle_gain", "energy", "maintenance", "performance"]),
   dietStyles: z.array(z.string()).min(1, "Select at least one diet/cuisine style"),
   foodsToAvoid: z.array(z.string()).default([]),
   householdSize: z.number().int().min(1).max(8),
@@ -94,8 +96,19 @@ export const preferencesSchema = z.object({
   budgetMode: z.enum(["normal", "budget_friendly"]),
   cookingTime: z.enum(["quick", "normal"]),
   mealsPerDay: z.union([z.literal(2), z.literal(3)]).default(3),
+  mealSlots: z.array(mealSlotEnum).optional(),
   allergies: z.string().optional(),
-});
+  age: z.number().int().min(1).max(120).optional(),
+  currentWeight: z.number().min(1).max(1000).optional(),
+  targetWeight: z.number().min(1).max(1000).optional(),
+  weightUnit: z.enum(["lb", "kg"]).default("lb"),
+  workoutDaysPerWeek: z.number().int().min(0).max(7).optional(),
+}).refine((data) => {
+  if (data.mealsPerDay === 2 && data.mealSlots) {
+    return data.mealSlots.length === 2;
+  }
+  return true;
+}, { message: "Select exactly 2 meal slots when choosing 2 meals per day", path: ["mealSlots"] });
 
 export const nutritionEstimateSchema = z.object({
   calories: z.string(),
@@ -131,8 +144,8 @@ export const daySchema = z.object({
   dayName: z.string(),
   meals: z.object({
     breakfast: mealSchema.optional(),
-    lunch: mealSchema,
-    dinner: mealSchema,
+    lunch: mealSchema.optional(),
+    dinner: mealSchema.optional(),
   }),
 });
 

@@ -27,7 +27,7 @@ const DIET_STYLES = [
 ];
 
 const GOAL_LABELS: Record<string, string> = {
-  fat_loss: "Fat Loss",
+  weight_loss: "Weight Loss",
   muscle_gain: "Muscle Gain",
   energy: "Energy & Focus",
   maintenance: "Maintenance",
@@ -53,7 +53,13 @@ export default function NewPlan() {
       budgetMode: "normal",
       cookingTime: "normal",
       mealsPerDay: 3,
+      mealSlots: undefined,
       allergies: "",
+      age: undefined,
+      currentWeight: undefined,
+      targetWeight: undefined,
+      weightUnit: "lb",
+      workoutDaysPerWeek: undefined,
     },
   });
 
@@ -320,16 +326,22 @@ export default function NewPlan() {
                         <Button
                           type="button"
                           variant={field.value === 2 ? "default" : "outline"}
-                          onClick={() => field.onChange(2)}
+                          onClick={() => {
+                            field.onChange(2);
+                            form.setValue("mealSlots", ["lunch", "dinner"]);
+                          }}
                           disabled={isPending}
                           data-testid="button-meals-2"
                         >
-                          2 Meals (Lunch + Dinner)
+                          2 Meals
                         </Button>
                         <Button
                           type="button"
                           variant={field.value === 3 ? "default" : "outline"}
-                          onClick={() => field.onChange(3)}
+                          onClick={() => {
+                            field.onChange(3);
+                            form.setValue("mealSlots", undefined);
+                          }}
                           disabled={isPending}
                           data-testid="button-meals-3"
                         >
@@ -337,8 +349,188 @@ export default function NewPlan() {
                         </Button>
                       </div>
                       <FormDescription>
-                        {field.value === 2 ? "Lunch and dinner only" : "Breakfast, lunch, and dinner"}
+                        {field.value === 2 ? "Pick which 2 meals below" : "Breakfast, lunch, and dinner"}
                       </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch("mealsPerDay") === 2 && (
+                  <FormField
+                    control={form.control}
+                    name="mealSlots"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Which 2 meals? (pick exactly 2)</FormLabel>
+                        <div className="flex gap-4 mt-2">
+                          {(["breakfast", "lunch", "dinner"] as const).map((slot) => {
+                            const checked = (field.value || []).includes(slot);
+                            return (
+                              <label key={slot} className="flex items-center gap-2 text-sm cursor-pointer capitalize">
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(isChecked) => {
+                                    const current = field.value || [];
+                                    if (isChecked) {
+                                      if (current.length >= 2) return;
+                                      field.onChange([...current, slot]);
+                                    } else {
+                                      field.onChange(current.filter((s: string) => s !== slot));
+                                    }
+                                  }}
+                                  disabled={isPending || (!checked && (field.value || []).length >= 2)}
+                                  data-testid={`checkbox-slot-${slot}`}
+                                />
+                                {slot}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <h2 className="font-semibold">About You</h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="age"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Age (optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={120}
+                          placeholder="Your age"
+                          className="w-32"
+                          disabled={isPending}
+                          data-testid="input-age"
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-2">
+                  <FormLabel>Weight (optional)</FormLabel>
+                  <FormField
+                    control={form.control}
+                    name="weightUnit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            variant={field.value === "lb" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => field.onChange("lb")}
+                            disabled={isPending}
+                            data-testid="button-unit-lb"
+                          >
+                            lb
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === "kg" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => field.onChange("kg")}
+                            disabled={isPending}
+                            data-testid="button-unit-kg"
+                          >
+                            kg
+                          </Button>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex flex-wrap gap-4">
+                    <FormField
+                      control={form.control}
+                      name="currentWeight"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={1000}
+                                placeholder="Current weight"
+                                className="w-36"
+                                disabled={isPending}
+                                data-testid="input-current-weight"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                              />
+                              <span className="text-sm text-muted-foreground">{form.watch("weightUnit")}</span>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="targetWeight"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={1000}
+                                placeholder="Target weight"
+                                className="w-36"
+                                disabled={isPending}
+                                data-testid="input-target-weight"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                              />
+                              <span className="text-sm text-muted-foreground">{form.watch("weightUnit")}</span>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="workoutDaysPerWeek"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Workout Days Per Week (optional)</FormLabel>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
+                          <Button
+                            key={n}
+                            type="button"
+                            variant={field.value === n ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => field.onChange(field.value === n ? undefined : n)}
+                            disabled={isPending}
+                            data-testid={`button-workout-${n}`}
+                          >
+                            {n}
+                          </Button>
+                        ))}
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -393,8 +585,8 @@ export default function NewPlan() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="cook_daily">Cook Daily</SelectItem>
-                          <SelectItem value="batch_2day">Batch Cook (2-day)</SelectItem>
-                          <SelectItem value="batch_3to4day">Batch Cook (3-4 day)</SelectItem>
+                          <SelectItem value="batch_2day">Meal Prep (2-day)</SelectItem>
+                          <SelectItem value="batch_3to4day">Meal Prep (3-4 day)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

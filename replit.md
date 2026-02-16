@@ -1,11 +1,11 @@
 # MealPlan AI
 
 ## Overview
-AI-powered 7-day meal planning app. Users enter dietary preferences and the app generates personalized meal plans with step-by-step recipes, nutrition info, and organized grocery lists using OpenAI gpt-4.1-mini.
+AI-powered 7-day meal planning app. Users enter dietary preferences and personalization data (age, weight, workout frequency) and the app generates personalized 7-day meal plans with step-by-step recipes, nutrition info, and organized grocery lists using OpenAI gpt-4.1-mini.
 
 ## Tech Stack
 - **Frontend**: React + Vite (TypeScript), Tailwind CSS, shadcn/ui components
-- **Backend**: Express (TypeScript) with session-based auth
+- **Backend**: Express (TypeScript) with session-based auth (PostgreSQL-backed, 30-day sessions via connect-pg-simple)
 - **Database**: PostgreSQL (Drizzle ORM)
 - **AI**: OpenAI gpt-4.1-mini for meal plan generation
 
@@ -23,10 +23,11 @@ client/src/
     plan-generating.tsx - Dedicated generation progress page (polls, timeout, retry)
     plan-view.tsx  - View generated plan (meals + grocery list)
     plans-list.tsx - List of user's saved plans
+    preferences.tsx - Manage liked/disliked meals and ingredient preferences
 
 server/
-  index.ts         - Express server setup
-  routes.ts        - API routes (auth + meal plan CRUD)
+  index.ts         - Express server setup (connect-pg-simple session store)
+  routes.ts        - API routes (auth + meal plan CRUD + preferences management)
   storage.ts       - Database storage layer (IStorage interface)
   db.ts            - PostgreSQL connection
   openai.ts        - OpenAI integration (plan generation, swap, regen)
@@ -37,8 +38,12 @@ shared/
 ```
 
 ## Key Features
-- Email/password authentication with sessions
+- Email/password authentication with PostgreSQL-backed sessions (30-day duration)
 - AI-generated 7-day meal plans with configurable meals per day (2 or 3)
+- Dynamic meal slots: when mealsPerDay=2, user picks exactly 2 from breakfast/lunch/dinner
+- Personalization: age, current/target weight (lb/kg), workout days/week
+  - Age < 18 triggers safe, non-prescriptive nutrition language
+  - Weight/activity data adapts portion sizes and macro ranges
 - Multi-select diet/cuisine styles with chip UI, including custom style input
 - 14 foods-to-avoid options including Chicken, Beans/Legumes, Spicy Foods, Garlic/Onion
 - Dedicated generation page (/plan/:id/generating) with 4-stage dynamic timeline, progress bar, rotating tips, collapsible preference summary
@@ -55,18 +60,22 @@ shared/
   - Frontend polls for pricing (max 10 polls, 3s interval) with timeout fallback
 - Rate limiting: 10 AI calls per user per day
 - Print-friendly layout
-- Plan Settings panel: collapsible view of plan preferences, swap/regen limits in plan-view
+- Plan Settings panel: collapsible view of plan preferences including personalization, swap/regen limits
 - Meal feedback learning: like/dislike meals to improve future AI suggestions
   - MealFeedback table stores per-meal feedback with fingerprinting
   - IngredientPreference table tracks derived ingredient avoids/prefers
   - Preferences wired into all OpenAI prompts (plan gen, swap, regen day)
+- Preferences management page (/preferences): view and delete liked/disliked meals and avoided ingredients
 
 ## Schema Notes
 - `dietStyles` is a string array (replaced old `dietStyle` string field)
-- `mealsPerDay` is 2 or 3 (default 3); when 2, only lunch+dinner are generated, breakfast is optional/null
+- `mealsPerDay` is 2 or 3 (default 3)
+- `mealSlots` is optional string array; when mealsPerDay=2, stores exactly 2 of ["breakfast","lunch","dinner"]
+- `age`, `currentWeight`, `targetWeight` (optional numbers), `weightUnit` ("lb"|"kg"), `workoutDaysPerWeek` (0-7)
 - `pricingStatus` column on mealPlans tracks grocery pricing independently (pending/ready/failed)
-- Day schema has optional breakfast to support 2-meal plans
+- Day schema has optional breakfast, lunch, dinner to support dynamic meal slots
 - OpenAI prompts limited to 6-8 steps per meal, shorter summaries and whyItHelpsGoal
+- Goal enum uses `weight_loss` (backward compat: server normalizes old `fat_loss` values)
 
 ## API Endpoints
 - `POST /api/auth/signup` - Create account
@@ -84,7 +93,9 @@ shared/
 - `POST /api/plan/:id/grocery/owned` - Toggle owned item status
 - `POST /api/feedback/meal` - Like/dislike a meal (upserts feedback + derives ingredient prefs)
 - `GET /api/feedback/plan/:planId` - Get feedback map for all meals (by fingerprint)
-- `GET /api/preferences` - Get user's learned preference context
+- `GET /api/preferences` - Get user's full preference data (meals + ingredients with IDs)
+- `DELETE /api/preferences/meal/:id` - Remove a meal feedback entry
+- `DELETE /api/preferences/ingredient/:id` - Remove an ingredient preference
 
 ## Environment Variables
 - `DATABASE_URL` - PostgreSQL connection string

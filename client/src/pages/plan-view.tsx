@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
+  weight_loss: Flame,
   fat_loss: Flame,
   muscle_gain: Dumbbell,
   energy: Zap,
@@ -647,7 +648,7 @@ export default function PlanView() {
                       </div>
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <span className="text-muted-foreground">Prep:</span>
-                        <span className="font-medium">{prefs.prepStyle === "cook_daily" ? "Cook Daily" : prefs.prepStyle === "batch_2day" ? "Batch 2-Day" : "Batch 3-4 Day"}</span>
+                        <span className="font-medium">{prefs.prepStyle === "cook_daily" ? "Cook Daily" : prefs.prepStyle === "batch_2day" ? "Meal Prep (2-day)" : "Meal Prep (3-4 day)"}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <span className="text-muted-foreground">Budget:</span>
@@ -657,6 +658,36 @@ export default function PlanView() {
                         <div className="flex items-start justify-between gap-2 flex-wrap">
                           <span className="text-muted-foreground shrink-0">Avoiding:</span>
                           <span className="font-medium text-right">{prefs.foodsToAvoid.join(", ")}</span>
+                        </div>
+                      )}
+                      {prefs.mealsPerDay === 2 && prefs.mealSlots && prefs.mealSlots.length > 0 && (
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground">Meal Slots:</span>
+                          <span className="font-medium capitalize">{prefs.mealSlots.join(", ")}</span>
+                        </div>
+                      )}
+                      {prefs.age && (
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground">Age:</span>
+                          <span className="font-medium">{prefs.age}</span>
+                        </div>
+                      )}
+                      {prefs.currentWeight && (
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground">Current Weight:</span>
+                          <span className="font-medium">{prefs.currentWeight} {prefs.weightUnit || "lb"}</span>
+                        </div>
+                      )}
+                      {prefs.targetWeight && (
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground">Target Weight:</span>
+                          <span className="font-medium">{prefs.targetWeight} {prefs.weightUnit || "lb"}</span>
+                        </div>
+                      )}
+                      {prefs.workoutDaysPerWeek !== undefined && prefs.workoutDaysPerWeek !== null && (
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground">Workouts/Week:</span>
+                          <span className="font-medium">{prefs.workoutDaysPerWeek} days</span>
                         </div>
                       )}
                       <div className="flex items-center justify-between gap-2 flex-wrap">

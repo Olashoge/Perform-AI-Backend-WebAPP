@@ -26,6 +26,10 @@ export interface IStorage {
   getMealFeedbackForPlan(userId: string, planId: string): Promise<MealFeedbackRecord[]>;
   upsertIngredientPreference(userId: string, ingredientKey: string, preference: "avoid" | "prefer", source: "user" | "derived"): Promise<void>;
   getUserPreferenceContext(userId: string): Promise<UserPreferenceContext>;
+  getAllMealFeedback(userId: string): Promise<MealFeedbackRecord[]>;
+  getAllIngredientPreferences(userId: string): Promise<IngredientPreferenceRecord[]>;
+  deleteMealFeedback(id: string, userId: string): Promise<boolean>;
+  deleteIngredientPreference(id: string, userId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -279,6 +283,35 @@ export class DatabaseStorage implements IStorage {
     const preferIngredients = allIngPrefs.filter(p => p.preference === "prefer").map(p => p.ingredientKey);
 
     return { likedMeals, dislikedMeals, avoidIngredients, preferIngredients };
+  }
+
+  async getAllMealFeedback(userId: string): Promise<MealFeedbackRecord[]> {
+    return db.select().from(mealFeedback)
+      .where(eq(mealFeedback.userId, userId))
+      .orderBy(desc(mealFeedback.createdAt));
+  }
+
+  async getAllIngredientPreferences(userId: string): Promise<IngredientPreferenceRecord[]> {
+    return db.select().from(ingredientPreferences)
+      .where(eq(ingredientPreferences.userId, userId));
+  }
+
+  async deleteMealFeedback(id: string, userId: string): Promise<boolean> {
+    const [record] = await db.select().from(mealFeedback)
+      .where(and(eq(mealFeedback.id, id), eq(mealFeedback.userId, userId)))
+      .limit(1);
+    if (!record) return false;
+    await db.delete(mealFeedback).where(eq(mealFeedback.id, id));
+    return true;
+  }
+
+  async deleteIngredientPreference(id: string, userId: string): Promise<boolean> {
+    const [record] = await db.select().from(ingredientPreferences)
+      .where(and(eq(ingredientPreferences.id, id), eq(ingredientPreferences.userId, userId)))
+      .limit(1);
+    if (!record) return false;
+    await db.delete(ingredientPreferences).where(eq(ingredientPreferences.id, id));
+    return true;
   }
 }
 

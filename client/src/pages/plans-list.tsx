@@ -9,12 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
   UtensilsCrossed, Plus, CalendarDays, LogOut, Sparkles, Loader2,
-  Flame, Dumbbell, Zap, Heart, Trophy,
+  Flame, Dumbbell, Zap, Heart, Trophy, Settings,
 } from "lucide-react";
 import { format } from "date-fns";
 
 const GOAL_LABELS: Record<string, string> = {
-  fat_loss: "Fat Loss",
+  weight_loss: "Weight Loss",
+  fat_loss: "Weight Loss",
   muscle_gain: "Muscle Gain",
   energy: "Energy",
   maintenance: "Maintenance",
@@ -22,6 +23,7 @@ const GOAL_LABELS: Record<string, string> = {
 };
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
+  weight_loss: Flame,
   fat_loss: Flame,
   muscle_gain: Dumbbell,
   energy: Zap,
@@ -75,12 +77,20 @@ export default function PlansList() {
             <h1 className="text-2xl font-bold">Your Meal Plans</h1>
             <p className="text-sm text-muted-foreground mt-1">View and manage your AI-generated meal plans</p>
           </div>
-          <Link href="/new-plan">
-            <Button data-testid="button-create-plan">
-              <Plus className="h-4 w-4 mr-2" />
-              New Plan
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/preferences">
+              <Button variant="outline" data-testid="button-preferences">
+                <Settings className="h-4 w-4 mr-2" />
+                Preferences
+              </Button>
+            </Link>
+            <Link href="/new-plan">
+              <Button data-testid="button-create-plan">
+                <Plus className="h-4 w-4 mr-2" />
+                New Plan
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {plansLoading ? (
@@ -128,8 +138,8 @@ export default function PlansList() {
                                 {GOAL_LABELS[prefs?.goal] || "Maintenance"}
                               </Badge>
                             )}
-                            {prefs?.dietStyle && prefs.dietStyle !== "No Preference" && (
-                              <Badge variant="outline">{prefs.dietStyle}</Badge>
+                            {prefs?.dietStyles && prefs.dietStyles.length > 0 && prefs.dietStyles[0] !== "No Preference" && (
+                              <Badge variant="outline">{prefs.dietStyles.join(", ")}</Badge>
                             )}
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
                               <CalendarDays className="h-3 w-3" />
