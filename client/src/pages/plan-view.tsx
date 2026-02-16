@@ -275,12 +275,16 @@ function normalizeItemKeyClient(item: string): string {
 
 function GroceryListView({ planId }: { planId: string }) {
   const { toast } = useToast();
+  const [pollCount, setPollCount] = useState(0);
 
   const { data: groceryData, isLoading: groceryLoading } = useQuery<GroceryData>({
     queryKey: ["/api/plan", planId, "grocery"],
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (data && !data.pricing) return 3000;
+      if (data && !data.pricing && pollCount < 10) {
+        setPollCount(c => c + 1);
+        return 3000;
+      }
       return false;
     },
   });
@@ -297,6 +301,13 @@ function GroceryListView({ planId }: { planId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId, "grocery"] });
     },
+    onError: (_err, variables) => {
+      setLocalOwned(prev => {
+        const next = { ...prev };
+        delete next[variables.itemKey];
+        return next;
+      });
+    },
   });
 
   const regenGroceryMutation = useMutation({
@@ -305,6 +316,7 @@ function GroceryListView({ planId }: { planId: string }) {
       return await res.json();
     },
     onSuccess: () => {
+      setPollCount(0);
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId, "grocery"] });
       toast({ title: "Grocery list updated" });
@@ -401,8 +413,14 @@ function GroceryListView({ planId }: { planId: string }) {
       ) : (
         <Card>
           <CardContent className="p-4 flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground" data-testid="text-pricing-loading">Estimating prices...</span>
+            {pollCount < 10 ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground" data-testid="text-pricing-loading">Estimating prices...</span>
+              </>
+            ) : (
+              <span className="text-sm text-muted-foreground" data-testid="text-pricing-unavailable">Price estimates unavailable</span>
+            )}
           </CardContent>
         </Card>
       )}
