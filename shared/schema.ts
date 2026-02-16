@@ -15,6 +15,7 @@ export const mealPlans = pgTable("meal_plans", {
   userId: varchar("user_id").notNull().references(() => users.id),
   idempotencyKey: varchar("idempotency_key"),
   status: varchar("status", { length: 20 }).notNull().default("ready"),
+  pricingStatus: varchar("pricing_status", { length: 20 }).notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
@@ -86,12 +87,13 @@ export const loginSchema = z.object({
 
 export const preferencesSchema = z.object({
   goal: z.enum(["fat_loss", "muscle_gain", "energy", "maintenance", "performance"]),
-  dietStyle: z.string().min(1, "Diet style is required"),
+  dietStyles: z.array(z.string()).min(1, "Select at least one diet/cuisine style"),
   foodsToAvoid: z.array(z.string()).default([]),
   householdSize: z.number().int().min(1).max(8),
   prepStyle: z.enum(["cook_daily", "batch_2day", "batch_3to4day"]),
   budgetMode: z.enum(["normal", "budget_friendly"]),
   cookingTime: z.enum(["quick", "normal"]),
+  mealsPerDay: z.union([z.literal(2), z.literal(3)]).default(3),
   allergies: z.string().optional(),
 });
 
@@ -128,7 +130,7 @@ export const daySchema = z.object({
   dayIndex: z.number(),
   dayName: z.string(),
   meals: z.object({
-    breakfast: mealSchema,
+    breakfast: mealSchema.optional(),
     lunch: mealSchema,
     dinner: mealSchema,
   }),

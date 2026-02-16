@@ -19,6 +19,7 @@ declare module "express-session" {
 
 async function runGroceryPricing(planId: string, planJson: PlanOutput, prefs: Preferences): Promise<void> {
   try {
+    await storage.updatePricingStatus(planId, "pending");
     log(`Generating grocery pricing for plan ${planId}`, "openai");
     const pricing = await generateGroceryPricing(
       planJson.groceryList.sections,
@@ -28,6 +29,7 @@ async function runGroceryPricing(planId: string, planJson: PlanOutput, prefs: Pr
     await storage.updateGroceryPricing(planId, pricing);
     log(`Grocery pricing generated for plan ${planId}`, "openai");
   } catch (err) {
+    await storage.updatePricingStatus(planId, "failed");
     log(`Grocery pricing failed for plan ${planId}: ${err instanceof Error ? err.message : String(err)}`, "openai");
   }
 }
@@ -192,7 +194,7 @@ export async function registerRoutes(
     if (!plan || plan.userId !== req.session.userId) {
       return res.status(404).json({ message: "Plan not found" });
     }
-    return res.json({ id: plan.id, status: plan.status });
+    return res.json({ id: plan.id, status: plan.status, pricingStatus: plan.pricingStatus });
   });
 
   app.get("/api/plan/:id", requireAuth, async (req: Request, res: Response) => {

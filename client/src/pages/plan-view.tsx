@@ -239,11 +239,13 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
       </div>
       <div className="space-y-2">
         {(["breakfast", "lunch", "dinner"] as const).map((mealType) => {
-          const fp = generateMealFingerprint(day.meals[mealType].name, day.meals[mealType].cuisineTag, day.meals[mealType].ingredients);
+          const meal = day.meals[mealType];
+          if (!meal) return null;
+          const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
           return (
             <MealCard
               key={mealType}
-              meal={day.meals[mealType]}
+              meal={meal}
               dayIndex={day.dayIndex}
               mealType={mealType}
               planId={planId}
@@ -535,6 +537,7 @@ export default function PlanView() {
   const plan = planStatus === "ready" ? (data?.planJson as PlanOutput | undefined) : undefined;
   const swapCount = data?.swapCount ?? 0;
   const regenDayCount = data?.regenDayCount ?? 0;
+  const prefs = data?.preferencesJson as any | undefined;
 
   const handlePrint = () => {
     window.print();
@@ -596,10 +599,10 @@ export default function PlanView() {
           </Card>
         ) : plan ? (
           <>
-            <div className="mb-6">
+            <div className="mb-6 space-y-3">
               <p className="text-muted-foreground text-sm leading-relaxed">{plan.summary}</p>
               {plan.nutritionNotes && (
-                <div className="mt-3 flex items-start gap-2 p-3 rounded-md bg-primary/5 border border-primary/10">
+                <div className="flex items-start gap-2 p-3 rounded-md bg-primary/5 border border-primary/10">
                   <Activity className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <div className="text-sm">
                     <span className="font-medium">Daily targets: </span>
@@ -611,6 +614,62 @@ export default function PlanView() {
                     </span>
                   </div>
                 </div>
+              )}
+              {prefs && (
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground" data-testid="button-toggle-plan-settings">
+                      <span className="text-xs">Plan Settings</span>
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="bg-muted/50 rounded-md p-3 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-muted-foreground">Goal:</span>
+                        <span className="font-medium capitalize">{prefs.goal?.replace(/_/g, " ")}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-muted-foreground">Cuisines:</span>
+                        <div className="flex gap-1 flex-wrap justify-end">
+                          {(prefs.dietStyles || [prefs.dietStyle || "No Preference"]).map((s: string) => (
+                            <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-muted-foreground">Meals/Day:</span>
+                        <span className="font-medium">{prefs.mealsPerDay || 3}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-muted-foreground">Household:</span>
+                        <span className="font-medium">{prefs.householdSize} {prefs.householdSize === 1 ? "person" : "people"}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-muted-foreground">Prep:</span>
+                        <span className="font-medium">{prefs.prepStyle === "cook_daily" ? "Cook Daily" : prefs.prepStyle === "batch_2day" ? "Batch 2-Day" : "Batch 3-4 Day"}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-muted-foreground">Budget:</span>
+                        <span className="font-medium">{prefs.budgetMode === "budget_friendly" ? "Budget Friendly" : "Normal"}</span>
+                      </div>
+                      {prefs.foodsToAvoid && prefs.foodsToAvoid.length > 0 && (
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground shrink-0">Avoiding:</span>
+                          <span className="font-medium text-right">{prefs.foodsToAvoid.join(", ")}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-muted-foreground">Swaps remaining:</span>
+                        <span className="font-medium">{3 - swapCount}/3</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-muted-foreground">Day regens remaining:</span>
+                        <span className="font-medium">{1 - regenDayCount}/1</span>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               )}
             </div>
 

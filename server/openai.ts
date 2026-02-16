@@ -12,13 +12,17 @@ function buildSystemPrompt(): string {
 
 RULES:
 - Return ONLY valid JSON. No markdown, no commentary, no code fences.
-- Always respect foodsToAvoid and allergies — never include them.
+- Always respect foodsToAvoid and allergies — never include them as ingredients or feature them in meals.
 - Keep ingredients realistic and accessible.
 - Budget mode: reduce specialty ingredients, keep meals simple.
-- Family mode (householdSize > 2): avoid overly spicy options unless dietStyle explicitly implies spice.
-- Each meal must have 5-10 steps maximum.
+- Family mode (householdSize > 2): avoid overly spicy options unless diet styles explicitly imply spice.
+- Each meal must have 6-8 steps maximum. Keep steps concise.
 - Scale servings to match householdSize.
-- Quick cooking time means each meal should be under 30 minutes.`;
+- Quick cooking time means each meal should be under 30 minutes.
+- Keep ingredient lines short (quantity + ingredient name only).
+- Keep summary to 2-3 sentences.
+- Keep whyItHelpsGoal to 1 brief sentence.
+- Keep nutrition explanation concise (2-3 reasons max).`;
 }
 
 function buildPreferenceContextBlock(ctx?: UserPreferenceContext): string {
@@ -42,31 +46,49 @@ function buildPreferenceContextBlock(ctx?: UserPreferenceContext): string {
   return `\n\n--- USER PREFERENCE LEARNING ---\nThe following preferences were learned from the user's past meal feedback. Respect these strictly:\n${parts.join("\n\n")}\n--- END USER PREFERENCES ---\n`;
 }
 
+function formatDietStyles(prefs: Preferences): string {
+  const styles = prefs.dietStyles;
+  if (!styles || styles.length === 0) return "No Preference";
+  return styles.join(", ");
+}
+
+function getMealTypesForPrefs(prefs: Preferences): string[] {
+  if (prefs.mealsPerDay === 2) return ["lunch", "dinner"];
+  return ["breakfast", "lunch", "dinner"];
+}
+
+function buildMealsStructure(prefs: Preferences): string {
+  const types = getMealTypesForPrefs(prefs);
+  return types.map(t => `"${t}": { meal object }`).join(",\n        ");
+}
+
 function buildPlanPrompt(prefs: Preferences, prefCtx?: UserPreferenceContext): string {
+  const mealTypes = getMealTypesForPrefs(prefs);
+  const mealsPerDayNote = prefs.mealsPerDay === 2 ? "Generate only lunch and dinner (2 meals per day). Do NOT include breakfast." : "Generate breakfast, lunch, and dinner (3 meals per day).";
+
   return `Generate a complete 7-day meal plan based on these preferences:
 
 Goal: ${prefs.goal}
-Diet/Cuisine Style: ${prefs.dietStyle}
+Diet/Cuisine Styles: ${formatDietStyles(prefs)} (Prefer meals that fit ANY of these cuisines/styles, and blend them sensibly)
 Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") : "None"}
 Household Size: ${prefs.householdSize}
 Prep Style: ${prefs.prepStyle}
 Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
+Meals Per Day: ${prefs.mealsPerDay || 3} — ${mealsPerDayNote}
 Allergies: ${prefs.allergies || "None"}
 
 Return a JSON object with this exact structure:
 {
   "title": "string - catchy plan title",
-  "summary": "string - 2-4 sentences summarizing the plan",
+  "summary": "string - 2-3 sentences summarizing the plan",
   "preferencesEcho": { copy of the preferences above as an object },
   "days": [
     {
       "dayIndex": 1-7,
       "dayName": "Day 1" through "Day 7",
       "meals": {
-        "breakfast": { meal object },
-        "lunch": { meal object },
-        "dinner": { meal object }
+        ${buildMealsStructure(prefs)}
       }
     }
   ],
@@ -87,7 +109,7 @@ Return a JSON object with this exact structure:
   },` : ""}
   "nutritionNotes": {
     "dailyMacroTargetsRange": { "calories": "string range", "protein_g": "string range", "carbs_g": "string range", "fat_g": "string range" },
-    "howThisSupportsGoal": ["reason 1", "reason 2", ...]
+    "howThisSupportsGoal": ["reason 1", "reason 2"] (2-3 concise reasons)
   }
 }
 
@@ -97,10 +119,10 @@ Meal object structure:
   "cuisineTag": "string",
   "prepTimeMinutes": number,
   "servings": number (scaled to householdSize of ${prefs.householdSize}),
-  "ingredients": ["string with quantity included"],
-  "steps": ["step 1", ..., max 10 steps],
+  "ingredients": ["short string with quantity, e.g. 2 cups rice"],
+  "steps": ["step 1", ..., max 6-8 steps, keep concise],
   "nutritionEstimateRange": { "calories": "string", "protein_g": "string", "carbs_g": "string", "fat_g": "string" },
-  "whyItHelpsGoal": "1-2 sentences"
+  "whyItHelpsGoal": "1 brief sentence"
 }${buildPreferenceContextBlock(prefCtx)}`;
 }
 
@@ -111,7 +133,7 @@ The current meal "${existingMealName}" needs to be replaced with something diffe
 
 Preferences:
 Goal: ${prefs.goal}
-Diet/Cuisine Style: ${prefs.dietStyle}
+Diet/Cuisine Styles: ${formatDietStyles(prefs)}
 Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") : "None"}
 Household Size: ${prefs.householdSize}
 Budget Mode: ${prefs.budgetMode}
@@ -124,19 +146,22 @@ Return ONLY a JSON meal object:
   "cuisineTag": "string",
   "prepTimeMinutes": number,
   "servings": ${prefs.householdSize},
-  "ingredients": ["string with quantity"],
-  "steps": ["step 1", ..., max 10],
+  "ingredients": ["short string with quantity"],
+  "steps": ["step 1", ..., max 6-8 steps],
   "nutritionEstimateRange": { "calories": "string", "protein_g": "string", "carbs_g": "string", "fat_g": "string" },
-  "whyItHelpsGoal": "1-2 sentences"
+  "whyItHelpsGoal": "1 brief sentence"
 }${buildPreferenceContextBlock(prefCtx)}`;
 }
 
 function buildRegenDayPrompt(prefs: Preferences, dayIndex: number, prefCtx?: UserPreferenceContext): string {
-  return `Generate meals for a SINGLE day (Day ${dayIndex}) of a meal plan.
+  const mealTypes = getMealTypesForPrefs(prefs);
+  const mealsNote = prefs.mealsPerDay === 2 ? "Generate only lunch and dinner." : "Generate breakfast, lunch, and dinner.";
+
+  return `Generate meals for a SINGLE day (Day ${dayIndex}) of a meal plan. ${mealsNote}
 
 Preferences:
 Goal: ${prefs.goal}
-Diet/Cuisine Style: ${prefs.dietStyle}
+Diet/Cuisine Styles: ${formatDietStyles(prefs)}
 Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") : "None"}
 Household Size: ${prefs.householdSize}
 Budget Mode: ${prefs.budgetMode}
@@ -148,13 +173,11 @@ Return ONLY a JSON object:
   "dayIndex": ${dayIndex},
   "dayName": "Day ${dayIndex}",
   "meals": {
-    "breakfast": { meal object },
-    "lunch": { meal object },
-    "dinner": { meal object }
+    ${buildMealsStructure(prefs)}
   }
 }
 
-Meal object: { "name", "cuisineTag", "prepTimeMinutes", "servings": ${prefs.householdSize}, "ingredients": [...], "steps": [...max 10], "nutritionEstimateRange": { "calories", "protein_g", "carbs_g", "fat_g" }, "whyItHelpsGoal" }${buildPreferenceContextBlock(prefCtx)}`;
+Meal object: { "name", "cuisineTag", "prepTimeMinutes", "servings": ${prefs.householdSize}, "ingredients": ["short string with qty"], "steps": [...max 6-8], "nutritionEstimateRange": { "calories", "protein_g", "carbs_g", "fat_g" }, "whyItHelpsGoal": "1 brief sentence" }${buildPreferenceContextBlock(prefCtx)}`;
 }
 
 async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<string> {
@@ -310,8 +333,10 @@ export function rebuildGroceryList(planJson: PlanOutput): PlanOutput["groceryLis
   };
 
   for (const day of planJson.days) {
-    for (const mealType of ["breakfast", "lunch", "dinner"] as const) {
+    const mealTypes = ["breakfast", "lunch", "dinner"] as const;
+    for (const mealType of mealTypes) {
       const meal = day.meals[mealType];
+      if (!meal) continue;
       for (const ing of meal.ingredients) {
         const category = categorize(ing);
         if (!ingredientMap.has(category)) {

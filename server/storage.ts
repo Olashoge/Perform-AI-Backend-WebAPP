@@ -19,6 +19,7 @@ export interface IStorage {
   logAction(userId: string, action: string, meta?: any): Promise<void>;
   getAiCallCountToday(userId: string): Promise<number>;
   updateGroceryPricing(id: string, pricingJson: GroceryPricing | null): Promise<MealPlan | undefined>;
+  updatePricingStatus(id: string, status: string): Promise<MealPlan | undefined>;
   getOwnedGroceryItems(userId: string, mealPlanId: string): Promise<OwnedGroceryItem[]>;
   upsertOwnedGroceryItem(userId: string, mealPlanId: string, itemKey: string, isOwned: boolean): Promise<OwnedGroceryItem>;
   upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" }): Promise<MealFeedbackRecord>;
@@ -156,8 +157,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateGroceryPricing(id: string, pricingJson: GroceryPricing | null): Promise<MealPlan | undefined> {
+    const updates: any = { groceryPricingJson: pricingJson };
+    if (pricingJson) {
+      updates.pricingStatus = "ready";
+    } else {
+      updates.pricingStatus = "pending";
+    }
     const [plan] = await db.update(mealPlans)
-      .set({ groceryPricingJson: pricingJson })
+      .set(updates)
+      .where(eq(mealPlans.id, id))
+      .returning();
+    return plan;
+  }
+
+  async updatePricingStatus(id: string, status: string): Promise<MealPlan | undefined> {
+    const [plan] = await db.update(mealPlans)
+      .set({ pricingStatus: status })
       .where(eq(mealPlans.id, id))
       .returning();
     return plan;

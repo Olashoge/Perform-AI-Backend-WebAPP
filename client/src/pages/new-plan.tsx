@@ -10,13 +10,15 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { UtensilsCrossed, Loader2, ArrowLeft, Sparkles } from "lucide-react";
+import { UtensilsCrossed, Loader2, ArrowLeft, Sparkles, X, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const COMMON_FOODS_TO_AVOID = [
   "Pork", "Shellfish", "Dairy", "Gluten", "Soy", "Eggs", "Nuts", "Red Meat", "Fish", "Mushrooms",
+  "Chicken", "Beans/Legumes", "Spicy Foods", "Garlic/Onion",
 ];
 
 const DIET_STYLES = [
@@ -38,17 +40,19 @@ export default function NewPlan() {
   const [isPending, setIsPending] = useState(false);
   const { toast } = useToast();
   const submittedRef = useRef(false);
+  const [customStyleInput, setCustomStyleInput] = useState("");
 
   const form = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
     defaultValues: {
       goal: "maintenance",
-      dietStyle: "No Preference",
+      dietStyles: ["No Preference"],
       foodsToAvoid: [],
       householdSize: 1,
       prepStyle: "cook_daily",
       budgetMode: "normal",
       cookingTime: "normal",
+      mealsPerDay: 3,
       allergies: "",
     },
   });
@@ -158,23 +162,89 @@ export default function NewPlan() {
               <CardContent className="space-y-4">
                 <FormField
                   control={form.control}
-                  name="dietStyle"
+                  name="dietStyles"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Diet / Cuisine Style</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={isPending}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-diet-style">
-                            <SelectValue placeholder="Select a style" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {DIET_STYLES.map((s) => (
-                            <SelectItem key={s} value={s}>{s}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>Choose a cuisine style or type your own</FormDescription>
+                      <FormLabel>Diet / Cuisine Styles (select multiple)</FormLabel>
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {(field.value || []).map((style: string) => (
+                          <Badge
+                            key={style}
+                            variant="default"
+                            className="cursor-pointer gap-1"
+                            onClick={() => {
+                              if (!isPending) {
+                                field.onChange(field.value.filter((s: string) => s !== style));
+                              }
+                            }}
+                            data-testid={`badge-style-${style.toLowerCase().replace(/\s/g, "-")}`}
+                          >
+                            {style}
+                            <X className="h-3 w-3" />
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {DIET_STYLES.filter(s => !(field.value || []).includes(s)).map((style) => (
+                          <Button
+                            key={style}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="justify-start text-xs"
+                            onClick={() => {
+                              const current = field.value || [];
+                              if (style === "No Preference") {
+                                field.onChange(["No Preference"]);
+                              } else {
+                                field.onChange([...current.filter(s => s !== "No Preference"), style]);
+                              }
+                            }}
+                            disabled={isPending}
+                            data-testid={`button-style-${style.toLowerCase().replace(/\s/g, "-")}`}
+                          >
+                            <Plus className="h-3 w-3 mr-1 shrink-0" />
+                            {style}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Input
+                          placeholder="Add custom style..."
+                          className="flex-1"
+                          value={customStyleInput}
+                          onChange={(e) => setCustomStyleInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const trimmed = customStyleInput.trim();
+                              if (trimmed && !(field.value || []).includes(trimmed)) {
+                                field.onChange([...(field.value || []).filter(s => s !== "No Preference"), trimmed]);
+                                setCustomStyleInput("");
+                              }
+                            }
+                          }}
+                          disabled={isPending}
+                          data-testid="input-custom-style"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const trimmed = customStyleInput.trim();
+                            if (trimmed && !(field.value || []).includes(trimmed)) {
+                              field.onChange([...(field.value || []).filter(s => s !== "No Preference"), trimmed]);
+                              setCustomStyleInput("");
+                            }
+                          }}
+                          disabled={isPending || !customStyleInput.trim()}
+                          data-testid="button-add-custom-style"
+                        >
+                          Add
+                        </Button>
+                      </div>
+                      <FormDescription>Pick one or more cuisines, or type your own</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -202,7 +272,7 @@ export default function NewPlan() {
                                 }
                               }}
                               disabled={isPending}
-                              data-testid={`checkbox-avoid-${food.toLowerCase().replace(/\s/g, "-")}`}
+                              data-testid={`checkbox-avoid-${food.toLowerCase().replace(/[\s/]/g, "-")}`}
                             />
                             {food}
                           </label>
@@ -228,6 +298,47 @@ export default function NewPlan() {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <h2 className="font-semibold">Meals & Schedule</h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="mealsPerDay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Meals Per Day</FormLabel>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          type="button"
+                          variant={field.value === 2 ? "default" : "outline"}
+                          onClick={() => field.onChange(2)}
+                          disabled={isPending}
+                          data-testid="button-meals-2"
+                        >
+                          2 Meals (Lunch + Dinner)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={field.value === 3 ? "default" : "outline"}
+                          onClick={() => field.onChange(3)}
+                          disabled={isPending}
+                          data-testid="button-meals-3"
+                        >
+                          3 Meals (Full Day)
+                        </Button>
+                      </div>
+                      <FormDescription>
+                        {field.value === 2 ? "Lunch and dinner only" : "Breakfast, lunch, and dinner"}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

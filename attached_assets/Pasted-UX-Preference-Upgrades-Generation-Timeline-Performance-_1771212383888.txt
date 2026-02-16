@@ -1,0 +1,134 @@
+UX + Preference Upgrades + Generation Timeline + Performance
+
+Implement the following improvements:
+
+A) Foods to Avoid: add 3–4 more items
+
+Add these checkboxes to the Foods to Avoid list:
+
+Chicken
+
+Beans/Legumes
+
+Spicy foods
+
+Garlic/Onion
+(Keep existing ones. Also keep the free-text allergies/avoid box.)
+
+Ensure these new selections are included in the preferences payload and fully enforced in prompts (avoid both ingredients + meals featuring them).
+
+B) Meals per day selection
+
+Add a field: mealsPerDay with options:
+
+2 meals/day
+
+3 meals/day (default)
+
+Update generation logic + JSON schema accordingly:
+
+If 2 meals/day: generate lunch + dinner (or allow user to pick which two later; for now default to lunch+dinner)
+
+If 3 meals/day: breakfast + lunch + dinner
+
+Update UI rendering to match.
+
+C) Multi-select Diet/Cuisine Style
+
+Change dietStyle from single-select to multi-select (chips or multi-select dropdown).
+Store as dietStyles: string[].
+Allow custom typed entry too (added as a chip).
+Update prompts: “Prefer meals that fit ANY of these cuisines/styles, and blend them sensibly.”
+
+D) Generation page: update time estimate + dynamic timeline
+
+The generation currently takes ~45–60 seconds. Update the copy accordingly.
+
+Add a dynamic staged timeline on /plan/:id/generating that updates based on elapsed time (frontend only, no backend streaming required). Example stages:
+
+0–20s: “Building your meal plan…”
+
+20–40s: “Compiling your grocery list…”
+
+40–60s: “Estimating prices…”
+
+60s+: “Syncing everything together…”
+
+Also show an animated progress indicator and rotate “tips” text (e.g., “Pro tip: Batch prep saves time.”) every ~6–8 seconds.
+
+E) Show the user’s input/preferences used for the plan
+
+On the plan view page (/plan/:id), add a “Your Inputs” / “Plan Settings” panel that displays:
+
+goal
+
+dietStyles (multi)
+
+foodsToAvoid (checkbox selections)
+
+allergies text
+
+household size
+
+prep style
+
+budget mode
+
+cooking time
+
+mealsPerDay
+
+Data source should be the saved preferencesJson (not the client state).
+
+Also show this summary (collapsed) on the generating page so users feel grounded.
+
+F) Performance: reduce perceived wait + prevent long blocking
+
+Right now, plan generation + price estimation is making users wait ~45–60s. Improve both:
+
+Reduce token output
+
+Limit meal steps to max 6–8.
+
+Keep ingredient lines short.
+
+Keep summary short (2–3 sentences).
+
+Keep nutrition explanation concise.
+
+Do not block “ready” on pricing
+
+Mark meal plan status="ready" as soon as planJson is validated and saved.
+
+Kick off pricing estimation immediately afterward, but allow pricing to be pending in the plan response.
+
+Add pricingStatus: "pending"|"ready"|"failed" in the API response and/or stored on MealPlan.
+
+Plan page should render immediately with meals, and show grocery pricing section as “Estimating prices…” until pricing is ready.
+
+Polling logic
+
+Generating page should redirect to /plan/:id once status="ready" (even if pricing is still pending).
+
+Plan page should poll pricing endpoint every 2s until pricingStatus="ready" or timeout.
+
+This reduces the “blank wait” and makes the app feel much faster.
+
+G) Update API + validation
+
+Ensure Zod schemas and JSON contract support:
+
+dietStyles: string[]
+
+mealsPerDay: 2|3
+
+If mealsPerDay=2, meal object should only include lunch+dinner (or allow breakfast optional but do not render breakfast).
+Ensure backend persists these in preferencesJson and echoes them in plan output.
+
+H) Small UI polish
+
+On Generate button click, disable it and route to generating page immediately (already done).
+
+On the plan page, add a small “Regenerate” area that warns about limits.
+
+Implement and test end-to-end.
