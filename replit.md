@@ -72,6 +72,8 @@ shared/
 - `mealsPerDay` is 2 or 3 (default 3)
 - `mealSlots` is optional string array; when mealsPerDay=2, stores exactly 2 of ["breakfast","lunch","dinner"]
 - `age`, `currentWeight`, `targetWeight` (optional numbers), `weightUnit` ("lb"|"kg"), `workoutDaysPerWeek` (0-7)
+- `spiceLevel` ("none"|"mild"|"medium"|"hot"), default "medium" — applied independently of cuisine
+- `authenticityMode` ("traditional"|"weeknight"|"mixed"), default "mixed" — controls recipe complexity
 - `pricingStatus` column on mealPlans tracks grocery pricing independently (pending/ready/failed)
 - Day schema has optional breakfast, lunch, dinner to support dynamic meal slots
 - OpenAI prompts limited to 6-8 steps per meal, shorter summaries and whyItHelpsGoal

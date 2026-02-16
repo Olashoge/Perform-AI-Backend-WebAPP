@@ -25,7 +25,23 @@ RULES:
 - Keep ingredient lines short (quantity + ingredient name only).
 - Keep summary to 2-3 sentences.
 - Keep whyItHelpsGoal to 1 brief sentence.
-- Keep nutrition explanation concise (2-3 reasons max).`;
+- Keep nutrition explanation concise (2-3 reasons max).
+
+SPICE LEVEL RULES:
+- Apply spice level INDEPENDENTLY of the cuisine. Do NOT infer spice tolerance from the chosen cuisine.
+- "none": No spicy ingredients or hot seasonings at all. No chili, cayenne, hot sauce, jalapeño, etc.
+- "mild": Only very gentle warmth allowed (e.g., mild paprika, a pinch of black pepper). No hot peppers.
+- "medium": Moderate spice is fine (jalapeño, sriracha, red pepper flakes in moderate amounts).
+- "hot": Generous use of hot peppers, chili paste, cayenne, habanero, etc. is encouraged.
+
+AUTHENTICITY MODE RULES:
+- "traditional": Use more authentic ingredients and traditional cooking methods for the chosen cuisines. Still ensure ingredients are available at US grocery stores — if a traditional ingredient is uncommon, include a parenthetical US substitute that keeps the dish coherent.
+- "weeknight": Prioritize fewer ingredients, faster steps, and simpler prep. Simplify traditional dishes to be weeknight-friendly while keeping the cuisine flavor profile.
+- "mixed": Balance authentic touches with practical weeknight convenience.
+
+CUISINE ADHERENCE:
+- When diet/cuisine styles are specified, meals MUST strongly reflect those cuisines through their staple ingredients, spice profiles, and cooking methods.
+- Do NOT just add a "twist" — actually use core ingredients and techniques from the specified cuisines.`;
 
   if (isMinor) {
     base += `\n\nIMPORTANT: This user is under 18 years old. Use only supportive, non-prescriptive language about nutrition. Avoid terms like "diet", "restrict", "cut", "deficit". Focus on balanced growth, energy for activities, and healthy habits. Never suggest calorie restriction.`;
@@ -129,6 +145,8 @@ Household Size: ${prefs.householdSize}
 Prep Style: ${prefs.prepStyle}
 Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
+Spice Level: ${prefs.spiceLevel || "medium"}
+Authenticity Mode: ${prefs.authenticityMode || "mixed"}
 Meals Per Day: ${prefs.mealsPerDay || 3} — ${mealsNote}
 Allergies: ${prefs.allergies || "None"}
 ${buildPersonalizationBlock(prefs)}
@@ -198,6 +216,8 @@ Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") 
 Household Size: ${prefs.householdSize}
 Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
+Spice Level: ${prefs.spiceLevel || "medium"}
+Authenticity Mode: ${prefs.authenticityMode || "mixed"}
 Allergies: ${prefs.allergies || "None"}
 ${buildPersonalizationBlock(prefs)}
 
@@ -232,6 +252,8 @@ Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") 
 Household Size: ${prefs.householdSize}
 Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
+Spice Level: ${prefs.spiceLevel || "medium"}
+Authenticity Mode: ${prefs.authenticityMode || "mixed"}
 Allergies: ${prefs.allergies || "None"}
 ${buildPersonalizationBlock(prefs)}
 

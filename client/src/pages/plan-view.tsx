@@ -690,6 +690,18 @@ export default function PlanView() {
                           <span className="font-medium">{prefs.workoutDaysPerWeek} days</span>
                         </div>
                       )}
+                      {prefs.spiceLevel && (
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground">Spice Level:</span>
+                          <span className="font-medium capitalize">{prefs.spiceLevel}</span>
+                        </div>
+                      )}
+                      {prefs.authenticityMode && (
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground">Recipe Style:</span>
+                          <span className="font-medium capitalize">{prefs.authenticityMode === "weeknight" ? "Weeknight Easy" : prefs.authenticityMode}</span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <span className="text-muted-foreground">Swaps remaining:</span>
                         <span className="font-medium">{3 - swapCount}/3</span>

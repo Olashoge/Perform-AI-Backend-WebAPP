@@ -60,6 +60,8 @@ export default function NewPlan() {
       targetWeight: undefined,
       weightUnit: "lb",
       workoutDaysPerWeek: undefined,
+      spiceLevel: "medium",
+      authenticityMode: "mixed",
     },
   });
 
@@ -634,6 +636,67 @@ export default function NewPlan() {
                             <SelectItem value="normal">Normal</SelectItem>
                           </SelectContent>
                         </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="spiceLevel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Spice Level</FormLabel>
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          {([
+                            { value: "none", label: "None" },
+                            { value: "mild", label: "Mild" },
+                            { value: "medium", label: "Medium" },
+                            { value: "hot", label: "Hot" },
+                          ] as const).map(opt => (
+                            <Button
+                              key={opt.value}
+                              type="button"
+                              variant={field.value === opt.value ? "default" : "outline"}
+                              onClick={() => field.onChange(opt.value)}
+                              disabled={isPending}
+                              data-testid={`button-spice-${opt.value}`}
+                            >
+                              {opt.label}
+                            </Button>
+                          ))}
+                        </div>
+                        <FormDescription>Applied independently of cuisine choice</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="authenticityMode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Recipe Style</FormLabel>
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          {([
+                            { value: "traditional", label: "Traditional" },
+                            { value: "weeknight", label: "Weeknight Easy" },
+                            { value: "mixed", label: "Mixed" },
+                          ] as const).map(opt => (
+                            <Button
+                              key={opt.value}
+                              type="button"
+                              variant={field.value === opt.value ? "default" : "outline"}
+                              onClick={() => field.onChange(opt.value)}
+                              disabled={isPending}
+                              data-testid={`button-authenticity-${opt.value}`}
+                            >
+                              {opt.label}
+                            </Button>
+                          ))}
+                        </div>
+                        <FormDescription>Traditional uses authentic methods; Weeknight keeps it simple</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
