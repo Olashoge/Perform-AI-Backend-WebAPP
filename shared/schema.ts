@@ -13,9 +13,11 @@ export const users = pgTable("users", {
 export const mealPlans = pgTable("meal_plans", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
+  idempotencyKey: varchar("idempotency_key"),
+  status: varchar("status", { length: 20 }).notNull().default("ready"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   preferencesJson: jsonb("preferences_json").notNull(),
-  planJson: jsonb("plan_json").notNull(),
+  planJson: jsonb("plan_json"),
   swapCount: integer("swap_count").default(0).notNull(),
   regenDayCount: integer("regen_day_count").default(0).notNull(),
 });

@@ -121,32 +121,63 @@ export async function registerRoutes(
 
   app.post("/api/plan", requireAuth, async (req: Request, res: Response) => {
     try {
-      const parsed = preferencesSchema.safeParse(req.body);
+      const { idempotencyKey, ...prefsBody } = req.body;
+      const parsed = preferencesSchema.safeParse(prefsBody);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid preferences" });
       }
 
       const userId = req.session.userId!;
+
+      if (idempotencyKey) {
+        const existing = await storage.findByIdempotencyKey(userId, idempotencyKey);
+        if (existing) {
+          return res.json(existing);
+        }
+      }
+
+      const generating = await storage.findGeneratingPlan(userId);
+      if (generating) {
+        return res.json(generating);
+      }
+
       const aiCalls = await storage.getAiCallCountToday(userId);
       if (aiCalls >= 10) {
         return res.status(429).json({ message: "Daily AI call limit reached (10/day). Try again tomorrow." });
       }
 
-      log(`Generating full plan for user ${userId}`, "openai");
-      const planJson = await generateFullPlan(parsed.data);
+      const pendingPlan = await storage.createPendingMealPlan(userId, idempotencyKey || null, parsed.data);
 
-      const plan = await storage.createMealPlan(userId, parsed.data, planJson);
-      await storage.logAction(userId, "ai_call_generate_plan", { planId: plan.id });
+      res.json(pendingPlan);
 
-      return res.json(plan);
+      (async () => {
+        try {
+          log(`Generating full plan for user ${userId} (plan ${pendingPlan.id})`, "openai");
+          const planJson = await generateFullPlan(parsed.data);
+          await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
+          await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
+          log(`Plan ${pendingPlan.id} generated successfully`, "openai");
+        } catch (err) {
+          log(`Plan generation error for ${pendingPlan.id}: ${err}`, "openai");
+          await storage.updatePlanStatus(pendingPlan.id, "failed");
+        }
+      })();
     } catch (err) {
-      log(`Plan generation error: ${err}`, "openai");
+      log(`Plan creation error: ${err}`, "openai");
       return res.status(500).json({ message: "Failed to generate meal plan. Please try again." });
     }
   });
 
+  app.get("/api/plan/:id/status", requireAuth, async (req: Request, res: Response) => {
+    const plan = await storage.getMealPlan(req.params.id as string);
+    if (!plan || plan.userId !== req.session.userId) {
+      return res.status(404).json({ message: "Plan not found" });
+    }
+    return res.json({ id: plan.id, status: plan.status });
+  });
+
   app.get("/api/plan/:id", requireAuth, async (req: Request, res: Response) => {
-    const plan = await storage.getMealPlan(req.params.id);
+    const plan = await storage.getMealPlan(req.params.id as string);
     if (!plan || plan.userId !== req.session.userId) {
       return res.status(404).json({ message: "Plan not found" });
     }
@@ -160,7 +191,7 @@ export async function registerRoutes(
 
   app.post("/api/plan/:id/swap", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plan = await storage.getMealPlan(req.params.id);
+      const plan = await storage.getMealPlan(req.params.id as string);
       if (!plan || plan.userId !== req.session.userId) {
         return res.status(404).json({ message: "Plan not found" });
       }
@@ -205,7 +236,7 @@ export async function registerRoutes(
 
   app.post("/api/plan/:id/regenerate-day", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plan = await storage.getMealPlan(req.params.id);
+      const plan = await storage.getMealPlan(req.params.id as string);
       if (!plan || plan.userId !== req.session.userId) {
         return res.status(404).json({ message: "Plan not found" });
       }
@@ -248,7 +279,7 @@ export async function registerRoutes(
 
   app.post("/api/plan/:id/grocery/regenerate", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plan = await storage.getMealPlan(req.params.id);
+      const plan = await storage.getMealPlan(req.params.id as string);
       if (!plan || plan.userId !== req.session.userId) {
         return res.status(404).json({ message: "Plan not found" });
       }

@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, gte } from "drizzle-orm";
 import { db } from "./db";
 import { users, mealPlans, auditLogs, type User, type MealPlan } from "@shared/schema";
 
@@ -7,8 +7,12 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(email: string, passwordHash: string): Promise<User>;
   createMealPlan(userId: string, preferencesJson: any, planJson: any): Promise<MealPlan>;
+  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any): Promise<MealPlan>;
   getMealPlan(id: string): Promise<MealPlan | undefined>;
   getMealPlansByUser(userId: string): Promise<MealPlan[]>;
+  findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined>;
+  findGeneratingPlan(userId: string): Promise<MealPlan | undefined>;
+  updatePlanStatus(id: string, status: string, planJson?: any): Promise<MealPlan | undefined>;
   updateMealPlanJson(id: string, planJson: any): Promise<MealPlan | undefined>;
   incrementSwapCount(id: string): Promise<MealPlan | undefined>;
   incrementRegenDayCount(id: string): Promise<MealPlan | undefined>;
@@ -37,6 +41,18 @@ export class DatabaseStorage implements IStorage {
       userId,
       preferencesJson,
       planJson,
+      status: "ready",
+    }).returning();
+    return plan;
+  }
+
+  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any): Promise<MealPlan> {
+    const [plan] = await db.insert(mealPlans).values({
+      userId,
+      idempotencyKey,
+      preferencesJson,
+      planJson: null,
+      status: "generating",
     }).returning();
     return plan;
   }
@@ -48,6 +64,38 @@ export class DatabaseStorage implements IStorage {
 
   async getMealPlansByUser(userId: string): Promise<MealPlan[]> {
     return db.select().from(mealPlans).where(eq(mealPlans.userId, userId)).orderBy(desc(mealPlans.createdAt));
+  }
+
+  async findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined> {
+    const [plan] = await db.select().from(mealPlans)
+      .where(and(eq(mealPlans.userId, userId), eq(mealPlans.idempotencyKey, idempotencyKey)))
+      .limit(1);
+    return plan;
+  }
+
+  async findGeneratingPlan(userId: string): Promise<MealPlan | undefined> {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const [plan] = await db.select().from(mealPlans)
+      .where(and(
+        eq(mealPlans.userId, userId),
+        eq(mealPlans.status, "generating"),
+        gte(mealPlans.createdAt, fiveMinAgo),
+      ))
+      .orderBy(desc(mealPlans.createdAt))
+      .limit(1);
+    return plan;
+  }
+
+  async updatePlanStatus(id: string, status: string, planJson?: any): Promise<MealPlan | undefined> {
+    const updates: any = { status };
+    if (planJson !== undefined) {
+      updates.planJson = planJson;
+    }
+    const [plan] = await db.update(mealPlans)
+      .set(updates)
+      .where(eq(mealPlans.id, id))
+      .returning();
+    return plan;
   }
 
   async updateMealPlanJson(id: string, planJson: any): Promise<MealPlan | undefined> {

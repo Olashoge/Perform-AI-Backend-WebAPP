@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useForm } from "react-hook-form";
@@ -32,11 +32,17 @@ const GOAL_LABELS: Record<string, string> = {
   performance: "Performance",
 };
 
+function generateUUID(): string {
+  return crypto.randomUUID();
+}
+
 export default function NewPlan() {
   const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
   const [isPending, setIsPending] = useState(false);
   const { toast } = useToast();
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submittedRef = useRef(false);
 
   const form = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
@@ -52,24 +58,74 @@ export default function NewPlan() {
     },
   });
 
-  async function onSubmit(data: Preferences) {
-    if (!user) {
-      navigate("/login");
-      return;
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
     }
+  }, []);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
+  async function pollPlanStatus(planId: string) {
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/plan/${planId}/status`, { credentials: "include" });
+        if (!res.ok) {
+          stopPolling();
+          setIsPending(false);
+          submittedRef.current = false;
+          toast({ title: "Error checking plan status", variant: "destructive" });
+          return;
+        }
+        const data = await res.json();
+        if (data.status === "ready") {
+          stopPolling();
+          navigate(`/plan/${planId}`);
+        } else if (data.status === "failed") {
+          stopPolling();
+          setIsPending(false);
+          submittedRef.current = false;
+          toast({ title: "Plan generation failed", description: "Something went wrong. Please try again.", variant: "destructive" });
+        }
+      } catch {
+        stopPolling();
+        setIsPending(false);
+        submittedRef.current = false;
+      }
+    }, 3000);
+  }
+
+  async function onSubmit(data: Preferences) {
+    if (!user || isPending || submittedRef.current) return;
+
+    submittedRef.current = true;
     setIsPending(true);
+    const idempotencyKey = generateUUID();
+
     try {
-      const res = await apiRequest("POST", "/api/plan", data);
+      const res = await apiRequest("POST", "/api/plan", { ...data, idempotencyKey });
       const plan = await res.json();
-      navigate(`/plan/${plan.id}`);
+
+      if (plan.status === "ready") {
+        navigate(`/plan/${plan.id}`);
+      } else if (plan.status === "generating") {
+        pollPlanStatus(plan.id);
+      } else if (plan.status === "failed") {
+        setIsPending(false);
+        submittedRef.current = false;
+        toast({ title: "Plan generation failed", description: "Please try again.", variant: "destructive" });
+      }
     } catch (err: any) {
+      setIsPending(false);
+      submittedRef.current = false;
       toast({
         title: "Failed to generate plan",
         description: err.message?.includes("429") ? "You've reached the daily limit for AI calls. Please try again tomorrow." : "Something went wrong generating your meal plan. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsPending(false);
     }
   }
 
@@ -130,6 +186,7 @@ export default function NewPlan() {
                             variant={field.value === value ? "default" : "outline"}
                             className="justify-start"
                             onClick={() => field.onChange(value)}
+                            disabled={isPending}
                             data-testid={`button-goal-${value}`}
                           >
                             {label}
@@ -154,7 +211,7 @@ export default function NewPlan() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Diet / Cuisine Style</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isPending}>
                         <FormControl>
                           <SelectTrigger data-testid="select-diet-style">
                             <SelectValue placeholder="Select a style" />
@@ -193,6 +250,7 @@ export default function NewPlan() {
                                   field.onChange(field.value?.filter((f: string) => f !== food));
                                 }
                               }}
+                              disabled={isPending}
                               data-testid={`checkbox-avoid-${food.toLowerCase().replace(/\s/g, "-")}`}
                             />
                             {food}
@@ -214,6 +272,7 @@ export default function NewPlan() {
                         <Textarea
                           placeholder="List any allergies or additional foods to avoid..."
                           className="resize-none"
+                          disabled={isPending}
                           data-testid="input-allergies"
                           {...field}
                         />
@@ -243,6 +302,7 @@ export default function NewPlan() {
                             min={1}
                             max={8}
                             className="w-24"
+                            disabled={isPending}
                             data-testid="input-household-size"
                             value={field.value}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
@@ -263,7 +323,7 @@ export default function NewPlan() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Prep Style</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isPending}>
                         <FormControl>
                           <SelectTrigger data-testid="select-prep-style">
                             <SelectValue />
@@ -287,7 +347,7 @@ export default function NewPlan() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Budget</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isPending}>
                           <FormControl>
                             <SelectTrigger data-testid="select-budget">
                               <SelectValue />
@@ -309,7 +369,7 @@ export default function NewPlan() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Cooking Time</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isPending}>
                           <FormControl>
                             <SelectTrigger data-testid="select-cooking-time">
                               <SelectValue />

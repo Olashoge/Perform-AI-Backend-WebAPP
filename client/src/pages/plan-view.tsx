@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -311,6 +311,11 @@ export default function PlanView() {
   const { data, isLoading, error } = useQuery<MealPlan>({
     queryKey: ["/api/plan", params.id],
     enabled: !!user && !!params.id,
+    refetchInterval: (query) => {
+      const plan = query.state.data;
+      if (plan && (plan as any).status === "generating") return 3000;
+      return false;
+    },
   });
 
   if (authLoading) {
@@ -323,7 +328,8 @@ export default function PlanView() {
 
   if (!user) return null;
 
-  const plan = data?.planJson as PlanOutput | undefined;
+  const planStatus = (data as any)?.status as string | undefined;
+  const plan = planStatus === "ready" ? (data?.planJson as PlanOutput | undefined) : undefined;
   const swapCount = data?.swapCount ?? 0;
   const regenDayCount = data?.regenDayCount ?? 0;
 
@@ -367,6 +373,27 @@ export default function PlanView() {
               <p className="text-sm text-muted-foreground">Please check the URL and try again.</p>
               <Link href="/plans">
                 <Button variant="outline" className="mt-4">Back to Plans</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ) : planStatus === "generating" ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+              <h2 className="font-semibold text-lg mb-2">Generating your meal plan</h2>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                Our AI is crafting your personalized 7-day meal plan. This usually takes 15-30 seconds.
+              </p>
+            </CardContent>
+          </Card>
+        ) : planStatus === "failed" ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-3" />
+              <h2 className="font-semibold text-lg mb-1">Plan generation failed</h2>
+              <p className="text-sm text-muted-foreground">Something went wrong while generating your plan.</p>
+              <Link href="/new-plan">
+                <Button variant="outline" className="mt-4" data-testid="button-try-again">Try Again</Button>
               </Link>
             </CardContent>
           </Card>
