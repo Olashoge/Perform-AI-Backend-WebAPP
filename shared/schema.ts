@@ -25,6 +25,7 @@ export const mealPlans = pgTable("meal_plans", {
   swapCount: integer("swap_count").default(0).notNull(),
   regenDayCount: integer("regen_day_count").default(0).notNull(),
   groceryPricingJson: jsonb("grocery_pricing_json"),
+  planStartDate: varchar("plan_start_date", { length: 10 }),
 });
 
 export const ownedGroceryItems = pgTable("owned_grocery_items", {

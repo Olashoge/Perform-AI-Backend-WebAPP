@@ -1,0 +1,175 @@
+Fix 3C + 3D, Upgrade Intelligence (#7), Change Workout Days UI, Add Calendar View Page
+Context
+
+3A and 3B are working. We need to fix 3C and 3D, improve #7 “intelligence,” change workout days per week to a days-of-week selector, and add a Calendar View to display a plan like a meal calendar (monthly + agenda).
+
+3C) Fix cuisine tagging alignment (must be faithful to selected cuisines)
+
+Problem: meal cuisineTag sometimes becomes generic (“American”, “Asian”, “Indian-inspired”) even when user selected specific cuisines.
+
+Fix rules:
+
+If dietStyles contains any cuisine styles (anything other than “No Preference”), then:
+
+every generated meal must have cuisineTag set to one of the selected dietStyles OR "Fusion" with explicit components (e.g., "Fusion: Mediterranean+Nigerian").
+
+Do NOT use generic tags like “American”, “Asian”, “International”, “Inspired” unless user actually selected those.
+
+If dietStyles includes “No Preference” and no other cuisines were selected:
+
+then cuisineTag may be “American/International/Any”.
+
+Implementation:
+
+Update the generation prompt and the JSON validator to enforce this.
+
+If the model returns an invalid cuisineTag, normalize it server-side:
+
+Map “Indian-inspired” → “Indian” if Indian is selected
+
+Map “Asian” → choose one selected Asian cuisine if present (Japanese/Chinese/Korean/Thai), else fallback to first selected cuisine
+
+Otherwise set to first selected dietStyle.
+
+3D) Fix goal label consistency (“Weight Loss” everywhere)
+
+Ensure goal display is consistent across:
+
+plan settings
+
+plan titles
+
+plan list chips
+
+any UI label mapping
+
+Rule: If stored enum is fat_loss, display as “Weight Loss” everywhere.
+If possible, migrate to weight_loss for new plans and map old ones.
+
+7) Make the plan output more intelligent (upgrade AI reasoning)
+
+The plan should feel smarter and more personalized using available inputs:
+
+age
+
+currentWeight/targetWeight + unit
+
+workout schedule (days selected)
+
+mealsPerDay + mealSlots
+
+spice level + recipe style
+
+avoids/allergies + likes/dislikes
+
+7A) Add a “Personalization Rationale” (short)
+
+On the plan page, add a small section (collapsed by default):
+“Why this plan fits you”
+
+3 bullet points max, based on inputs (e.g., higher protein for muscle gain; calorie range for weight loss; meal prep chosen so repeated components; spice set to medium).
+
+7B) Add “Smart swaps”
+
+When user swaps a meal:
+
+if they liked similar meals, bias toward those patterns
+
+never resuggest disliked meals
+
+keep cuisineTag aligned with selected cuisines
+
+keep within cooking time + budget
+
+7C) Calorie/protein target logic (still estimates)
+
+Keep your current “daily targets” line but make it computed more intelligently:
+
+Base calorie range on goal + activity proxy:
+
+use workout days count to shift calories upward slightly for muscle gain/performance
+
+Protein range:
+
+weight-based if weight is provided (use safe ranges; keep as “estimated”)
+
+Always display as “estimated range” and avoid medical claims
+
+Workout Days: change from 0–7 to Days of Week selector
+
+Replace “Workout Days Per Week (0–7)” with:
+
+multi-select chips: Mon Tue Wed Thu Fri Sat Sun
+Save as workoutDays: string[] (e.g., ["Mon","Wed","Fri"])
+Derive workoutDaysCount = workoutDays.length for logic.
+
+Also add a small helper text:
+“Used to tune portions and recovery-friendly meals.”
+
+Add Calendar View Pages (Monthly + Agenda)
+
+Add a new navigation item: Calendar
+
+Requirements
+
+Show a monthly calendar view where each date displays meal titles for that day (Breakfast/Lunch/Dinner or selected mealSlots)
+
+Show an agenda/list view similar to the reference (vertical list of days with meal columns)
+
+Allow switching between Month <-> Agenda
+
+Allow selecting which plan to view (dropdown at top: “Current plan” default, or choose any plan)
+
+Respect “start of week” setting (Sunday/Monday) similar to reference
+
+Data model
+
+Meal plans are 7 days. For calendar display:
+
+Create a “startDate” for the plan (default: user-selected start date; if not present, use plan createdAt date as start)
+
+Map Day 1..Day 7 onto consecutive dates starting at startDate.
+
+Store planStartDate on MealPlan to persist the mapping.
+
+API
+
+PATCH /api/plan/:id/start-date body { startDate: "YYYY-MM-DD" }
+
+GET /api/plan/:id/calendar returns an array of:
+{ date, dayIndex, meals: { breakfast?, lunch?, dinner? }, mealSlots }
+
+UI details
+
+Month view:
+
+each cell shows up to 3 lines (B/L/D) with tiny labels or colored dots
+
+clicking a day opens that day’s meals (modal or side panel)
+
+Agenda view:
+
+each row = date
+
+columns = Breakfast/Lunch/Dinner (or only selected slots)
+
+Add a settings modal:
+
+Start of week: Sunday or Monday
+
+Toggle “Show public holidays” (optional placeholder; can be future)
+
+Implement using a React calendar library or lightweight custom grid.
+Keep it fast and mobile-friendly.
+
+Testing checklist
+
+Select cuisines: Mediterranean + Vegetarian → every meal cuisineTag must be Mediterranean or Vegetarian or Fusion of selected.
+
+Old plans that show “Fat Loss” should display “Weight Loss.”
+
+Workout days selector saves correctly and affects targets.
+
+Calendar view correctly maps Day 1–7 to dates based on startDate and renders meals.
+
+Switching plans updates calendar.

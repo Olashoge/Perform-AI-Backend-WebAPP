@@ -12,6 +12,7 @@ import PlanView from "@/pages/plan-view";
 import PlanGenerating from "@/pages/plan-generating";
 import PlansList from "@/pages/plans-list";
 import PreferencesPage from "@/pages/preferences";
+import PlanCalendar from "@/pages/plan-calendar";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/plan/:id" component={PlanView} />
       <Route path="/plans" component={PlansList} />
       <Route path="/preferences" component={PreferencesPage} />
+      <Route path="/calendar" component={PlanCalendar} />
       <Route component={NotFound} />
     </Switch>
   );

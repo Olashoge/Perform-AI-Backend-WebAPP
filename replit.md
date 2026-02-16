@@ -24,6 +24,7 @@ client/src/
     plan-view.tsx  - View generated plan (meals + grocery list)
     plans-list.tsx - List of user's saved plans
     preferences.tsx - Manage liked/disliked meals and ingredient preferences
+    plan-calendar.tsx - Calendar view (month + agenda) with date picker, plan selector, feedback icons
 
 server/
   index.ts         - Express server setup (connect-pg-simple session store)

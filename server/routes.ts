@@ -505,5 +505,66 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/plan/:id/start-date", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getMealPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      const { startDate } = req.body;
+      if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+        return res.status(400).json({ message: "startDate must be YYYY-MM-DD format" });
+      }
+      const updated = await storage.updatePlanStartDate(plan.id, startDate);
+      return res.json(updated);
+    } catch (err) {
+      log(`Update start date error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to update start date" });
+    }
+  });
+
+  app.get("/api/plan/:id/calendar", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getMealPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      if (plan.status !== "ready" || !plan.planJson) {
+        return res.status(400).json({ message: "Plan is not ready yet" });
+      }
+
+      const planJson = plan.planJson as PlanOutput;
+      const prefs = plan.preferencesJson as Preferences;
+      const startDate = plan.planStartDate || plan.createdAt.toISOString().slice(0, 10);
+
+      const mealSlots = (prefs.mealsPerDay === 2 && prefs.mealSlots && prefs.mealSlots.length === 2)
+        ? prefs.mealSlots
+        : (prefs.mealsPerDay === 2 ? ["lunch", "dinner"] : ["breakfast", "lunch", "dinner"]);
+
+      const calendarDays = planJson.days.map((day, i) => {
+        const date = new Date(startDate + "T00:00:00");
+        date.setDate(date.getDate() + i);
+        const dateStr = date.toISOString().slice(0, 10);
+        return {
+          date: dateStr,
+          dayIndex: day.dayIndex,
+          dayName: day.dayName,
+          meals: day.meals,
+          mealSlots,
+        };
+      });
+
+      return res.json({
+        planId: plan.id,
+        startDate,
+        mealSlots,
+        days: calendarDays,
+      });
+    } catch (err) {
+      log(`Calendar fetch error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to load calendar data" });
+    }
+  });
+
   return httpServer;
 }

@@ -78,6 +78,12 @@ export default function PlansList() {
             <p className="text-sm text-muted-foreground mt-1">View and manage your AI-generated meal plans</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/calendar">
+              <Button variant="outline" data-testid="button-calendar">
+                <CalendarDays className="h-4 w-4 mr-2" />
+                Calendar
+              </Button>
+            </Link>
             <Link href="/preferences">
               <Button variant="outline" data-testid="button-preferences">
                 <Settings className="h-4 w-4 mr-2" />
