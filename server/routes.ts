@@ -143,7 +143,7 @@ export async function registerRoutes(
 
   app.post("/api/plan", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { idempotencyKey, ...prefsBody } = req.body;
+      const { idempotencyKey, startDate, ...prefsBody } = req.body;
       if (prefsBody.goal === "fat_loss") {
         prefsBody.goal = "weight_loss";
       }
@@ -171,7 +171,8 @@ export async function registerRoutes(
         return res.status(429).json({ message: "Daily AI call limit reached (10/day). Try again tomorrow." });
       }
 
-      const pendingPlan = await storage.createPendingMealPlan(userId, idempotencyKey || null, parsed.data);
+      const validStartDate = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
+      const pendingPlan = await storage.createPendingMealPlan(userId, idempotencyKey || null, parsed.data, validStartDate);
 
       res.json(pendingPlan);
 

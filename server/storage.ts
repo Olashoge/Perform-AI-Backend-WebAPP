@@ -7,7 +7,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(email: string, passwordHash: string): Promise<User>;
   createMealPlan(userId: string, preferencesJson: any, planJson: any): Promise<MealPlan>;
-  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any): Promise<MealPlan>;
+  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string): Promise<MealPlan>;
   getMealPlan(id: string): Promise<MealPlan | undefined>;
   getMealPlansByUser(userId: string): Promise<MealPlan[]>;
   findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined>;
@@ -59,7 +59,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any): Promise<MealPlan> {
+  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string): Promise<MealPlan> {
     const [plan] = await db.insert(mealPlans).values({
       userId,
       idempotencyKey,
@@ -67,6 +67,7 @@ export class DatabaseStorage implements IStorage {
       planJson: null,
       status: "generating",
       startedAt: new Date(),
+      planStartDate: startDate || new Date().toISOString().slice(0, 10),
     }).returning();
     return plan;
   }

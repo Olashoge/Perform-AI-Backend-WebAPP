@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   ArrowLeft, CalendarDays, Rows3, Grid3X3,
   Loader2, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown,
-  CalendarIcon, Settings2,
+  CalendarIcon, Settings2, Ban,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, isSameMonth, eachDayOfInterval } from "date-fns";
@@ -64,10 +64,28 @@ const SLOT_BORDER: Record<string, string> = {
 
 const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function FeedbackDot({ feedback }: { feedback?: "like" | "dislike" }) {
+function FeedbackDot({ feedback }: { feedback?: "like" | "dislike" | "avoid" }) {
   if (!feedback) return null;
   if (feedback === "like") return <ThumbsUp className="h-2.5 w-2.5 text-emerald-500 shrink-0" />;
+  if (feedback === "avoid") return <Ban className="h-2.5 w-2.5 text-orange-500 shrink-0" />;
   return <ThumbsDown className="h-2.5 w-2.5 text-rose-500 shrink-0" />;
+}
+
+function getMealFeedback(
+  meal: Meal,
+  fingerprint: string,
+  feedbackMap: Record<string, "like" | "dislike">,
+  avoidedIngredients: string[],
+): "like" | "dislike" | "avoid" | undefined {
+  const fb = feedbackMap[fingerprint];
+  if (fb) return fb;
+  if (avoidedIngredients.length > 0 && meal.ingredients) {
+    const combined = meal.ingredients.join(" ").toLowerCase();
+    for (const ing of avoidedIngredients) {
+      if (combined.includes(ing.toLowerCase())) return "avoid";
+    }
+  }
+  return undefined;
 }
 
 function WeekView({
@@ -75,6 +93,7 @@ function WeekView({
   currentWeekStart,
   setCurrentWeekStart,
   feedbackMap,
+  avoidedIngredients,
   weekStartsOn,
   onDayClick,
 }: {
@@ -82,6 +101,7 @@ function WeekView({
   currentWeekStart: Date;
   setCurrentWeekStart: (d: Date) => void;
   feedbackMap: Record<string, "like" | "dislike">;
+  avoidedIngredients: string[];
   weekStartsOn: 0 | 1;
   onDayClick: (day: CalendarDay) => void;
 }) {
@@ -151,7 +171,7 @@ function WeekView({
                   return <div key={slot} className="border-l min-h-[44px]" />;
                 }
                 const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
-                const feedback = feedbackMap[fp];
+                const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
 
                 return (
                   <div key={slot} className={`border-l min-h-[44px] p-1 flex items-start gap-1`}>
@@ -181,6 +201,7 @@ function MonthView({
   weekStartsOn,
   onDayClick,
   feedbackMap,
+  avoidedIngredients,
 }: {
   calendarData: CalendarData;
   currentMonth: Date;
@@ -188,6 +209,7 @@ function MonthView({
   weekStartsOn: 0 | 1;
   onDayClick: (day: CalendarDay) => void;
   feedbackMap: Record<string, "like" | "dislike">;
+  avoidedIngredients: string[];
 }) {
   const dayMap = useMemo(() => {
     const m = new Map<string, CalendarDay>();
@@ -265,13 +287,16 @@ function MonthView({
                       {slots.map(slot => {
                         const meal = calDay.meals[slot as keyof typeof calDay.meals];
                         if (!meal) return null;
-                        const truncName = meal.name.length > 14 ? meal.name.slice(0, 13) + "\u2026" : meal.name;
+                        const truncName = meal.name.length > 12 ? meal.name.slice(0, 11) + "\u2026" : meal.name;
+                        const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
+                        const fb = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
                         return (
-                          <div key={slot} className="flex items-start gap-0 px-0.5">
+                          <div key={slot} className="flex items-center gap-0 px-0.5">
                             <span className={`text-[9px] leading-tight font-semibold shrink-0 ${SLOT_TEXT_COLOR[slot]}`}>{SLOT_LABEL[slot]}</span>
                             <span className={`text-[9px] leading-tight truncate ml-0.5 ${SLOT_BORDER[slot]} border-l pl-0.5`}>
                               {truncName}
                             </span>
+                            {fb && <FeedbackDot feedback={fb} />}
                           </div>
                         );
                       })}
@@ -291,12 +316,14 @@ function DayDetailModal({
   day,
   mealSlots,
   feedbackMap,
+  avoidedIngredients,
   open,
   onClose,
 }: {
   day: CalendarDay;
   mealSlots: string[];
   feedbackMap: Record<string, "like" | "dislike">;
+  avoidedIngredients: string[];
   open: boolean;
   onClose: () => void;
 }) {
@@ -316,7 +343,7 @@ function DayDetailModal({
             const meal = day.meals[slot as keyof typeof day.meals];
             if (!meal) return null;
             const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
-            const feedback = feedbackMap[fp];
+            const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
 
             return (
               <div key={slot} className={`border-l-2 ${SLOT_BORDER[slot]} pl-3`}>
@@ -443,6 +470,15 @@ export default function PlanCalendar() {
     },
     enabled: !!selectedPlanId,
   });
+
+  const { data: prefsData } = useQuery<{ avoidIngredients: { ingredientKey: string }[] }>({
+    queryKey: ["/api/preferences"],
+    enabled: !!user,
+  });
+
+  const avoidedIngredients = useMemo(() => {
+    return (prefsData?.avoidIngredients || []).map(i => i.ingredientKey);
+  }, [prefsData]);
 
   const startDateMutation = useMutation({
     mutationFn: async (startDate: string) => {
@@ -595,6 +631,7 @@ export default function PlanCalendar() {
             weekStartsOn={weekStartsOn}
             onDayClick={setSelectedDay}
             feedbackMap={feedbackMap || {}}
+            avoidedIngredients={avoidedIngredients}
           />
         ) : (
           <WeekView
@@ -602,6 +639,7 @@ export default function PlanCalendar() {
             currentWeekStart={currentWeekStart}
             setCurrentWeekStart={setCurrentWeekStart}
             feedbackMap={feedbackMap || {}}
+            avoidedIngredients={avoidedIngredients}
             weekStartsOn={weekStartsOn}
             onDayClick={setSelectedDay}
           />
@@ -613,6 +651,7 @@ export default function PlanCalendar() {
           day={selectedDay}
           mealSlots={calendarData?.mealSlots || ["breakfast", "lunch", "dinner"]}
           feedbackMap={feedbackMap || {}}
+          avoidedIngredients={avoidedIngredients}
           open={!!selectedDay}
           onClose={() => setSelectedDay(null)}
         />

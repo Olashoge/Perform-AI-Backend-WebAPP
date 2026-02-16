@@ -1,0 +1,55 @@
+Goal: Finish the “real usage” features for MealPlan AI: plan start-date anchoring, calendar rendering based on start date, feedback icons on calendar, and ensure workout days affect generation.
+
+A) Add “Start plan on” (date picker) and store it
+
+On New Meal Plan form, add Start plan on: date picker (default = today).
+
+Persist it in DB on the plan model as startDate (ISO date string).
+
+Update API + types so startDate is returned everywhere plans are fetched.
+
+Add ability on Calendar page to change startDate for selected plan (a small date picker near the top). Save change and rerender.
+
+B) Calendar rendering must be based on startDate
+
+Update Calendar Week/Month views so displayed meals map like:
+
+plan dayIndex 0 = startDate
+
+dayIndex 1 = startDate + 1 day … through dayIndex 6
+
+When navigating weeks/months, show meals only where the date falls within the plan’s 7 days. Other dates stay empty.
+
+C) Show liked/disliked/avoided icons in Calendar cells
+
+Wherever likes/dislikes are stored (MealPreferences / feedback table / meal rating field), expose it to calendar endpoints.
+
+In Week view cells and Month view cells, show tiny icons beside the meal text:
+
+liked → 👍 (or heart)
+
+disliked → 👎
+
+avoided → 🚫
+
+Clicking/tapping the meal should open the plan day/meal detail (or a small popover).
+
+D) Workout days must influence plan generation
+
+The selected workout days (Sun–Sat) must be included in the generation payload.
+
+Update the generator prompt/rules so:
+
+Workout days → higher protein emphasis + more carb support
+
+Rest days → lighter carbs (still adequate protein)
+
+Optionally tag each generated day as “Workout Day” / “Rest Day” in the plan output for clarity.
+
+E) Keep the UI compact like the provided screenshots
+
+Week view should keep tiny font, multi-column grid (Breakfast/Lunch/Dinner).
+
+Month view should show abbreviated meal text (ellipsis) and remain readable.
+
+Deliverable: Start date works, calendar aligns meals correctly, rating icons appear on calendar, workout day selection changes generated meals/macros.

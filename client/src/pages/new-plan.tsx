@@ -13,8 +13,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { UtensilsCrossed, Loader2, ArrowLeft, Sparkles, X, Plus } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { UtensilsCrossed, Loader2, ArrowLeft, Sparkles, X, Plus, CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 const COMMON_FOODS_TO_AVOID = [
   "Pork", "Shellfish", "Dairy", "Gluten", "Soy", "Eggs", "Nuts", "Red Meat", "Fish", "Mushrooms",
@@ -41,6 +44,8 @@ export default function NewPlan() {
   const { toast } = useToast();
   const submittedRef = useRef(false);
   const [customStyleInput, setCustomStyleInput] = useState("");
+  const [startDate, setStartDate] = useState<Date>(new Date());
+  const [startDateOpen, setStartDateOpen] = useState(false);
 
   const form = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
@@ -78,7 +83,7 @@ export default function NewPlan() {
     }
 
     try {
-      const res = await apiRequest("POST", "/api/plan", { ...data, idempotencyKey });
+      const res = await apiRequest("POST", "/api/plan", { ...data, idempotencyKey, startDate: format(startDate, "yyyy-MM-dd") });
       const plan = await res.json();
 
       if (plan.status === "ready") {
@@ -718,6 +723,38 @@ export default function NewPlan() {
                       </FormItem>
                     )}
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <h2 className="font-semibold">Start Date</h2>
+              </CardHeader>
+              <CardContent>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">When should your 7-day plan begin?</p>
+                  <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="justify-start text-left font-normal" disabled={isPending} data-testid="button-start-date">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(startDate, "EEEE, MMM d, yyyy")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={(date) => {
+                          if (date) {
+                            setStartDate(date);
+                            setStartDateOpen(false);
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </CardContent>
             </Card>
