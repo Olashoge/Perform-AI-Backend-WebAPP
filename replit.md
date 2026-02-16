@@ -44,6 +44,12 @@ shared/
 - Swap individual meals (max 3 per plan)
 - Regenerate entire day (max 1 per plan)
 - Rebuild grocery list from current meals (no AI needed)
+- Grocery price estimation: AI estimates min/max price ranges per item with confidence levels
+  - groceryPricingJson stored on mealPlans, regenerated on swap/regen/rebuild
+  - Owned item tracking: users mark items they already have, adjusted totals update in real-time
+  - ownedGroceryItems table with unique constraint on (userId, mealPlanId, itemKey)
+  - Item key normalization shared between server (meal-utils.ts) and client
+  - Frontend polls for pricing (max 10 polls, 3s interval) with timeout fallback
 - Rate limiting: 10 AI calls per user per day
 - Print-friendly layout
 - Meal feedback learning: like/dislike meals to improve future AI suggestions
@@ -63,6 +69,8 @@ shared/
 - `POST /api/plan/:id/swap` - Swap a meal
 - `POST /api/plan/:id/regenerate-day` - Regenerate a day
 - `POST /api/plan/:id/grocery/regenerate` - Rebuild grocery list
+- `GET /api/plan/:id/grocery` - Get grocery data with pricing, owned items, totals
+- `POST /api/plan/:id/grocery/owned` - Toggle owned item status
 - `POST /api/feedback/meal` - Like/dislike a meal (upserts feedback + derives ingredient prefs)
 - `GET /api/feedback/plan/:planId` - Get feedback map for all meals (by fingerprint)
 - `GET /api/preferences` - Get user's learned preference context
