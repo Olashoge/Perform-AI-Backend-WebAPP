@@ -13,9 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Dumbbell, Loader2, ArrowLeft, Sparkles, CalendarDays, Target, Clock, Crosshair, AlertTriangle } from "lucide-react";
+import { Loader2, Sparkles, CalendarDays, Target, Clock, Crosshair, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
 
 const GOAL_OPTIONS = [
   { value: "weight_loss", label: "Weight Loss" },
@@ -121,34 +120,16 @@ export default function NewWorkout() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" data-testid="loading-spinner">
+      <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  if (!user) {
-    navigate("/login");
-    return null;
-  }
+  if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
-          <Link href="/plans">
-            <Button variant="ghost" size="icon" data-testid="button-back">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2.5">
-            <Dumbbell className="h-5 w-5 text-primary" />
-            <span className="font-semibold">New Workout Plan</span>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         {searchParams.get("fromMealPlan") === "true" && (
           <div className="mb-6 flex items-center gap-3 rounded-md border border-primary/20 bg-primary/5 px-4 py-3">
             <Sparkles className="h-4 w-4 text-primary shrink-0" />
@@ -473,7 +454,6 @@ export default function NewWorkout() {
             </Button>
           </form>
         </Form>
-      </div>
     </div>
   );
 }

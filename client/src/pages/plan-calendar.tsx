@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { Link, useLocation } from "wouter";
+import { useState, useEffect, useMemo } from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import type { Meal, WorkoutSession } from "@shared/schema";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  ArrowLeft, CalendarDays, Activity, Rows3, Grid3X3,
+  CalendarDays, Rows3, Grid3X3,
   Loader2, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown,
   Settings2, Ban, Dumbbell, UtensilsCrossed,
 } from "lucide-react";
@@ -476,7 +476,6 @@ function SettingsModal({
 
 export default function PlanCalendar() {
   const { user, isLoading: authLoading } = useAuth();
-  const [, navigate] = useLocation();
 
   const [viewMode, setViewMode] = useState<"month" | "week">("week");
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -571,15 +570,9 @@ export default function PlanCalendar() {
     }
   }, [calendarData?.days?.length, weekStartsOn]);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/login");
-    }
-  }, [authLoading, user, navigate]);
-
   if (authLoading || !user) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -590,28 +583,17 @@ export default function PlanCalendar() {
   const hasAnyData = hasMeals || hasWorkouts;
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/plans">
-              <Button variant="ghost" size="icon" data-testid="button-back">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Activity className="h-4.5 w-4.5 text-primary hidden sm:block" />
-            <span className="font-semibold text-sm tracking-wide">Calendar</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} data-testid="button-settings">
-              <Settings2 className="h-4 w-4" />
-            </Button>
-          </div>
+    <div className="px-4 sm:px-6 py-8">
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Calendar</h1>
+          <p className="text-sm text-muted-foreground mt-1">Your unified schedule</p>
         </div>
-      </nav>
-
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-8 sm:py-10">
-        <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} data-testid="button-settings">
+          <Settings2 className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
           <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
             <Button
               variant={calFilter === "combined" ? "default" : "ghost"}
@@ -700,7 +682,6 @@ export default function PlanCalendar() {
             onDayClick={setSelectedDay}
           />
         )}
-      </div>
 
       {selectedDay && (
         <DayDetailModal

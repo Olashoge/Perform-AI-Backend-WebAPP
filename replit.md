@@ -12,25 +12,28 @@ AI-powered personal performance system combining 7-day meal planning AND workout
 ## Project Structure
 ```
 client/src/
-  App.tsx          - Main router with auth provider
+  App.tsx          - Main router with AuthenticatedLayout (sidebar + goal bar wrapper)
+  components/
+    app-sidebar.tsx  - AppSidebar (icon-only nav) + ActiveGoalBar components
   lib/auth.tsx     - Auth context (login/signup/logout)
   lib/queryClient.ts - TanStack Query setup
   pages/
-    landing.tsx    - Landing page
-    login.tsx      - Login form
-    signup.tsx     - Signup form
-    new-plan.tsx   - Preference form for generating plans
-    plan-generating.tsx - Dedicated generation progress page (polls, timeout, retry)
+    landing.tsx    - Landing page (no sidebar)
+    login.tsx      - Login form (no sidebar)
+    signup.tsx     - Signup form (no sidebar)
+    dashboard.tsx  - Weekly overview with goal progress, quick actions, week strip, daily detail, active plans sidebar
+    plans-list.tsx - Unified Nutrition/Training plans list (route-based tab: /nutrition or /training), grid card layout
+    plan-calendar.tsx - Calendar view (dense month + week) showing ALL scheduled plans merged
+    new-plan.tsx   - Preference form for generating meal plans
+    plan-generating.tsx - Meal plan generation progress page
     plan-view.tsx  - View generated plan (meals + grocery list)
-    plans-list.tsx - List of user's saved plans
-    preferences.tsx - Manage liked/disliked meals and ingredient preferences
-    plan-calendar.tsx - Calendar view (dense month + week) showing ALL scheduled plans merged, feedback icons, workout indicators, settings modal
-    new-workout.tsx  - Workout preference form (goal, location, mode, days, focus areas, session length, experience, limitations)
-    workout-generating.tsx - Workout generation progress page (polls, timeline, tips)
-    workout-view.tsx - View generated workout plan (sessions, exercises, progression notes, 3-dot scheduling/delete)
-    goal-plans.tsx - GoalPlan management (create goals, link meal+workout plans, navigate to check-ins)
+    new-workout.tsx  - Workout preference form
+    workout-generating.tsx - Workout generation progress page
+    workout-view.tsx - View generated workout plan
+    goal-plans.tsx - GoalPlan management (create goals, link meal+workout plans)
     check-ins.tsx  - Weekly check-in logging (weight, energy, compliance, notes) with history
-    dashboard.tsx  - Unified weekly overview (active plans, momentum, compliance, weight trend)
+    preferences.tsx - Manage liked/disliked meals and ingredient preferences
+    settings.tsx   - Settings page (profile, active goal, check-in link, food/exercise preferences)
 
 server/
   index.ts         - Express server setup (connect-pg-simple session store)

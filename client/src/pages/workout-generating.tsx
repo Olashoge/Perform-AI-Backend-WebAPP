@@ -104,27 +104,16 @@ export default function WorkoutGenerating() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" data-testid="loading-spinner">
+      <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  if (!user) {
-    navigate("/login");
-    return null;
-  }
+  if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
-          <Dumbbell className="h-5 w-5 text-primary" />
-          <span className="font-semibold">Workout Plan</span>
-        </div>
-      </nav>
-
-      <div className="max-w-md mx-auto px-4 sm:px-6 py-8 sm:py-10">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <div className="space-y-6">
           <div className="text-center space-y-3">
             <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -201,7 +190,6 @@ export default function WorkoutGenerating() {
             </>
           )}
         </div>
-      </div>
     </div>
   );
 }

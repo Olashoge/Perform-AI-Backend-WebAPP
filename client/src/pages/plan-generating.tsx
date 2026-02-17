@@ -242,12 +242,6 @@ export default function PlanGenerating() {
     return () => stopPolling();
   }, [user, params.id, startPolling, stopPolling]);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/login");
-    }
-  }, [authLoading, user, navigate]);
-
   const handleManualRefresh = () => {
     startPolling();
   };
@@ -283,7 +277,7 @@ export default function PlanGenerating() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -294,15 +288,7 @@ export default function PlanGenerating() {
   const progressPercent = Math.min(95, Math.round((elapsedSec / 60) * 100));
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
-          <UtensilsCrossed className="h-5 w-5 text-primary" />
-          <span className="font-semibold">MealPlan AI</span>
-        </div>
-      </nav>
-
-      <div className="max-w-lg mx-auto px-4 sm:px-6 py-8 sm:py-10">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         {status === "polling" && (
           <Card>
             <CardContent className="p-6 sm:p-8 space-y-6">
@@ -429,7 +415,6 @@ export default function PlanGenerating() {
             </CardContent>
           </Card>
         )}
-      </div>
     </div>
   );
 }

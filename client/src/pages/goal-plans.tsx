@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Target, Plus, ArrowLeft, Trash2, Loader2, UtensilsCrossed, Dumbbell,
+  Target, Plus, Trash2, Loader2, UtensilsCrossed, Dumbbell,
   Flame, Zap, Heart, Trophy, CalendarDays, Link2, Unlink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -140,13 +140,9 @@ export default function GoalPlans() {
     },
   });
 
-  useEffect(() => {
-    if (!isLoading && !user) navigate("/login");
-  }, [isLoading, user, navigate]);
-
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
@@ -172,31 +168,16 @@ export default function GoalPlans() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Link href="/plans">
-              <Button variant="ghost" size="icon" data-testid="button-back">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
-                <Target className="h-4 w-4 text-primary" />
-              </div>
-              <span className="font-semibold text-base sm:text-lg tracking-tight">Goal Plans</span>
-            </div>
-          </div>
-          <Button onClick={() => setCreateOpen(true)} data-testid="button-create-goal">
-            <Plus className="h-4 w-4 mr-1.5" />
-            <span className="hidden sm:inline">New Goal</span>
-            <span className="sm:hidden">New</span>
-          </Button>
-        </div>
-      </nav>
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+    <div className="px-4 sm:px-6 py-8">
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Goal Plans</h1>
+        <Button onClick={() => setCreateOpen(true)} data-testid="button-create-goal">
+          <Plus className="h-4 w-4 mr-1.5" />
+          <span className="hidden sm:inline">New Goal</span>
+          <span className="sm:hidden">New</span>
+        </Button>
+      </div>
+      <div>
         {goalLoading ? (
           <div className="space-y-4">
             {[1, 2].map(i => (

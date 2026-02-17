@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useSearch } from "wouter";
+import { useState, useRef } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { UtensilsCrossed, Loader2, ArrowLeft, Sparkles, X, Plus, CalendarDays, Target, ChefHat, User, Home } from "lucide-react";
+import { Loader2, Sparkles, X, Plus, CalendarDays, Target, ChefHat, User, Home } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
@@ -118,37 +118,16 @@ export default function NewPlan() {
     }
   }
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      navigate("/login");
-    }
-  }, [isLoading, user, navigate]);
-
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
-          <Link href="/plans">
-            <Button variant="ghost" size="icon" data-testid="button-back">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2.5">
-            <UtensilsCrossed className="h-5 w-5 text-primary" />
-            <span className="font-semibold">New Meal Plan</span>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         {searchParams.get("alsoWorkout") === "true" && (
           <div className="mb-6 flex items-center gap-3 rounded-md border border-primary/20 bg-primary/5 px-4 py-3">
             <Sparkles className="h-4 w-4 text-primary shrink-0" />
@@ -821,7 +800,6 @@ export default function NewPlan() {
             </Button>
           </form>
         </Form>
-      </div>
     </div>
   );
 }

@@ -21,7 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  UtensilsCrossed, ArrowLeft, ChevronDown, Clock, Users,
+  UtensilsCrossed, ChevronDown, Clock, Users,
   RefreshCw, Loader2, Printer, ShoppingCart, ChefHat, Flame,
   AlertCircle, Zap, Dumbbell, Heart, Trophy, Activity,
   ThumbsUp, ThumbsDown, CalendarIcon, MoreVertical, Trash2,
@@ -653,7 +653,7 @@ export default function PlanView() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -672,79 +672,68 @@ export default function PlanView() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 print:hidden">
-        <div className="max-w-4xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-            <Link href="/plans">
-              <Button variant="ghost" size="icon" data-testid="button-back-plans">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <UtensilsCrossed className="h-5 w-5 text-primary shrink-0 hidden sm:block" />
-            <span className="font-semibold truncate text-sm sm:text-base">{plan?.title || "Meal Plan"}</span>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <div className="flex items-center justify-between gap-2 mb-6 print:hidden flex-wrap">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-xs text-muted-foreground hidden sm:block">
+            Swaps: {swapCount}/3 | Regen: {regenDayCount}/1
           </div>
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            <div className="text-xs text-muted-foreground hidden sm:block">
-              Swaps: {swapCount}/3 | Regen: {regenDayCount}/1
-            </div>
-            <Button variant="outline" size="icon" className="sm:hidden" onClick={handlePrint} data-testid="button-print-mobile">
-              <Printer className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="outline" size="sm" className="hidden sm:inline-flex" onClick={handlePrint} data-testid="button-print">
-              <Printer className="h-3.5 w-3.5 mr-1.5" />
-              Print
-            </Button>
-            {plan && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-plan-menu">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {data?.planStartDate ? (
-                    <>
-                      <DropdownMenuItem
-                        onClick={() => setStartDateOpen(true)}
-                        data-testid="menu-move-start-date"
-                      >
-                        <CalendarClock className="h-4 w-4 mr-2" />
-                        Move start date
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => clearStartDateMutation.mutate()}
-                        data-testid="menu-remove-from-calendar"
-                      >
-                        <CalendarMinus className="h-4 w-4 mr-2" />
-                        Remove from calendar
-                      </DropdownMenuItem>
-                    </>
-                  ) : (
+          <Button variant="outline" size="icon" className="sm:hidden" onClick={handlePrint} data-testid="button-print-mobile">
+            <Printer className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="outline" size="sm" className="hidden sm:inline-flex" onClick={handlePrint} data-testid="button-print">
+            <Printer className="h-3.5 w-3.5 mr-1.5" />
+            Print
+          </Button>
+          {plan && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid="button-plan-menu">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {data?.planStartDate ? (
+                  <>
                     <DropdownMenuItem
                       onClick={() => setStartDateOpen(true)}
-                      data-testid="menu-add-to-calendar"
+                      data-testid="menu-move-start-date"
                     >
-                      <CalendarPlus className="h-4 w-4 mr-2" />
-                      Add to calendar
+                      <CalendarClock className="h-4 w-4 mr-2" />
+                      Move start date
                     </DropdownMenuItem>
-                  )}
+                    <DropdownMenuItem
+                      onClick={() => clearStartDateMutation.mutate()}
+                      data-testid="menu-remove-from-calendar"
+                    >
+                      <CalendarMinus className="h-4 w-4 mr-2" />
+                      Remove from calendar
+                    </DropdownMenuItem>
+                  </>
+                ) : (
                   <DropdownMenuItem
-                    onClick={() => setDeleteConfirmOpen(true)}
-                    className="text-destructive focus:text-destructive"
-                    data-testid="menu-delete-plan"
+                    onClick={() => setStartDateOpen(true)}
+                    data-testid="menu-add-to-calendar"
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete plan
+                    <CalendarPlus className="h-4 w-4 mr-2" />
+                    Add to calendar
                   </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
+                )}
+                <DropdownMenuItem
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="text-destructive focus:text-destructive"
+                  data-testid="menu-delete-plan"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete plan
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
-      </nav>
+      </div>
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-8 sm:py-10">
+      <div>
         {isLoading ? (
           <PlanSkeleton />
         ) : error ? (

@@ -19,7 +19,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Dumbbell, ArrowLeft, ChevronDown, Clock, Loader2,
+  Dumbbell, ChevronDown, Clock, Loader2,
   Flame, Target, MoreVertical, Trash2,
   CalendarPlus, CalendarMinus, CalendarClock,
   Zap, Activity, Timer, ChevronRight,
@@ -296,30 +296,19 @@ export default function WorkoutView() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b h-16 flex items-center px-4 sm:px-6">
-          <div className="max-w-3xl mx-auto w-full flex items-center gap-3">
-            <Skeleton className="h-9 w-9" />
-            <Skeleton className="h-5 w-48" />
-          </div>
-        </div>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 w-full" />
-          ))}
-        </div>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-32 w-full" />
+        ))}
       </div>
     );
   }
 
-  if (!user) {
-    navigate("/login");
-    return null;
-  }
+  if (!user) return null;
 
   if (!plan || !plan.planJson) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-4">
           <Dumbbell className="h-12 w-12 text-muted-foreground mx-auto" />
           <p className="text-muted-foreground">Workout plan not found</p>
@@ -337,47 +326,37 @@ export default function WorkoutView() {
   const restDays = planJson.days.filter(d => !d.isWorkoutDay);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b h-16 flex items-center px-4 sm:px-6">
-        <div className="max-w-3xl mx-auto w-full flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link href="/plans">
-              <Button variant="ghost" size="icon" data-testid="button-back">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Activity className="h-5 w-5 text-primary shrink-0" />
-            <h1 className="text-sm sm:text-base font-semibold truncate" data-testid="text-plan-title">
-              {planJson.title}
-            </h1>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" data-testid="button-menu">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setShowDatePicker(true)} data-testid="menu-schedule">
-                <CalendarPlus className="h-4 w-4 mr-2" />
-                {plan.planStartDate ? "Reschedule" : "Schedule"}
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <div className="flex items-center justify-between gap-2 mb-6 flex-wrap">
+        <h1 className="text-lg sm:text-xl font-semibold truncate" data-testid="text-plan-title">
+          {planJson.title}
+        </h1>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" data-testid="button-menu">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setShowDatePicker(true)} data-testid="menu-schedule">
+              <CalendarPlus className="h-4 w-4 mr-2" />
+              {plan.planStartDate ? "Reschedule" : "Schedule"}
+            </DropdownMenuItem>
+            {plan.planStartDate && (
+              <DropdownMenuItem onClick={() => scheduleMutation.mutate(null)} data-testid="menu-unschedule">
+                <CalendarMinus className="h-4 w-4 mr-2" />
+                Unschedule
               </DropdownMenuItem>
-              {plan.planStartDate && (
-                <DropdownMenuItem onClick={() => scheduleMutation.mutate(null)} data-testid="menu-unschedule">
-                  <CalendarMinus className="h-4 w-4 mr-2" />
-                  Unschedule
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive" data-testid="menu-delete">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+            )}
+            <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive" data-testid="menu-delete">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-4">
+      <div className="space-y-4">
         <Card>
           <CardContent className="p-4 sm:p-5 space-y-4">
             <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-plan-summary">{planJson.summary}</p>
