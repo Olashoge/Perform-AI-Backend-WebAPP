@@ -28,6 +28,8 @@ client/src/
     new-workout.tsx  - Workout preference form (goal, location, mode, days, focus areas, session length, experience, limitations)
     workout-generating.tsx - Workout generation progress page (polls, timeline, tips)
     workout-view.tsx - View generated workout plan (sessions, exercises, progression notes, 3-dot scheduling/delete)
+    goal-plans.tsx - GoalPlan management (create goals, link meal+workout plans, navigate to check-ins)
+    check-ins.tsx  - Weekly check-in logging (weight, energy, compliance, notes) with history
 
 server/
   index.ts         - Express server setup (connect-pg-simple session store)

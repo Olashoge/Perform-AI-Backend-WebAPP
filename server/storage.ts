@@ -33,7 +33,7 @@ export interface IStorage {
   updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined>;
   getScheduledPlans(userId: string): Promise<MealPlan[]>;
   softDeletePlan(id: string): Promise<MealPlan | undefined>;
-  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any): Promise<WorkoutPlan>;
+  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string): Promise<WorkoutPlan>;
   getWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
   getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]>;
   updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined>;
@@ -372,7 +372,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any): Promise<WorkoutPlan> {
+  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string): Promise<WorkoutPlan> {
     const [plan] = await db.insert(workoutPlans).values({
       userId,
       idempotencyKey,
@@ -380,6 +380,7 @@ export class DatabaseStorage implements IStorage {
       planJson: null,
       status: "generating",
       startedAt: new Date(),
+      planStartDate: startDate || null,
     }).returning();
     return plan;
   }

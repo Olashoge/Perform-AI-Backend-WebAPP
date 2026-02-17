@@ -7,12 +7,13 @@ import { workoutPreferencesSchema, type WorkoutPreferences } from "@shared/schem
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Dumbbell, Loader2, ArrowLeft, Sparkles } from "lucide-react";
+import { Dumbbell, Loader2, ArrowLeft, Sparkles, CalendarDays } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
@@ -63,6 +64,7 @@ export default function NewWorkout() {
   const [isPending, setIsPending] = useState(false);
   const { toast } = useToast();
   const submittedRef = useRef(false);
+  const [planStartDate, setPlanStartDate] = useState("");
 
   const form = useForm<WorkoutPreferences>({
     resolver: zodResolver(workoutPreferencesSchema),
@@ -88,6 +90,7 @@ export default function NewWorkout() {
       const res = await apiRequest("POST", "/api/workout", {
         preferences: data,
         idempotencyKey,
+        startDate: planStartDate || undefined,
       });
       const result = await res.json();
       navigate(`/workout/${result.id}/generating`);
@@ -364,6 +367,26 @@ export default function NewWorkout() {
                       <FormMessage />
                     </FormItem>
                   )}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                  <h3 className="font-medium text-sm sm:text-base">Schedule Start Date (optional)</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Optionally pick when this workout plan should start. You can also schedule it later.
+                </p>
+                <Input
+                  type="date"
+                  value={planStartDate}
+                  onChange={(e) => setPlanStartDate(e.target.value)}
+                  min={new Date().toISOString().split("T")[0]}
+                  disabled={isPending}
+                  data-testid="input-workout-start-date"
                 />
               </CardContent>
             </Card>

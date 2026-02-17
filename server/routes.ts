@@ -688,6 +688,8 @@ export async function registerRoutes(
       }
       const prefs = parsed.data;
       const idempotencyKey = req.body.idempotencyKey || null;
+      const startDate = req.body.startDate;
+      const validStartDate = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
 
       if (idempotencyKey) {
         const existing = await storage.findByIdempotencyKeyWorkout(userId, idempotencyKey);
@@ -701,7 +703,7 @@ export async function registerRoutes(
         return res.json({ id: generating.id, status: "generating" });
       }
 
-      const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs);
+      const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs, validStartDate);
 
       (async () => {
         try {

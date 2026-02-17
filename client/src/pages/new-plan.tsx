@@ -13,7 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { UtensilsCrossed, Loader2, ArrowLeft, Sparkles, X, Plus } from "lucide-react";
+import { UtensilsCrossed, Loader2, ArrowLeft, Sparkles, X, Plus, CalendarDays } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
 const COMMON_FOODS_TO_AVOID = [
@@ -41,6 +42,7 @@ export default function NewPlan() {
   const { toast } = useToast();
   const submittedRef = useRef(false);
   const [customStyleInput, setCustomStyleInput] = useState("");
+  const [planStartDate, setPlanStartDate] = useState("");
 
   const form = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
@@ -78,7 +80,7 @@ export default function NewPlan() {
     }
 
     try {
-      const res = await apiRequest("POST", "/api/plan", { ...data, idempotencyKey });
+      const res = await apiRequest("POST", "/api/plan", { ...data, idempotencyKey, startDate: planStartDate || undefined });
       const plan = await res.json();
 
       if (plan.status === "ready") {
@@ -719,6 +721,26 @@ export default function NewPlan() {
                     )}
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                  <h3 className="font-medium text-sm sm:text-base">Schedule Start Date (optional)</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Optionally pick when this plan should start. You can also schedule it later from the plan details page.
+                </p>
+                <Input
+                  type="date"
+                  value={planStartDate}
+                  onChange={(e) => setPlanStartDate(e.target.value)}
+                  min={new Date().toISOString().split("T")[0]}
+                  disabled={isPending}
+                  data-testid="input-plan-start-date"
+                />
               </CardContent>
             </Card>
 

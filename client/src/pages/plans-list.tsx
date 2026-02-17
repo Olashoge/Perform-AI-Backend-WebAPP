@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   UtensilsCrossed, Plus, CalendarDays, LogOut, Sparkles, Loader2,
   Flame, Dumbbell, Zap, Heart, Trophy, Settings, Activity,
-  CheckCircle2, Clock, CalendarCheck,
+  CheckCircle2, Clock, CalendarCheck, Target, ClipboardCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -134,6 +134,24 @@ export default function PlansList() {
             </TabsList>
           </Tabs>
           <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/goals">
+              <Button variant="outline" size="icon" className="sm:hidden" data-testid="button-goals-mobile">
+                <Target className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" className="hidden sm:inline-flex" data-testid="button-goals">
+                <Target className="h-4 w-4 mr-2" />
+                Goals
+              </Button>
+            </Link>
+            <Link href="/check-ins">
+              <Button variant="outline" size="icon" className="sm:hidden" data-testid="button-checkins-mobile">
+                <ClipboardCheck className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" className="hidden sm:inline-flex" data-testid="button-checkins">
+                <ClipboardCheck className="h-4 w-4 mr-2" />
+                Check-ins
+              </Button>
+            </Link>
             <Link href="/calendar">
               <Button variant="outline" size="icon" className="sm:hidden" data-testid="button-calendar-mobile">
                 <CalendarDays className="h-4 w-4" />
