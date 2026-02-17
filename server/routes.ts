@@ -3,8 +3,8 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, type PlanOutput, type Preferences, type GroceryPricing } from "@shared/schema";
-import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing } from "./openai";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
+import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import connectPgSimple from "connect-pg-simple";
@@ -670,6 +670,141 @@ export async function registerRoutes(
     } catch (err) {
       log(`Calendar fetch error: ${err}`, "plan");
       return res.status(500).json({ message: "Failed to load calendar data" });
+    }
+  });
+
+  app.post("/api/workout", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const parsed = workoutPreferencesSchema.safeParse(req.body.preferences);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid workout preferences", errors: parsed.error.flatten() });
+      }
+      const prefs = parsed.data;
+      const idempotencyKey = req.body.idempotencyKey || null;
+
+      if (idempotencyKey) {
+        const existing = await storage.findByIdempotencyKeyWorkout(userId, idempotencyKey);
+        if (existing) {
+          return res.json({ id: existing.id, status: existing.status });
+        }
+      }
+
+      const generating = await storage.findGeneratingWorkoutPlan(userId);
+      if (generating) {
+        return res.json({ id: generating.id, status: "generating" });
+      }
+
+      const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs);
+
+      (async () => {
+        try {
+          log(`Generating workout plan ${plan.id}`, "openai");
+          const result = await generateWorkoutPlan(prefs);
+          await storage.updateWorkoutPlanStatus(plan.id, "ready", result);
+          log(`Workout plan ${plan.id} generated successfully`, "openai");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          log(`Workout plan ${plan.id} failed: ${msg}`, "openai");
+          await storage.updateWorkoutPlanStatus(plan.id, "failed", undefined, msg);
+        }
+      })();
+
+      return res.json({ id: plan.id, status: "generating" });
+    } catch (err) {
+      log(`Workout plan creation error: ${err}`, "openai");
+      return res.status(500).json({ message: "Failed to create workout plan" });
+    }
+  });
+
+  app.get("/api/workout/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getWorkoutPlan(req.params.id);
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+        return res.status(404).json({ message: "Workout plan not found" });
+      }
+      return res.json(plan);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load workout plan" });
+    }
+  });
+
+  app.get("/api/workout/:id/status", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getWorkoutPlan(req.params.id);
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+        return res.status(404).json({ message: "Workout plan not found" });
+      }
+      return res.json({ status: plan.status, errorMessage: plan.errorMessage });
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load status" });
+    }
+  });
+
+  app.get("/api/workouts", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plans = await storage.getWorkoutPlansByUser(req.session.userId!);
+      return res.json(plans);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load workout plans" });
+    }
+  });
+
+  app.post("/api/workout/:id/start-date", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getWorkoutPlan(req.params.id);
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+        return res.status(404).json({ message: "Workout plan not found" });
+      }
+      const { startDate } = req.body;
+      const updated = await storage.updateWorkoutStartDate(plan.id, startDate || null);
+      return res.json(updated);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to update start date" });
+    }
+  });
+
+  app.delete("/api/workouts/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getWorkoutPlan(req.params.id);
+      if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Workout plan not found" });
+      }
+      await storage.softDeleteWorkoutPlan(plan.id);
+      return res.json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to delete workout plan" });
+    }
+  });
+
+  app.get("/api/calendar/workouts", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const plans = await storage.getScheduledWorkoutPlans(userId);
+
+      const allDays: any[] = [];
+      for (const plan of plans) {
+        const startDate = plan.planStartDate;
+        if (!startDate || !plan.planJson) continue;
+        const planJson = plan.planJson as WorkoutPlanOutput;
+        planJson.days.forEach((day, i) => {
+          const date = new Date(startDate + "T00:00:00");
+          date.setDate(date.getDate() + i);
+          const dateStr = date.toISOString().slice(0, 10);
+          allDays.push({
+            date: dateStr,
+            dayIndex: day.dayIndex,
+            isWorkoutDay: day.isWorkoutDay,
+            session: day.session,
+            workoutPlanId: plan.id,
+          });
+        });
+      }
+
+      return res.json({ days: allDays });
+    } catch (err) {
+      log(`Calendar workouts fetch error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to load workout calendar data" });
     }
   });
 

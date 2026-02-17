@@ -1,0 +1,137 @@
+UPDATE: Strengthen integration between Workout Plans and Meal Plans.
+
+GOAL:
+Meal plans must intelligently adapt to:
+- workoutDays (specific weekdays)
+- trainingMode (Strength | Cardio | Both)
+- per-day workout type (if workout plan exists and is scheduled)
+
+This should be deterministic, not vague.
+
+------------------------------------------------------------
+A) SHARED CONTEXT
+------------------------------------------------------------
+When generating a Meal Plan:
+The generator must receive:
+- goal
+- workoutDays (Sun–Sat array)
+- trainingMode
+- if a WorkoutPlan exists and overlaps same date range:
+    - per-day workout type (strength/cardio/mixed/rest)
+
+If no workout plan exists:
+- fallback to workoutDays + trainingMode only.
+
+------------------------------------------------------------
+B) MACRO ADJUSTMENT RULES (STRUCTURED)
+------------------------------------------------------------
+
+1) Protein Logic
+- If goal = Muscle Gain OR trainingMode includes Strength:
+    → increase daily protein target range moderately.
+- If goal = Weight Loss:
+    → keep protein at upper-normal range to preserve muscle.
+- On strength workout days:
+    → emphasize protein in at least 2 meals.
+
+2) Carb Logic
+- If trainingMode = Cardio:
+    → increase carb range on workout days.
+- If trainingMode = Strength:
+    → moderate carbs on workout days.
+- If Both:
+    → adjust per-day:
+        - strength day → moderate carb bump
+        - cardio day → higher carb bump
+- On rest days:
+    → slightly reduce carb emphasis (not extreme).
+
+3) Meal Content Bias
+- On workout days:
+    - include easily digestible carb source in at least one meal.
+    - include recovery-oriented dinner (protein-forward).
+- On rest days:
+    - more vegetables/fiber.
+    - slightly lighter starch portions.
+
+4) Snack Suggestion Logic
+If workout exists that day:
+    - optionally add a short “Pre/Post workout suggestion” line.
+Keep it 1 sentence max.
+
+------------------------------------------------------------
+C) DAILY TAGGING
+------------------------------------------------------------
+Each generated meal day should include:
+- isWorkoutDay: boolean
+- workoutType: "strength" | "cardio" | "mixed" | "rest"
+
+Display this subtly on plan page:
+- “Workout Day Fueling”
+- “Rest Day Lighter Focus”
+
+------------------------------------------------------------
+D) TRAINING MODE INTELLIGENCE
+------------------------------------------------------------
+trainingMode affects meal structure:
+
+If Strength:
+    - bias toward protein-forward meals.
+    - include whole-food protein sources.
+If Cardio:
+    - bias toward carb-supported meals.
+    - include fruit, grains, starchy veg appropriately.
+If Both:
+    - adapt based on daily workoutType.
+
+------------------------------------------------------------
+E) WORKOUT PLAN GENERATION INTELLIGENCE
+------------------------------------------------------------
+Workout plan must also reflect goal alignment:
+
+If Weight Loss:
+    - combine strength + cardio (unless user overrides).
+If Muscle Gain:
+    - prioritize strength days.
+If Performance:
+    - balanced conditioning + strength.
+If Maintenance:
+    - moderate intensity and balanced.
+
+Ensure:
+- location constraints respected.
+- session length respected.
+- progressive overload guidance included in progressionNotes.
+- rest days inserted automatically if user selected too many consecutive days (protect recovery).
+
+------------------------------------------------------------
+F) CALENDAR INTEGRATION
+------------------------------------------------------------
+Calendar must:
+- derive workoutType per day from WorkoutPlan.
+- pass that context into MealPlan generation if overlapping.
+
+If MealPlan and WorkoutPlan overlap:
+- meal plan logic must use workout plan per-day type instead of generic workoutDays.
+
+------------------------------------------------------------
+G) EXPLANATION SECTION
+------------------------------------------------------------
+On Meal Plan page:
+Add small collapsible section:
+“Why this plan fits your training”
+Include 2–3 short bullets explaining:
+- protein logic
+- carb adjustment
+- workout alignment
+
+Keep it simple and non-medical.
+
+------------------------------------------------------------
+H) VALIDATION
+------------------------------------------------------------
+- Strength-only training weeks show higher protein emphasis.
+- Cardio-heavy weeks show higher carb emphasis.
+- Rest days visibly differ from workout days.
+- If workout plan exists, per-day meal logic follows it.
+- If no workout plan exists, fallback logic works using workoutDays only.

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { planOutputSchema, mealSchema, daySchema, groceryPricingSchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext, type GroceryPricing, type GrocerySection } from "@shared/schema";
+import { planOutputSchema, mealSchema, daySchema, groceryPricingSchema, workoutPlanOutputSchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext, type GroceryPricing, type GrocerySection, type WorkoutPreferences, type WorkoutPlanOutput } from "@shared/schema";
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn("WARNING: OPENAI_API_KEY is not set. AI features will not work.");
@@ -424,6 +424,132 @@ Include one entry per grocery item provided. The itemKey should be the item name
     raw = await callOpenAI(systemPrompt, repairPrompt);
     cleaned = cleanJsonString(raw);
     return groceryPricingSchema.parse(JSON.parse(cleaned));
+  }
+}
+
+function buildWorkoutSystemPrompt(): string {
+  return `You are a certified fitness coach and workout plan designer. You generate detailed, safe, practical 7-day workout plans.
+
+RULES:
+- Return ONLY valid JSON. No markdown, no commentary, no code fences.
+- Prioritize proper form and safety over intensity.
+- Include warm-up and cool-down for every session.
+- Respect equipment/location constraints strictly.
+- Never suggest exercises that require equipment the user doesn't have.
+- Keep coaching cues to 3 max per session.
+- Rest days should have session: null.
+- Be encouraging but never make medical claims.`;
+}
+
+function buildWorkoutPlanPrompt(prefs: WorkoutPreferences): string {
+  const locationLabels: Record<string, string> = {
+    home_none: "Home (no equipment — bodyweight only)",
+    home_equipment: "Home (dumbbells and/or resistance bands)",
+    gym: "Gym (full equipment: machines, barbells, dumbbells, cables)",
+    outdoor: "Outdoor (running, walking, bodyweight, hills)",
+    mixed: "Mixed (combination of home, gym, and outdoor)",
+  };
+
+  const dayMap: Record<string, number> = { Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6, Sat: 7 };
+  const workoutDayIndices = prefs.daysOfWeek.map(d => dayMap[d]).filter(Boolean);
+
+  return `Generate a complete 7-day workout plan based on these preferences:
+
+Goal: ${prefs.goal.replace("_", " ")}
+Location: ${locationLabels[prefs.location] || prefs.location}
+Training Mode: ${prefs.trainingMode}
+Focus Areas: ${prefs.focusAreas.join(", ")}
+Workout Days: ${prefs.daysOfWeek.join(", ")} (Day indices: ${workoutDayIndices.join(", ")})
+Session Length: ${prefs.sessionLength} minutes
+Experience Level: ${prefs.experienceLevel}
+Limitations/Injuries: ${prefs.limitations || "None"}
+
+TRAINING MODE RULES:
+- If trainingMode = "strength": sessions MUST be strength-focused (optional short mobility). Include sets, reps, rest periods.
+- If trainingMode = "cardio": sessions MUST be cardio-focused. Use time-based exercises, intervals, circuits.
+- If trainingMode = "both": alternate or mix strength and cardio intelligently through the week.
+
+LOCATION/EQUIPMENT RULES:
+- "home_none": ONLY bodyweight exercises. No dumbbells, no bands, no machines.
+- "home_equipment": Bodyweight + dumbbell + resistance band exercises. No machines, no barbells.
+- "gym": Full equipment including barbells, machines, cables, dumbbells.
+- "outdoor": Running, walking, sprints, hills, bodyweight exercises. No indoor equipment.
+- "mixed": Combine freely based on what makes sense per session.
+
+DAY ASSIGNMENT:
+- Days ${workoutDayIndices.join(", ")} are workout days: isWorkoutDay=true and session must be provided.
+- All other days are rest days: isWorkoutDay=false and session=null.
+
+GOAL ALIGNMENT:
+- Weight Loss: combine strength + cardio for maximum calorie burn, moderate intensity.
+- Muscle Gain: prioritize strength, progressive overload, adequate rest between sets.
+- Performance: balanced conditioning + strength, sport-specific movements.
+- Maintenance: moderate intensity, balanced, enjoyable variety.
+
+SAFETY:
+- If user reports limitations/injuries, avoid exercises that stress those areas.
+- Include proper warm-up (3-5 items) and cool-down (2-4 items) for every session.
+- Insert rest if user selected too many consecutive workout days (add note in progression).
+
+Return a JSON object with this exact structure:
+{
+  "title": "string - catchy workout plan title",
+  "summary": "string - 2-3 sentences summarizing the plan approach",
+  "preferencesEcho": { copy of preferences },
+  "days": [
+    {
+      "dayIndex": 1-7,
+      "dayName": "Day 1" through "Day 7",
+      "isWorkoutDay": boolean,
+      "session": null OR {
+        "mode": "strength"|"cardio"|"mixed",
+        "focus": "string describing session focus",
+        "durationMinutes": number,
+        "intensity": "easy"|"moderate"|"hard",
+        "warmup": ["warm-up item 1", ...] (3-5 items),
+        "main": [
+          {
+            "name": "exercise name",
+            "type": "strength"|"cardio"|"mobility",
+            "sets": number or null,
+            "reps": "string or null (e.g. '8-12', '10 each side')",
+            "time": "string or null (e.g. '30 seconds', '5 minutes')",
+            "restSeconds": number or null,
+            "notes": "string or null (form cues, modifications)"
+          }
+        ],
+        "finisher": ["optional finisher item"] (optional array),
+        "cooldown": ["cool-down item 1", ...] (2-4 items),
+        "coachingCues": ["cue 1", "cue 2"] (max 3, optional)
+      }
+    }
+  ],
+  "progressionNotes": [
+    "string - week-to-week guidance" (max 4 items)
+  ]
+}`;
+}
+
+export async function generateWorkoutPlan(prefs: WorkoutPreferences): Promise<WorkoutPlanOutput> {
+  const systemPrompt = buildWorkoutSystemPrompt();
+  const userPrompt = buildWorkoutPlanPrompt(prefs);
+
+  let raw = await callOpenAI(systemPrompt, userPrompt);
+  let cleaned = cleanJsonString(raw);
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return workoutPlanOutputSchema.parse(parsed);
+  } catch (firstErr) {
+    const repairPrompt = `The following JSON was invalid. Fix it and return ONLY valid JSON matching the required schema. Error: ${firstErr instanceof Error ? firstErr.message : "Parse error"}
+
+Original JSON:
+${cleaned}`;
+
+    raw = await callOpenAI(systemPrompt, repairPrompt);
+    cleaned = cleanJsonString(raw);
+    const parsed = JSON.parse(cleaned);
+    return workoutPlanOutputSchema.parse(parsed);
   }
 }
 

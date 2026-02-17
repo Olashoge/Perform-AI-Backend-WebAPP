@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import type { Meal } from "@shared/schema";
+import type { Meal, WorkoutSession } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   ArrowLeft, CalendarDays, Rows3, Grid3X3,
   Loader2, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown,
-  Settings2, Ban,
+  Settings2, Ban, Dumbbell, UtensilsCrossed,
 } from "lucide-react";
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, isSameMonth, eachDayOfInterval } from "date-fns";
 
@@ -21,10 +21,18 @@ function sortSlots(slots: string[]): string[] {
   return [...slots].sort((a, b) => (SLOT_ORDER[a] || 99) - (SLOT_ORDER[b] || 99));
 }
 
+interface WorkoutCalendarDay {
+  date: string;
+  isWorkoutDay: boolean;
+  session: WorkoutSession | null;
+  workoutPlanId: string;
+}
+
 interface CalendarDay {
   date: string;
   meals: Record<string, Meal>;
   planIds?: string[];
+  workout?: WorkoutCalendarDay;
 }
 
 interface AllCalendarData {
@@ -161,6 +169,9 @@ function WeekView({
                   <span className={`text-[10px] leading-none mt-0.5 ${isToday ? "text-primary" : "text-muted-foreground"}`}>
                     {DAY_ABBR[dayOfWeek]}
                   </span>
+                  {calDay?.workout?.isWorkoutDay && (
+                    <Dumbbell className="h-2.5 w-2.5 text-violet-500 mt-0.5" />
+                  )}
                 </div>
 
                 {slots.map(slot => {
@@ -279,11 +290,16 @@ function MonthView({
                     onClick={() => calDay && onDayClick(calDay)}
                     data-testid={`cell-date-${dateStr}`}
                   >
-                    <div className={`text-[10px] sm:text-[11px] font-medium leading-none mb-0.5 pl-0.5 ${isToday ? "text-primary font-bold" : isWeekend ? "text-rose-500" : "text-muted-foreground"}`}>
-                      {format(date, "d")}
+                    <div className="flex items-center gap-0.5">
+                      <span className={`text-[10px] sm:text-[11px] font-medium leading-none pl-0.5 ${isToday ? "text-primary font-bold" : isWeekend ? "text-rose-500" : "text-muted-foreground"}`}>
+                        {format(date, "d")}
+                      </span>
+                      {calDay?.workout?.isWorkoutDay && (
+                        <Dumbbell className="h-2 w-2 text-violet-500 shrink-0" />
+                      )}
                     </div>
                     {calDay && (
-                      <div className="space-y-px">
+                      <div className="space-y-px mt-0.5">
                         {slots.map(slot => {
                           const meal = calDay.meals[slot] as Meal | undefined;
                           if (!meal) return null;
@@ -340,6 +356,22 @@ function DayDetailModal({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
+          {day.workout?.isWorkoutDay && day.workout.session && (
+            <div className="border-l-2 border-l-violet-500 pl-3">
+              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+                Workout
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Dumbbell className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                <p className="font-medium text-sm">{day.workout.session.focus}</p>
+              </div>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <Badge variant="outline" className="text-xs capitalize">{day.workout.session.mode}</Badge>
+                <span className="text-[11px] text-muted-foreground">{day.workout.session.durationMinutes} min</span>
+                <Badge variant="outline" className="text-xs capitalize">{day.workout.session.intensity}</Badge>
+              </div>
+            </div>
+          )}
           {slots.map(slot => {
             const meal = day.meals[slot] as Meal | undefined;
             if (!meal) return null;
@@ -434,10 +466,40 @@ export default function PlanCalendar() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const { data: calendarData, isLoading: calLoading } = useQuery<AllCalendarData>({
+  const { data: rawCalendarData, isLoading: calLoading } = useQuery<AllCalendarData>({
     queryKey: ["/api/calendar/all"],
     enabled: !!user,
   });
+
+  const { data: workoutCalData } = useQuery<{ days: WorkoutCalendarDay[] }>({
+    queryKey: ["/api/calendar/workouts"],
+    enabled: !!user,
+  });
+
+  const calendarData = useMemo((): AllCalendarData | undefined => {
+    const base: AllCalendarData = rawCalendarData || { mealSlots: ["breakfast", "lunch", "dinner"], days: [] };
+    const wDays = workoutCalData?.days || [];
+
+    if (!rawCalendarData && wDays.length === 0) return undefined;
+
+    const workoutMap = new Map<string, WorkoutCalendarDay>();
+    for (const wd of wDays) workoutMap.set(wd.date, wd);
+
+    const existingDates = new Set(base.days.map(d => d.date));
+    const mergedDays: CalendarDay[] = base.days.map(d => ({
+      ...d,
+      workout: workoutMap.get(d.date),
+    }));
+
+    for (const wd of wDays) {
+      if (!existingDates.has(wd.date)) {
+        mergedDays.push({ date: wd.date, meals: {}, workout: wd });
+      }
+    }
+
+    mergedDays.sort((a, b) => a.date.localeCompare(b.date));
+    return { ...base, days: mergedDays };
+  }, [rawCalendarData, workoutCalData]);
 
   const { data: allFeedback } = useQuery<{ likedMeals: { mealFingerprint: string; feedback: string }[]; dislikedMeals: { mealFingerprint: string; feedback: string }[] }>({
     queryKey: ["/api/preferences"],
@@ -490,6 +552,8 @@ export default function PlanCalendar() {
   }
 
   const hasMeals = calendarData && calendarData.days.length > 0;
+  const hasWorkouts = workoutCalData && workoutCalData.days.length > 0;
+  const hasAnyData = hasMeals || hasWorkouts;
 
   return (
     <div className="min-h-screen bg-background">
@@ -544,12 +608,12 @@ export default function PlanCalendar() {
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        ) : !hasMeals ? (
+        ) : !hasAnyData ? (
           <Card>
             <CardContent className="p-10 text-center">
               <CalendarDays className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-              <h2 className="font-semibold mb-1" data-testid="text-no-scheduled-plans">No scheduled meals</h2>
-              <p className="text-xs text-muted-foreground mb-3">Schedule your meal plans from each plan's detail page to see them here.</p>
+              <h2 className="font-semibold mb-1" data-testid="text-no-scheduled-plans">No scheduled plans</h2>
+              <p className="text-xs text-muted-foreground mb-3">Schedule your meal or workout plans from each plan's detail page to see them here.</p>
               <Link href="/plans">
                 <Button size="sm" data-testid="button-go-to-plans">View Plans</Button>
               </Link>

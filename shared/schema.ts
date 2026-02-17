@@ -64,6 +64,21 @@ export const ingredientPreferences = pgTable("ingredient_preferences", {
   uniqueIndex("ingredient_pref_user_key_idx").on(table.userId, table.ingredientKey),
 ]);
 
+export const workoutPlans = pgTable("workout_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  idempotencyKey: varchar("idempotency_key"),
+  status: varchar("status", { length: 20 }).notNull().default("ready"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  errorMessage: text("error_message"),
+  preferencesJson: jsonb("preferences_json").notNull(),
+  planJson: jsonb("plan_json"),
+  planStartDate: varchar("plan_start_date", { length: 10 }),
+  deletedAt: timestamp("deleted_at"),
+});
+
 export const auditLogs = pgTable("audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
@@ -191,6 +206,54 @@ export const groceryPricingSchema = z.object({
   items: z.array(groceryPricingItemSchema),
 });
 
+export const workoutPreferencesSchema = z.object({
+  goal: z.enum(["weight_loss", "muscle_gain", "performance", "maintenance"]),
+  location: z.enum(["home_none", "home_equipment", "gym", "outdoor", "mixed"]),
+  trainingMode: z.enum(["strength", "cardio", "both"]),
+  focusAreas: z.array(z.string()).min(1, "Select at least one focus area"),
+  daysOfWeek: z.array(z.enum(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"])).min(1, "Select at least one day"),
+  sessionLength: z.union([z.literal(20), z.literal(30), z.literal(45), z.literal(60)]),
+  experienceLevel: z.enum(["beginner", "intermediate", "advanced"]),
+  limitations: z.string().optional(),
+});
+
+export const workoutExerciseSchema = z.object({
+  name: z.string(),
+  type: z.enum(["strength", "cardio", "mobility"]),
+  sets: z.coerce.number().nullable(),
+  reps: z.string().nullable(),
+  time: z.string().nullable(),
+  restSeconds: z.coerce.number().nullable(),
+  notes: z.string().nullable(),
+});
+
+export const workoutSessionSchema = z.object({
+  mode: z.enum(["strength", "cardio", "mixed"]),
+  focus: z.string(),
+  durationMinutes: z.coerce.number(),
+  intensity: z.enum(["easy", "moderate", "hard"]),
+  warmup: z.array(z.string()),
+  main: z.array(workoutExerciseSchema),
+  finisher: z.array(z.string()).optional(),
+  cooldown: z.array(z.string()),
+  coachingCues: z.array(z.string()).optional(),
+});
+
+export const workoutDaySchema = z.object({
+  dayIndex: z.coerce.number(),
+  dayName: z.string(),
+  isWorkoutDay: z.boolean(),
+  session: workoutSessionSchema.nullable(),
+});
+
+export const workoutPlanOutputSchema = z.object({
+  title: z.string(),
+  summary: z.string(),
+  preferencesEcho: z.record(z.any()),
+  days: z.array(workoutDaySchema).length(7),
+  progressionNotes: z.array(z.string()).optional(),
+});
+
 export const mealFeedbackSchema = z.object({
   planId: z.string().optional(),
   dayIndex: z.number().optional(),
@@ -216,6 +279,13 @@ export type GrocerySection = z.infer<typeof grocerySectionSchema>;
 export type GroceryItem = z.infer<typeof groceryItemSchema>;
 export type GroceryPricing = z.infer<typeof groceryPricingSchema>;
 export type GroceryPricingItem = z.infer<typeof groceryPricingItemSchema>;
+
+export type WorkoutPlan = typeof workoutPlans.$inferSelect;
+export type WorkoutPreferences = z.infer<typeof workoutPreferencesSchema>;
+export type WorkoutPlanOutput = z.infer<typeof workoutPlanOutputSchema>;
+export type WorkoutDay = z.infer<typeof workoutDaySchema>;
+export type WorkoutSession = z.infer<typeof workoutSessionSchema>;
+export type WorkoutExercise = z.infer<typeof workoutExerciseSchema>;
 
 export interface UserPreferenceContext {
   likedMeals: { name: string; cuisineTag: string }[];

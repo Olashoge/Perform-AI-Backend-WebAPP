@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, type User, type MealPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -33,6 +33,15 @@ export interface IStorage {
   updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined>;
   getScheduledPlans(userId: string): Promise<MealPlan[]>;
   softDeletePlan(id: string): Promise<MealPlan | undefined>;
+  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any): Promise<WorkoutPlan>;
+  getWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
+  getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]>;
+  updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined>;
+  updateWorkoutStartDate(id: string, startDate: string | null): Promise<WorkoutPlan | undefined>;
+  softDeleteWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
+  getScheduledWorkoutPlans(userId: string): Promise<WorkoutPlan[]>;
+  findByIdempotencyKeyWorkout(userId: string, idempotencyKey: string): Promise<WorkoutPlan | undefined>;
+  findGeneratingWorkoutPlan(userId: string): Promise<WorkoutPlan | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -338,6 +347,72 @@ export class DatabaseStorage implements IStorage {
       .set({ deletedAt: new Date(), planStartDate: null })
       .where(eq(mealPlans.id, id))
       .returning();
+    return plan;
+  }
+
+  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any): Promise<WorkoutPlan> {
+    const [plan] = await db.insert(workoutPlans).values({
+      userId,
+      idempotencyKey,
+      preferencesJson,
+      planJson: null,
+      status: "generating",
+      startedAt: new Date(),
+    }).returning();
+    return plan;
+  }
+
+  async getWorkoutPlan(id: string): Promise<WorkoutPlan | undefined> {
+    const [plan] = await db.select().from(workoutPlans).where(eq(workoutPlans.id, id)).limit(1);
+    return plan;
+  }
+
+  async getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]> {
+    return db.select().from(workoutPlans).where(and(eq(workoutPlans.userId, userId), isNull(workoutPlans.deletedAt))).orderBy(desc(workoutPlans.createdAt));
+  }
+
+  async updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined> {
+    const updates: any = { status, completedAt: new Date() };
+    if (planJson !== undefined) updates.planJson = planJson;
+    if (errorMessage !== undefined) updates.errorMessage = errorMessage;
+    const [plan] = await db.update(workoutPlans).set(updates).where(eq(workoutPlans.id, id)).returning();
+    return plan;
+  }
+
+  async updateWorkoutStartDate(id: string, startDate: string | null): Promise<WorkoutPlan | undefined> {
+    const [plan] = await db.update(workoutPlans).set({ planStartDate: startDate }).where(eq(workoutPlans.id, id)).returning();
+    return plan;
+  }
+
+  async softDeleteWorkoutPlan(id: string): Promise<WorkoutPlan | undefined> {
+    const [plan] = await db.update(workoutPlans).set({ deletedAt: new Date(), planStartDate: null }).where(eq(workoutPlans.id, id)).returning();
+    return plan;
+  }
+
+  async getScheduledWorkoutPlans(userId: string): Promise<WorkoutPlan[]> {
+    const allPlans = await db.select().from(workoutPlans)
+      .where(and(eq(workoutPlans.userId, userId), eq(workoutPlans.status, "ready"), isNull(workoutPlans.deletedAt)))
+      .orderBy(desc(workoutPlans.createdAt));
+    return allPlans.filter(p => p.planStartDate && p.planJson);
+  }
+
+  async findByIdempotencyKeyWorkout(userId: string, idempotencyKey: string): Promise<WorkoutPlan | undefined> {
+    const [plan] = await db.select().from(workoutPlans)
+      .where(and(eq(workoutPlans.userId, userId), eq(workoutPlans.idempotencyKey, idempotencyKey)))
+      .limit(1);
+    return plan;
+  }
+
+  async findGeneratingWorkoutPlan(userId: string): Promise<WorkoutPlan | undefined> {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const [plan] = await db.select().from(workoutPlans)
+      .where(and(
+        eq(workoutPlans.userId, userId),
+        eq(workoutPlans.status, "generating"),
+        gte(workoutPlans.createdAt, fiveMinAgo),
+      ))
+      .orderBy(desc(workoutPlans.createdAt))
+      .limit(1);
     return plan;
   }
 }

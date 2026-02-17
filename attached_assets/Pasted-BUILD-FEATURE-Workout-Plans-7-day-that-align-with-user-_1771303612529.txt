@@ -1,0 +1,170 @@
+BUILD FEATURE: Workout Plans (7-day) that align with user goals, and integrate into existing Calendar (Meals / Workouts / Both).
+
+ASSUME EXISTING:
+- Meal plans exist with likes/dislikes, pricing, scheduling via startDate set on plan page only.
+- Calendar shows all scheduled meal plans (startDate != null) and prevents overlaps with conflict-aware startDate picker.
+- Week/Month views exist and are compact.
+
+GOALS:
+1) Add Workout Plan generator with user preferences:
+   - location: Home (none) | Home (dumbbells/bands) | Gym | Outdoor | Mixed
+   - trainingMode: Strength | Cardio | Both
+   - goal: Weight Loss | Muscle Gain | Performance | Maintenance
+   - focusAreas (multi-select): Full Body, Upper, Lower, Core, Glutes/Legs, Arms/Shoulders, Back, Athletic Conditioning
+   - daysOfWeek (multi-select): Sun..Sat (same UI as meal workout-days selector)
+   - sessionLength: 20/30/45/60
+   - experienceLevel: Beginner/Intermediate/Advanced
+   - limitations/injuries: optional text
+2) Generate a 7-day workout plan (JSON-only) via OpenAI gpt-4.1-mini.
+3) Add Workout Plans to My Plans list + deletable + schedule/unschedule via startDate on the Workout Plan page (same 3-dot menu pattern).
+4) Calendar must show workouts as well as meals with a toggle: Meals | Workouts | Both.
+5) Keep single source of truth for scheduling: ONLY startDate on plan page assigns to calendar. No other assignment logic.
+
+------------------------------------------------------------
+A) DATA MODEL
+------------------------------------------------------------
+Add table WorkoutPlan:
+- id, userId, createdAt
+- title (string)
+- preferencesJson (JSON)
+- planJson (JSON)
+- startDate (Date | null)
+- status ("generating"|"ready"|"failed")
+- deletedAt (Date | null)
+
+Add WorkoutFeedback (optional for future):
+- userId, workoutPlanId, dayIndex, completed(bool), difficulty(1-5), notes
+
+------------------------------------------------------------
+B) API ENDPOINTS
+------------------------------------------------------------
+- POST /api/workout-plans
+  Body: preferences
+  Creates row status="generating"
+  Calls OpenAI -> validates JSON -> stores planJson -> status="ready"
+- GET /api/workout-plans
+- GET /api/workout-plans/:id
+- PATCH /api/workout-plans/:id/start-date  { startDate: string | null }
+- DELETE /api/workout-plans/:id  (soft delete, clears startDate)
+
+Calendar endpoints update:
+- GET /api/calendar?view=month|week&filter=meals|workouts|both
+Return combined events derived from:
+- MealPlans where startDate != null and deletedAt == null
+- WorkoutPlans where startDate != null and deletedAt == null
+
+------------------------------------------------------------
+C) WORKOUT PLAN JSON CONTRACT (STRICT)
+------------------------------------------------------------
+Workout plan response must be JSON only:
+
+{
+  "title": string,
+  "summary": string (2-3 sentences),
+  "preferencesEcho": { ...normalized preferences... },
+  "days": [
+    {
+      "dayIndex": 1..7,
+      "dayName": "Day 1" ...,
+      "isWorkoutDay": boolean,
+      "session": null OR {
+        "mode": "strength"|"cardio"|"mixed",
+        "focus": string,
+        "durationMinutes": number,
+        "intensity": "easy"|"moderate"|"hard",
+        "warmup": [string] (3-5 items),
+        "main": [
+          {
+            "name": string,
+            "type": "strength"|"cardio"|"mobility",
+            "sets": number|null,
+            "reps": string|null,
+            "time": string|null,
+            "restSeconds": number|null,
+            "notes": string|null
+          }
+        ],
+        "finisher": [string] (optional),
+        "cooldown": [string] (2-4 items),
+        "coachingCues": [string] (max 3)
+      }
+    }
+  ],
+  "progressionNotes": [
+    string (max 4, simple week-to-week guidance)
+  ]
+}
+
+Rules:
+- If user selected trainingMode = Strength, sessions must be strength (with optional short mobility).
+- If Cardio, sessions must be cardio (with warmup/cooldown).
+- If Both, alternate or mix intelligently through the week.
+- Respect location + equipment:
+  - Home (none): bodyweight cardio/strength, no equipment moves
+  - Home (dumbbells/bands): include DB/band moves
+  - Gym: include gym lifts (machines/barbells optional based on level)
+  - Outdoor: running/walking/sprints/hills + bodyweight
+- Use daysOfWeek selection:
+  - On selected days: isWorkoutDay=true and session!=null
+  - On non-selected days: isWorkoutDay=false and session=null OR mobility (very light)
+
+------------------------------------------------------------
+D) PROMPTING (ALIGN WITH MEAL PLAN)
+------------------------------------------------------------
+In workout plan generation prompt:
+- Use goal + focusAreas + experience + duration + daysOfWeek + location + trainingMode
+- Keep it safe: no extreme claims, no medical advice.
+- Encourage form, rest, progression.
+
+MEAL PLAN INTEGRATION:
+- Update meal plan generator to accept workoutDays (daysOfWeek) and trainingMode
+- On workout days:
+  - suggest higher protein emphasis and reasonable carbs
+  - add optional "pre/post workout snack suggestion" line (short)
+- On rest days:
+  - slightly lighter carb emphasis, still protein-forward
+
+------------------------------------------------------------
+E) UI PAGES
+------------------------------------------------------------
+Add:
+- /workouts/new (workout plan form)
+- /workouts/:id (workout plan detail page similar to meal plan detail)
+- Add to navigation: "Workouts"
+
+Workout Plan detail page:
+- Show plan, 7-day list, each day expandable
+- Show “Plan Settings” (inputs)
+- 3-dot menu (top right):
+  - Move start date
+  - Add to calendar / Remove from calendar (startDate null vs set)
+  - Delete plan
+- Start date picker conflict-aware against BOTH meal plans and workout plans
+  (i.e., cannot overlap any scheduled content on any day)
+
+Calendar page:
+- Add toggle chips: Meals | Workouts | Both
+- Week view:
+  - If Meals only: existing B/L/D columns
+  - If Workouts only: show a “Workout” column with session title (tiny)
+  - If Both: show B/L/D + Workout columns (compact)
+- Month view:
+  - show abbreviated meal lines + workout line (e.g., "W: Lower Strength (45m)")
+  - keep compact and readable
+
+My Plans page:
+- Add tabs or sections:
+  - Meal Plans
+  - Workout Plans
+  - (Optional) All
+Each plan card shows if scheduled.
+
+------------------------------------------------------------
+F) TESTS
+------------------------------------------------------------
+- Create workout plan -> view it
+- Schedule workout plan start date -> appears on calendar
+- Toggle calendar filter -> shows meals/workouts/both
+- Conflict blocking works across plan types
+- Delete workout plan removes it from lists + calendar
+- Meal plan generation uses workout days context (visible in rationale)
