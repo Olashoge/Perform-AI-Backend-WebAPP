@@ -31,6 +31,7 @@ export interface IStorage {
   deleteMealFeedback(id: string, userId: string): Promise<boolean>;
   deleteIngredientPreference(id: string, userId: string): Promise<boolean>;
   updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined>;
+  getScheduledPlans(userId: string): Promise<MealPlan[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -322,6 +323,13 @@ export class DatabaseStorage implements IStorage {
       .where(eq(mealPlans.id, id))
       .returning();
     return plan;
+  }
+
+  async getScheduledPlans(userId: string): Promise<MealPlan[]> {
+    const allPlans = await db.select().from(mealPlans)
+      .where(and(eq(mealPlans.userId, userId), eq(mealPlans.status, "ready")))
+      .orderBy(desc(mealPlans.createdAt));
+    return allPlans.filter(p => p.planStartDate && p.planJson);
   }
 }
 

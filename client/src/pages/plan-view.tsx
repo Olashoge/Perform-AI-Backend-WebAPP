@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -524,12 +524,43 @@ export default function PlanView() {
 
   const [startDateOpen, setStartDateOpen] = useState(false);
 
+  const { data: occupiedDatesData } = useQuery<{ occupiedDates: string[] }>({
+    queryKey: ["/api/calendar/occupied-dates", params.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/calendar/occupied-dates?excludePlanId=${params.id}`, { credentials: "include" });
+      if (!res.ok) return { occupiedDates: [] };
+      return res.json();
+    },
+    enabled: !!user && !!params.id,
+  });
+
+  const occupiedDateSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const d of occupiedDatesData?.occupiedDates || []) {
+      s.add(d);
+    }
+    return s;
+  }, [occupiedDatesData]);
+
+  const isDateOccupied = useCallback((date: Date): boolean => {
+    const planDays = (data?.planJson as PlanOutput | undefined)?.days?.length || 7;
+    for (let i = 0; i < planDays; i++) {
+      const d = new Date(date);
+      d.setDate(d.getDate() + i);
+      const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (occupiedDateSet.has(dStr)) return true;
+    }
+    return false;
+  }, [occupiedDateSet, data]);
+
   const startDateMutation = useMutation({
     mutationFn: async (startDate: string) => {
       await apiRequest("PATCH", `/api/plan/${params.id}/start-date`, { startDate });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/occupied-dates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
       toast({ title: "Plan scheduled", description: "Your calendar has been updated." });
       setStartDateOpen(false);
     },
@@ -544,6 +575,8 @@ export default function PlanView() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/occupied-dates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
       toast({ title: "Schedule removed", description: "This plan is no longer scheduled on your calendar." });
     },
     onError: () => {
@@ -652,10 +685,27 @@ export default function PlanView() {
                     mode="single"
                     selected={data?.planStartDate ? new Date(data.planStartDate + "T00:00:00") : undefined}
                     onSelect={(date) => {
-                      if (date) startDateMutation.mutate(format(date, "yyyy-MM-dd"));
+                      if (date && !isDateOccupied(date)) {
+                        startDateMutation.mutate(format(date, "yyyy-MM-dd"));
+                      }
+                    }}
+                    disabled={(date) => isDateOccupied(date)}
+                    modifiers={{
+                      occupied: (date: Date) => {
+                        const dStr = format(date, "yyyy-MM-dd");
+                        return occupiedDateSet.has(dStr);
+                      },
+                    }}
+                    modifiersClassNames={{
+                      occupied: "bg-destructive/15 text-muted-foreground line-through",
                     }}
                     initialFocus
                   />
+                  {occupiedDateSet.size > 0 && (
+                    <p className="text-[11px] text-muted-foreground px-3 pb-2" data-testid="text-occupied-hint">
+                      Dates with existing meals are unavailable.
+                    </p>
+                  )}
                 </PopoverContent>
               </Popover>
               {data?.planStartDate && (

@@ -528,6 +528,82 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/calendar/all", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const scheduledPlans = await storage.getScheduledPlans(userId);
+
+      const SLOT_ORDER: Record<string, number> = { breakfast: 1, lunch: 2, dinner: 3, snack: 4 };
+      const allSlots = new Set<string>();
+      const dayMap = new Map<string, { date: string; meals: Record<string, any>; planIds: string[] }>();
+
+      for (const plan of scheduledPlans) {
+        const planJson = plan.planJson as PlanOutput;
+        const prefs = plan.preferencesJson as Preferences;
+        const startDate = plan.planStartDate!;
+
+        const mealSlots = (prefs.mealsPerDay === 2 && prefs.mealSlots && prefs.mealSlots.length === 2)
+          ? prefs.mealSlots
+          : (prefs.mealsPerDay === 2 ? ["lunch", "dinner"] : ["breakfast", "lunch", "dinner"]);
+        for (const s of mealSlots) allSlots.add(s);
+
+        for (let i = 0; i < planJson.days.length; i++) {
+          const day = planJson.days[i];
+          const date = new Date(startDate + "T00:00:00");
+          date.setDate(date.getDate() + i);
+          const dateStr = date.toISOString().slice(0, 10);
+
+          if (!dayMap.has(dateStr)) {
+            dayMap.set(dateStr, { date: dateStr, meals: {}, planIds: [] });
+          }
+          const entry = dayMap.get(dateStr)!;
+          if (!entry.planIds.includes(plan.id)) entry.planIds.push(plan.id);
+
+          for (const slot of mealSlots) {
+            const meal = (day.meals as any)[slot];
+            if (meal && !entry.meals[slot]) {
+              entry.meals[slot] = meal;
+            }
+          }
+        }
+      }
+
+      const sortedSlots = Array.from(allSlots).sort((a, b) => (SLOT_ORDER[a] || 99) - (SLOT_ORDER[b] || 99));
+      const days = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+      return res.json({ mealSlots: sortedSlots, days });
+    } catch (err) {
+      log(`Calendar all error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to load calendar data" });
+    }
+  });
+
+  app.get("/api/calendar/occupied-dates", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const excludePlanId = req.query.excludePlanId as string | undefined;
+      const scheduledPlans = await storage.getScheduledPlans(userId);
+
+      const occupiedDates = new Set<string>();
+      for (const plan of scheduledPlans) {
+        if (excludePlanId && plan.id === excludePlanId) continue;
+        const planJson = plan.planJson as PlanOutput;
+        const startDate = plan.planStartDate!;
+
+        for (let i = 0; i < planJson.days.length; i++) {
+          const date = new Date(startDate + "T00:00:00");
+          date.setDate(date.getDate() + i);
+          occupiedDates.add(date.toISOString().slice(0, 10));
+        }
+      }
+
+      return res.json({ occupiedDates: Array.from(occupiedDates) });
+    } catch (err) {
+      log(`Occupied dates error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to load occupied dates" });
+    }
+  });
+
   app.get("/api/plan/:id/calendar", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);

@@ -1,0 +1,115 @@
+Goal
+
+Update Calendar + Week views so they:
+
+show ALL meal plans together (not just one selected plan),
+
+use the correct meal order Breakfast → Lunch → Dinner,
+
+improve the “Start plan on” date picker so users can clearly see which dates are already occupied by existing planned meals.
+
+A) Calendar must show ALL meal plans (remove plan selector)
+Current issue
+
+Calendar currently only shows the selected plan because there’s a plan dropdown/filter at the top.
+
+Required fix
+
+Remove the meal-plan selection dropdown from the Calendar page UI.
+
+Update the calendar data logic so it loads events from all plans that have startDate set for the logged-in user.
+
+If a plan does not have startDate, it should not appear on the calendar (since the plan is not assigned yet).
+
+Data rule (single source of truth)
+
+The only way plans get assigned to dates is via Start plan on on the plan page.
+
+Remove/disable any other legacy mechanism that auto-places plans on calendar.
+
+B) Fix meal order everywhere (Breakfast → Lunch → Dinner)
+Current issue
+
+In week view, Dinner appears before Lunch.
+
+Required fix
+
+Ensure the calendar “columns” are ordered: Breakfast, Lunch, Dinner (or Breakfast, Lunch, Dinner, Snacks if present).
+
+Ensure the event-building code sorts meal slots using a fixed order mapping, e.g.:
+
+breakfast: 1
+
+lunch: 2
+
+dinner: 3
+
+snack: 4 (optional)
+
+Apply this order both in:
+
+Week view grid
+
+Month view cell rendering (B/L/D)
+
+Any agenda/week list view if it exists
+
+C) Improve “Start plan on” date picker: block/highlight occupied dates
+Required behavior
+
+When choosing “Start plan on” inside a plan:
+
+The date picker should visually mark dates that already contain planned meals (from any plan).
+
+Ideally block selecting dates that would conflict, OR allow it but show a clear warning + confirm modal. (Prefer blocking to keep it simple and prevent overlaps.)
+
+What counts as “occupied”
+
+A date is occupied if any meal event exists on that day in the calendar for the user (derived from all plans with startDate).
+
+UX requirement
+
+Use a clear style (disabled / greyed out) for blocked dates.
+
+Also highlight them (light red or subtle stripe) so it’s obvious why they can’t be selected.
+
+Add helper text under the picker:
+“Dates with existing meals are unavailable.”
+
+Implementation outline
+
+Add an API endpoint that returns a set/list of occupied dates for the user:
+
+Example: GET /api/calendar/occupied-dates?from=YYYY-MM-DD&to=YYYY-MM-DD
+
+Calendar computation:
+
+Expand all plans with startDate into dated events (planDayIndex → actualDate).
+
+Date picker:
+
+Fetch occupied dates for the displayed month range.
+
+Use the date-picker library’s disabled / isDayBlocked / renderDay hooks to disable + highlight.
+
+Edge case
+
+If the user is editing the same plan’s start date:
+
+Either allow selecting its current assigned dates without blocking (so user can reselect the same start date),
+
+or temporarily ignore that plan’s currently mapped dates when determining conflicts.
+
+D) Keep the calendar showing like the screenshots
+
+Month view should remain compact and legible (tiny text, multiple meals visible per day).
+
+Week view should show the full week grid at once with compact rows.
+
+Acceptance checks
+
+Calendar shows meals from multiple plans at once without selecting a plan.
+
+Week view columns appear in Breakfast → Lunch → Dinner order.
+
+“Start plan on” date picker clearly shows blocked/highlighted occupied dates and prevents overlap

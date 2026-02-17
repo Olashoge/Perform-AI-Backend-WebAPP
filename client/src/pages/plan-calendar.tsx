@@ -2,11 +2,10 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import type { MealPlan, Meal } from "@shared/schema";
+import type { Meal } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -16,17 +15,19 @@ import {
 } from "lucide-react";
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, isSameMonth, eachDayOfInterval } from "date-fns";
 
-interface CalendarDay {
-  date: string;
-  dayIndex: number;
-  dayName: string;
-  meals: { breakfast?: Meal; lunch?: Meal; dinner?: Meal };
-  mealSlots: string[];
+const SLOT_ORDER: Record<string, number> = { breakfast: 1, lunch: 2, dinner: 3, snack: 4 };
+
+function sortSlots(slots: string[]): string[] {
+  return [...slots].sort((a, b) => (SLOT_ORDER[a] || 99) - (SLOT_ORDER[b] || 99));
 }
 
-interface CalendarData {
-  planId: string;
-  startDate: string | null;
+interface CalendarDay {
+  date: string;
+  meals: Record<string, Meal>;
+  planIds?: string[];
+}
+
+interface AllCalendarData {
   mealSlots: string[];
   days: CalendarDay[];
 }
@@ -93,7 +94,7 @@ function WeekView({
   weekStartsOn,
   onDayClick,
 }: {
-  calendarData: CalendarData;
+  calendarData: AllCalendarData;
   currentWeekStart: Date;
   setCurrentWeekStart: (d: Date) => void;
   feedbackMap: Record<string, "like" | "dislike">;
@@ -112,7 +113,7 @@ function WeekView({
   }, [currentWeekStart]);
 
   const weekEnd = weekDates[6];
-  const slots = calendarData.mealSlots;
+  const slots = sortSlots(calendarData.mealSlots);
 
   return (
     <div>
@@ -133,7 +134,7 @@ function WeekView({
           <div className="p-1" />
           {slots.map(slot => (
             <div key={slot} className="text-[11px] font-medium text-muted-foreground p-1.5 text-center border-l">
-              {SLOT_FULL[slot]}
+              {SLOT_FULL[slot] || slot}
             </div>
           ))}
         </div>
@@ -162,7 +163,7 @@ function WeekView({
               </div>
 
               {slots.map(slot => {
-                const meal = calDay?.meals[slot as keyof CalendarDay["meals"]];
+                const meal = calDay?.meals[slot] as Meal | undefined;
                 if (!meal) {
                   return <div key={slot} className="border-l min-h-[44px]" />;
                 }
@@ -171,7 +172,7 @@ function WeekView({
 
                 return (
                   <div key={slot} className={`border-l min-h-[44px] p-1 flex items-start gap-1`}>
-                    <div className={`border-l-2 ${SLOT_BORDER[slot]} pl-1.5 flex-1 min-w-0`}>
+                    <div className={`border-l-2 ${SLOT_BORDER[slot] || ""} pl-1.5 flex-1 min-w-0`}>
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] leading-tight line-clamp-2" data-testid={`text-week-meal-${dateStr}-${slot}`}>
                           {meal.name}
@@ -199,7 +200,7 @@ function MonthView({
   feedbackMap,
   avoidedIngredients,
 }: {
-  calendarData: CalendarData;
+  calendarData: AllCalendarData;
   currentMonth: Date;
   setCurrentMonth: (d: Date) => void;
   weekStartsOn: 0 | 1;
@@ -228,7 +229,7 @@ function MonthView({
     ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  const slots = calendarData.mealSlots;
+  const slots = sortSlots(calendarData.mealSlots);
   const SLOT_LABEL: Record<string, string> = { breakfast: "B", lunch: "L", dinner: "D" };
   const SLOT_TEXT_COLOR: Record<string, string> = {
     breakfast: "text-amber-600 dark:text-amber-400",
@@ -281,15 +282,15 @@ function MonthView({
                   {calDay && (
                     <div className="space-y-px">
                       {slots.map(slot => {
-                        const meal = calDay.meals[slot as keyof typeof calDay.meals];
+                        const meal = calDay.meals[slot] as Meal | undefined;
                         if (!meal) return null;
                         const truncName = meal.name.length > 12 ? meal.name.slice(0, 11) + "\u2026" : meal.name;
                         const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
                         const fb = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
                         return (
                           <div key={slot} className="flex items-center gap-0 px-0.5">
-                            <span className={`text-[9px] leading-tight font-semibold shrink-0 ${SLOT_TEXT_COLOR[slot]}`}>{SLOT_LABEL[slot]}</span>
-                            <span className={`text-[9px] leading-tight truncate ml-0.5 ${SLOT_BORDER[slot]} border-l pl-0.5`}>
+                            <span className={`text-[9px] leading-tight font-semibold shrink-0 ${SLOT_TEXT_COLOR[slot] || ""}`}>{SLOT_LABEL[slot] || slot[0]?.toUpperCase()}</span>
+                            <span className={`text-[9px] leading-tight truncate ml-0.5 ${SLOT_BORDER[slot] || ""} border-l pl-0.5`}>
                               {truncName}
                             </span>
                             {fb && <FeedbackDot feedback={fb} />}
@@ -324,6 +325,7 @@ function DayDetailModal({
   onClose: () => void;
 }) {
   const date = new Date(day.date + "T00:00:00");
+  const slots = sortSlots(mealSlots);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -331,20 +333,19 @@ function DayDetailModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             {format(date, "EEEE, MMM d, yyyy")}
-            <Badge variant="secondary" className="text-xs">{day.dayName}</Badge>
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
-          {mealSlots.map(slot => {
-            const meal = day.meals[slot as keyof typeof day.meals];
+          {slots.map(slot => {
+            const meal = day.meals[slot] as Meal | undefined;
             if (!meal) return null;
             const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
             const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
 
             return (
-              <div key={slot} className={`border-l-2 ${SLOT_BORDER[slot]} pl-3`}>
+              <div key={slot} className={`border-l-2 ${SLOT_BORDER[slot] || ""} pl-3`}>
                 <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                  {SLOT_FULL[slot]}
+                  {SLOT_FULL[slot] || slot}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <p className="font-medium text-sm">{meal.name}</p>
@@ -420,7 +421,6 @@ export default function PlanCalendar() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     return startOfWeek(new Date(), { weekStartsOn: 0 });
   });
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
   const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(() => {
     try {
@@ -430,40 +430,28 @@ export default function PlanCalendar() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const { data: plans, isLoading: plansLoading } = useQuery<MealPlan[]>({
-    queryKey: ["/api/plans"],
+  const { data: calendarData, isLoading: calLoading } = useQuery<AllCalendarData>({
+    queryKey: ["/api/calendar/all"],
     enabled: !!user,
   });
 
-  const readyPlans = useMemo(() => {
-    return (plans || []).filter(p => p.status === "ready" && p.planJson);
-  }, [plans]);
+  const { data: allFeedback } = useQuery<{ likedMeals: { mealFingerprint: string; feedback: string }[]; dislikedMeals: { mealFingerprint: string; feedback: string }[] }>({
+    queryKey: ["/api/preferences"],
+    enabled: !!user,
+  });
 
-  useEffect(() => {
-    if (readyPlans.length > 0 && !selectedPlanId) {
-      setSelectedPlanId(readyPlans[0].id);
+  const feedbackMap = useMemo(() => {
+    const map: Record<string, "like" | "dislike"> = {};
+    if (allFeedback) {
+      for (const m of allFeedback.likedMeals || []) {
+        map[m.mealFingerprint] = "like";
+      }
+      for (const m of allFeedback.dislikedMeals || []) {
+        map[m.mealFingerprint] = "dislike";
+      }
     }
-  }, [readyPlans, selectedPlanId]);
-
-  const { data: calendarData, isLoading: calLoading } = useQuery<CalendarData>({
-    queryKey: ["/api/plan", selectedPlanId, "calendar"],
-    queryFn: async () => {
-      const res = await fetch(`/api/plan/${selectedPlanId}/calendar`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load calendar");
-      return res.json();
-    },
-    enabled: !!selectedPlanId,
-  });
-
-  const { data: feedbackMap } = useQuery<Record<string, "like" | "dislike">>({
-    queryKey: ["/api/feedback/plan", selectedPlanId],
-    queryFn: async () => {
-      const res = await fetch(`/api/feedback/plan/${selectedPlanId}`, { credentials: "include" });
-      if (!res.ok) return {};
-      return res.json();
-    },
-    enabled: !!selectedPlanId,
-  });
+    return map;
+  }, [allFeedback]);
 
   const { data: prefsData } = useQuery<{ avoidIngredients: { ingredientKey: string }[] }>({
     queryKey: ["/api/preferences"],
@@ -475,12 +463,13 @@ export default function PlanCalendar() {
   }, [prefsData]);
 
   useEffect(() => {
-    if (calendarData?.startDate) {
-      const start = new Date(calendarData.startDate + "T00:00:00");
+    if (calendarData?.days && calendarData.days.length > 0) {
+      const firstDate = calendarData.days[0].date;
+      const start = new Date(firstDate + "T00:00:00");
       setCurrentMonth(new Date(start.getFullYear(), start.getMonth()));
       setCurrentWeekStart(startOfWeek(start, { weekStartsOn }));
     }
-  }, [calendarData?.startDate, weekStartsOn]);
+  }, [calendarData?.days?.length, weekStartsOn]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -495,6 +484,8 @@ export default function PlanCalendar() {
       </div>
     );
   }
+
+  const hasMeals = calendarData && calendarData.days.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -518,24 +509,7 @@ export default function PlanCalendar() {
       </nav>
 
       <div className="max-w-5xl mx-auto px-2 sm:px-4 py-3">
-        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            {readyPlans.length > 1 && (
-              <Select value={selectedPlanId || ""} onValueChange={setSelectedPlanId}>
-                <SelectTrigger className="w-[180px] text-xs" data-testid="select-plan">
-                  <SelectValue placeholder="Select a plan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {readyPlans.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {((p.planJson as any)?.title || "Meal Plan").slice(0, 30)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
+        <div className="flex items-center justify-end gap-2 mb-3">
           <div className="flex items-center gap-1 bg-muted rounded-md p-0.5">
             <Button
               variant={viewMode === "week" ? "default" : "ghost"}
@@ -560,54 +534,39 @@ export default function PlanCalendar() {
           </div>
         </div>
 
-        {plansLoading || calLoading ? (
+        {calLoading ? (
           <div className="space-y-2">
             {[1, 2, 3].map(i => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        ) : readyPlans.length === 0 ? (
+        ) : !hasMeals ? (
           <Card>
             <CardContent className="p-10 text-center">
               <CalendarDays className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-              <h2 className="font-semibold mb-1">No meal plans yet</h2>
-              <p className="text-xs text-muted-foreground mb-3">Create a meal plan first to view it on the calendar.</p>
-              <Link href="/new-plan">
-                <Button size="sm" data-testid="button-create-plan">Create a Plan</Button>
-              </Link>
-            </CardContent>
-          </Card>
-        ) : !calendarData ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          </div>
-        ) : !calendarData.startDate ? (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <CalendarDays className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-              <h2 className="font-semibold mb-1" data-testid="text-not-scheduled">Plan not scheduled</h2>
-              <p className="text-xs text-muted-foreground mb-3">Schedule this plan from the plan page to see it on your calendar.</p>
-              <Link href={`/plan/${selectedPlanId}`}>
-                <Button size="sm" data-testid="button-go-to-plan">Open Plan</Button>
+              <h2 className="font-semibold mb-1" data-testid="text-no-scheduled-plans">No scheduled meals</h2>
+              <p className="text-xs text-muted-foreground mb-3">Schedule your meal plans from each plan's detail page to see them here.</p>
+              <Link href="/plans">
+                <Button size="sm" data-testid="button-go-to-plans">View Plans</Button>
               </Link>
             </CardContent>
           </Card>
         ) : viewMode === "month" ? (
           <MonthView
-            calendarData={calendarData}
+            calendarData={calendarData!}
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
             weekStartsOn={weekStartsOn}
             onDayClick={setSelectedDay}
-            feedbackMap={feedbackMap || {}}
+            feedbackMap={feedbackMap}
             avoidedIngredients={avoidedIngredients}
           />
         ) : (
           <WeekView
-            calendarData={calendarData}
+            calendarData={calendarData!}
             currentWeekStart={currentWeekStart}
             setCurrentWeekStart={setCurrentWeekStart}
-            feedbackMap={feedbackMap || {}}
+            feedbackMap={feedbackMap}
             avoidedIngredients={avoidedIngredients}
             weekStartsOn={weekStartsOn}
             onDayClick={setSelectedDay}
@@ -619,7 +578,7 @@ export default function PlanCalendar() {
         <DayDetailModal
           day={selectedDay}
           mealSlots={calendarData?.mealSlots || ["breakfast", "lunch", "dinner"]}
-          feedbackMap={feedbackMap || {}}
+          feedbackMap={feedbackMap}
           avoidedIngredients={avoidedIngredients}
           open={!!selectedDay}
           onClose={() => setSelectedDay(null)}

@@ -24,7 +24,7 @@ client/src/
     plan-view.tsx  - View generated plan (meals + grocery list)
     plans-list.tsx - List of user's saved plans
     preferences.tsx - Manage liked/disliked meals and ingredient preferences
-    plan-calendar.tsx - Calendar view (dense month + week) with date picker, plan selector, feedback icons, settings modal
+    plan-calendar.tsx - Calendar view (dense month + week) showing ALL scheduled plans merged, feedback icons, settings modal
 
 server/
   index.ts         - Express server setup (connect-pg-simple session store)
@@ -100,6 +100,8 @@ shared/
 - `GET /api/preferences` - Get user's full preference data (meals + ingredients with IDs)
 - `DELETE /api/preferences/meal/:id` - Remove a meal feedback entry
 - `DELETE /api/preferences/ingredient/:id` - Remove an ingredient preference
+- `GET /api/calendar/all` - Merged calendar data from ALL scheduled plans (no plan selector)
+- `GET /api/calendar/occupied-dates?excludePlanId=X` - List of dates with existing meals (for date picker blocking)
 
 ## Environment Variables
 - `DATABASE_URL` - PostgreSQL connection string
