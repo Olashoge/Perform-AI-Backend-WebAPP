@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -61,15 +61,22 @@ const EXPERIENCE_OPTIONS = [
 export default function NewWorkout() {
   const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  const validGoals = ["weight_loss", "muscle_gain", "performance", "maintenance"] as const;
+  const goalParam = searchParams.get("goal");
+  const goalFromUrl = validGoals.includes(goalParam as any) ? (goalParam as typeof validGoals[number]) : undefined;
+  const startDateFromUrl = searchParams.get("startDate");
+  const goalPlanId = searchParams.get("goalPlanId");
   const [isPending, setIsPending] = useState(false);
   const { toast } = useToast();
   const submittedRef = useRef(false);
-  const [planStartDate, setPlanStartDate] = useState("");
+  const [planStartDate, setPlanStartDate] = useState(startDateFromUrl || "");
 
   const form = useForm<WorkoutPreferences>({
     resolver: zodResolver(workoutPreferencesSchema),
     defaultValues: {
-      goal: "maintenance",
+      goal: goalFromUrl || "maintenance",
       location: "gym",
       trainingMode: "both",
       focusAreas: ["Full Body"],
@@ -93,6 +100,13 @@ export default function NewWorkout() {
         startDate: planStartDate || undefined,
       });
       const result = await res.json();
+
+      if (goalPlanId) {
+        try {
+          await apiRequest("PATCH", `/api/goal-plans/${goalPlanId}`, { workoutPlanId: result.id });
+        } catch {}
+      }
+
       navigate(`/workout/${result.id}/generating`);
     } catch (err: any) {
       submittedRef.current = false;

@@ -52,6 +52,7 @@ export default function GoalPlans() {
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState("weight_loss");
+  const [selectedPlanType, setSelectedPlanType] = useState<"both" | "meal" | "workout">("both");
   const [startDate, setStartDate] = useState("");
   const [linkingPlanId, setLinkingPlanId] = useState<string | null>(null);
   const [linkType, setLinkType] = useState<"meal" | "workout">("meal");
@@ -75,17 +76,29 @@ export default function GoalPlans() {
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/goal-plans", {
         goalType: selectedGoal,
-        planTypes: "both",
+        planTypes: selectedPlanType,
         startDate: startDate || undefined,
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: GoalPlan) => {
       queryClient.invalidateQueries({ queryKey: ["/api/goal-plans"] });
       setCreateOpen(false);
+      const navGoal = selectedGoal;
+      const navDate = startDate;
+      const navType = selectedPlanType;
+      const goalParam = `?goal=${navGoal}${navDate ? `&startDate=${navDate}` : ""}&goalPlanId=${data.id}`;
       setSelectedGoal("weight_loss");
+      setSelectedPlanType("both");
       setStartDate("");
-      toast({ title: "Goal plan created" });
+      toast({ title: "Goal plan created! Now create your plans." });
+      if (navType === "both") {
+        navigate(`/new-plan${goalParam}&alsoWorkout=true`);
+      } else if (navType === "meal") {
+        navigate(`/new-plan${goalParam}`);
+      } else {
+        navigate(`/workouts/new${goalParam}`);
+      }
     },
     onError: () => {
       toast({ title: "Failed to create goal plan", variant: "destructive" });
@@ -345,6 +358,19 @@ export default function GoalPlans() {
                   {GOAL_OPTIONS.map(g => (
                     <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>What would you like to create?</Label>
+              <Select value={selectedPlanType} onValueChange={(v) => setSelectedPlanType(v as "both" | "meal" | "workout")}>
+                <SelectTrigger data-testid="select-plan-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="both">Meal Plan + Workout Plan</SelectItem>
+                  <SelectItem value="meal">Meal Plan Only</SelectItem>
+                  <SelectItem value="workout">Workout Plan Only</SelectItem>
                 </SelectContent>
               </Select>
             </div>

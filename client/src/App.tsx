@@ -18,6 +18,7 @@ import WorkoutView from "@/pages/workout-view";
 import WorkoutGenerating from "@/pages/workout-generating";
 import GoalPlans from "@/pages/goal-plans";
 import CheckIns from "@/pages/check-ins";
+import Dashboard from "@/pages/dashboard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/workout/:id" component={WorkoutView} />
       <Route path="/goals" component={GoalPlans} />
       <Route path="/check-ins" component={CheckIns} />
+      <Route path="/dashboard" component={Dashboard} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -11,9 +11,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   UtensilsCrossed, Plus, CalendarDays, LogOut, Sparkles, Loader2,
   Flame, Dumbbell, Zap, Heart, Trophy, Settings, Activity,
-  CheckCircle2, Clock, CalendarCheck, Target, ClipboardCheck,
+  CheckCircle2, Clock, CalendarCheck, Target, ClipboardCheck, BarChart3,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 
 type PlanLifecycleStatus = "draft" | "scheduled" | "active" | "completed";
 
@@ -134,6 +134,15 @@ export default function PlansList() {
             </TabsList>
           </Tabs>
           <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/dashboard">
+              <Button variant="outline" size="icon" className="sm:hidden" data-testid="button-dashboard-mobile">
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" className="hidden sm:inline-flex" data-testid="button-dashboard">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Overview
+              </Button>
+            </Link>
             <Link href="/goals">
               <Button variant="outline" size="icon" className="sm:hidden" data-testid="button-goals-mobile">
                 <Target className="h-4 w-4" />
@@ -174,7 +183,7 @@ export default function PlansList() {
               <Link href="/new-plan">
                 <Button data-testid="button-create-plan">
                   <Plus className="h-4 w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">New Plan</span>
+                  <span className="hidden sm:inline">New Meal Plan</span>
                   <span className="sm:hidden">New</span>
                 </Button>
               </Link>
@@ -281,8 +290,11 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
                         {format(new Date(mp.createdAt), "MMM d, yyyy")}
                       </span>
                       {mp.planStartDate && (
-                        <span className="text-xs text-muted-foreground">
-                          Starts {format(new Date(mp.planStartDate + "T00:00:00"), "MMM d")}
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" />
+                          {format(new Date(mp.planStartDate + "T00:00:00"), "MMM d, yyyy")}
+                          {" \u2192 "}
+                          {format(addDays(new Date(mp.planStartDate + "T00:00:00"), 6), "MMM d, yyyy")}
                         </span>
                       )}
                     </div>
@@ -377,8 +389,11 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
                         {format(new Date(wp.createdAt), "MMM d, yyyy")}
                       </span>
                       {wp.planStartDate && (
-                        <span className="text-xs text-muted-foreground">
-                          Starts {format(new Date(wp.planStartDate + "T00:00:00"), "MMM d")}
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" />
+                          {format(new Date(wp.planStartDate + "T00:00:00"), "MMM d, yyyy")}
+                          {" \u2192 "}
+                          {format(addDays(new Date(wp.planStartDate + "T00:00:00"), 6), "MMM d, yyyy")}
                         </span>
                       )}
                     </div>

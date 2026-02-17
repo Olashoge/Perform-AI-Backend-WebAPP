@@ -30,6 +30,7 @@ client/src/
     workout-view.tsx - View generated workout plan (sessions, exercises, progression notes, 3-dot scheduling/delete)
     goal-plans.tsx - GoalPlan management (create goals, link meal+workout plans, navigate to check-ins)
     check-ins.tsx  - Weekly check-in logging (weight, energy, compliance, notes) with history
+    dashboard.tsx  - Unified weekly overview (active plans, momentum, compliance, weight trend)
 
 server/
   index.ts         - Express server setup (connect-pg-simple session store)

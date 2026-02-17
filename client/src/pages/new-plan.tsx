@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,16 +38,23 @@ const GOAL_LABELS: Record<string, string> = {
 export default function NewPlan() {
   const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  const validGoals = ["weight_loss", "muscle_gain", "performance", "maintenance", "energy"] as const;
+  const goalParam = searchParams.get("goal");
+  const goalFromUrl = validGoals.includes(goalParam as any) ? (goalParam as typeof validGoals[number]) : undefined;
+  const startDateFromUrl = searchParams.get("startDate");
+  const goalPlanId = searchParams.get("goalPlanId");
   const [isPending, setIsPending] = useState(false);
   const { toast } = useToast();
   const submittedRef = useRef(false);
   const [customStyleInput, setCustomStyleInput] = useState("");
-  const [planStartDate, setPlanStartDate] = useState("");
+  const [planStartDate, setPlanStartDate] = useState(startDateFromUrl || "");
 
   const form = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
     defaultValues: {
-      goal: "maintenance",
+      goal: goalFromUrl || "maintenance",
       dietStyles: ["No Preference"],
       foodsToAvoid: [],
       householdSize: 1,
@@ -79,11 +86,23 @@ export default function NewPlan() {
       data.workoutDaysPerWeek = data.workoutDays.length;
     }
 
+    const alsoCreateWorkout = searchParams.get("alsoWorkout") === "true";
+
     try {
       const res = await apiRequest("POST", "/api/plan", { ...data, idempotencyKey, startDate: planStartDate || undefined });
       const plan = await res.json();
 
-      if (plan.status === "ready") {
+      if (goalPlanId) {
+        try {
+          await apiRequest("PATCH", `/api/goal-plans/${goalPlanId}`, { mealPlanId: plan.id });
+        } catch {}
+      }
+
+      if (alsoCreateWorkout) {
+        const workoutParams = `?goal=${data.goal}${planStartDate ? `&startDate=${planStartDate}` : ""}${goalPlanId ? `&goalPlanId=${goalPlanId}` : ""}`;
+        toast({ title: "Meal plan created! Now set up your workout plan." });
+        navigate(`/workouts/new${workoutParams}`);
+      } else if (plan.status === "ready") {
         navigate(`/plan/${plan.id}`);
       } else {
         navigate(`/plan/${plan.id}/generating`);
@@ -130,6 +149,14 @@ export default function NewPlan() {
       </nav>
 
       <div className="max-w-3xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
+        {searchParams.get("alsoWorkout") === "true" && (
+          <Card className="mb-4 border-primary/20 bg-primary/5">
+            <CardContent className="p-3 flex items-center gap-2 text-sm">
+              <Sparkles className="h-4 w-4 text-primary shrink-0" />
+              <span>Step 1 of 2: Set up your meal plan first, then we'll create your workout plan.</span>
+            </CardContent>
+          </Card>
+        )}
         <div className="mb-5 sm:mb-8">
           <h1 className="text-xl sm:text-2xl font-bold mb-2">Create Your Meal Plan</h1>
           <p className="text-sm sm:text-base text-muted-foreground">Tell us about your preferences and we'll generate a personalized 7-day meal plan.</p>

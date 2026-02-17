@@ -1,0 +1,299 @@
+1️⃣ Show Start → End Dates on Both Plan Lists
+Meal Plans list page
+
+Each card should show:
+
+• Goal
+• Cuisine / Type
+• Start Date
+• End Date
+• Status badge:
+
+Scheduled
+
+Not Scheduled
+
+Completed
+
+Archived
+
+End date = startDate + 6 days (for 7-day plans)
+
+Example:
+
+📅 Feb 16, 2026 → Feb 22, 2026
+Status: Scheduled
+
+Same format on Workouts tab.
+
+This makes your app feel structured and intentional.
+
+2️⃣ Start Date Selection in Create Flow (Meal + Workout)
+
+Right now start date is chosen after creation.
+
+Better architecture:
+
+When creating:
+
+“Start this plan on:” date picker
+
+Conflict-aware
+
+Block dates that collide with:
+
+Other meal plans (for meals)
+
+Other workout plans (for workouts)
+
+Conflict rule:
+A plan occupies 7 days.
+Any overlap = blocked.
+
+This creates discipline in the system.
+
+3️⃣ Create Meal + Workout Together (Unified Plan Builder)
+
+This is a powerful move.
+
+Add new button:
+
+“Create Goal Plan”
+
+Flow:
+Step 1: Select primary goal (Muscle Gain, Weight Loss, Performance)
+Step 2: Choose:
+
+Meal Plan only
+
+Workout Plan only
+
+Both
+
+If Both:
+
+Generate them together
+
+Share same startDate
+
+Store under shared goalId
+
+Keep them synced
+
+This makes your app a transformation system instead of a planner.
+
+4️⃣ Calendar Filter Modes
+
+Top toggle:
+
+[ Meals ] [ Workouts ] [ Combined ]
+
+Combined:
+
+Breakfast
+
+Lunch
+
+Dinner
+
+Workout block (separate row or icon marker)
+
+Workout could show:
+🏋️ Strength
+🏃 Cardio
+🔄 Mixed
+
+This makes the calendar multi-layered without being cluttered.
+
+5️⃣ Workout Like / Dislike / Regenerate
+
+Yes — mirror meal logic.
+
+Workout day card should include:
+👍
+👎
+🔄 Regenerate session
+
+Store preference:
+
+workoutSessionSignature
+
+or structured type (e.g., “Upper Body Strength 45min”)
+
+Add new section in Preferences:
+
+Workout Preferences:
+Liked
+Disliked
+Avoided Movements (optional)
+
+Now your personalization engine grows smarter.
+
+6️⃣ Neutral Like State (Very Important)
+
+Right now:
+👍 can only be removed by 👎
+
+Fix to tri-state logic:
+
+Neutral (default)
+👍 Liked
+👎 Disliked
+
+Click again returns to Neutral.
+
+This prevents forced polarity.
+
+That’s intelligent UX.
+
+7️⃣ Dislike → Avoid Ingredient Confirmation
+
+This is excellent instinct.
+
+Currently:
+Dislike meal → auto-add ingredient to Avoided
+
+That’s too aggressive.
+
+Replace with modal:
+
+“You disliked this meal.
+Would you like to avoid any of these ingredients in future plans?”
+
+Show:
+☐ Lentils
+☐ Chickpeas
+☐ Quinoa
+
+User chooses.
+
+You are separating:
+Taste preference
+vs
+Ingredient restriction
+
+That’s a big maturity upgrade.
+
+8️⃣ Rename Button
+
+Change:
+New Plan → New Meal Plan
+
+Precision in language builds trust.
+
+9️⃣ Additional Ideas After Reviewing Screenshots
+
+Now I’ll go deeper.
+
+A) Plan Status Lifecycle
+
+Add:
+
+Draft
+Scheduled
+Active (today is within range)
+Completed
+Archived
+
+This allows:
+
+Historical tracking
+
+Progress analytics later
+
+Performance review engine
+
+B) Progress Tracking Overlay
+
+You’re building goal-driven system.
+
+Add simple weekly metric capture:
+
+For Muscle Gain:
+• Weight start
+• Weight end
+• Energy rating
+• Strength increase?
+
+For Weight Loss:
+• Weekly weight delta
+• Compliance %
+
+This creates feedback loop.
+
+Without feedback, planning is theory.
+
+C) Workout Intensity Visualization on Calendar
+
+Instead of plain text:
+
+Low = gray dot
+Moderate = orange
+High = red
+
+Visual density improves scan speed.
+
+D) Unified Weekly Overview Page
+
+Imagine a dashboard:
+
+Week of Feb 16–22
+
+Nutrition compliance: 85%
+Workout completion: 3/4
+Goal momentum: Positive
+
+That’s powerful.
+
+E) Regeneration Intelligence
+
+Currently regenerate is random-ish.
+
+Upgrade logic:
+If disliked strength session:
+→ Replace with similar muscle group but different movement pattern.
+
+If disliked meal:
+→ Replace with similar macros, different cuisine.
+
+That keeps structure intact.
+
+F) Sync Awareness Between Meal & Workout
+
+If workout day:
+Meals = higher carbs.
+
+If rest day:
+Meals = lower carb / recovery optimized.
+
+This is where your system becomes intelligent rather than static.
+
+10️⃣ Strategic Perspective
+
+Right now you have:
+
+Meal Planner
+Workout Planner
+
+You are one layer away from:
+
+Transformation Engine
+
+The difference is:
+
+A planner schedules.
+An engine adapts.
+
+If you continue building:
+
+Preference memory
+
+Feedback loops
+
+Conflict management
+
+Goal syncing
+
+Unified scheduling
+
+You will have something far beyond a template generator.
