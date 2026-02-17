@@ -1,4 +1,4 @@
-import { eq, desc, and, gte } from "drizzle-orm";
+import { eq, desc, and, gte, isNull } from "drizzle-orm";
 import { db } from "./db";
 import { users, mealPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, type User, type MealPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing } from "@shared/schema";
 
@@ -32,6 +32,7 @@ export interface IStorage {
   deleteIngredientPreference(id: string, userId: string): Promise<boolean>;
   updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined>;
   getScheduledPlans(userId: string): Promise<MealPlan[]>;
+  softDeletePlan(id: string): Promise<MealPlan | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -79,7 +80,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMealPlansByUser(userId: string): Promise<MealPlan[]> {
-    return db.select().from(mealPlans).where(eq(mealPlans.userId, userId)).orderBy(desc(mealPlans.createdAt));
+    return db.select().from(mealPlans).where(and(eq(mealPlans.userId, userId), isNull(mealPlans.deletedAt))).orderBy(desc(mealPlans.createdAt));
   }
 
   async findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined> {
@@ -327,9 +328,17 @@ export class DatabaseStorage implements IStorage {
 
   async getScheduledPlans(userId: string): Promise<MealPlan[]> {
     const allPlans = await db.select().from(mealPlans)
-      .where(and(eq(mealPlans.userId, userId), eq(mealPlans.status, "ready")))
+      .where(and(eq(mealPlans.userId, userId), eq(mealPlans.status, "ready"), isNull(mealPlans.deletedAt)))
       .orderBy(desc(mealPlans.createdAt));
     return allPlans.filter(p => p.planStartDate && p.planJson);
+  }
+
+  async softDeletePlan(id: string): Promise<MealPlan | undefined> {
+    const [plan] = await db.update(mealPlans)
+      .set({ deletedAt: new Date(), planStartDate: null })
+      .where(eq(mealPlans.id, id))
+      .returning();
+    return plan;
   }
 }
 

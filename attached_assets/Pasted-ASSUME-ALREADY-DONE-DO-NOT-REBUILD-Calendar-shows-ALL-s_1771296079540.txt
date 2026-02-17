@@ -1,0 +1,84 @@
+ASSUME ALREADY DONE (DO NOT REBUILD):
+- Calendar shows ALL scheduled plans (no plan selector).
+- Meal order is Breakfast -> Lunch -> Dinner everywhere.
+- Like/dislike icons render in week/month views.
+- Conflict-aware date picker blocks overlapping date ranges.
+
+FOCUS NOW: Plan lifecycle controls (delete + schedule/unschedule).
+Calendar assignment must ONLY depend on startDate.
+
+------------------------------------------------------------
+1) DATA MODEL
+------------------------------------------------------------
+MealPlan:
+- startDate: Date | null
+- deletedAt: Date | null (soft delete)
+
+All queries must exclude deletedAt != null.
+
+------------------------------------------------------------
+2) DELETE PLAN
+------------------------------------------------------------
+Behavior:
+- Soft delete (set deletedAt = now).
+- Also set startDate = null so it disappears from calendar.
+- After delete → redirect to My Plans.
+- Show toast: “Plan deleted.”
+
+API:
+DELETE /api/plans/:id
+→ sets deletedAt
+→ returns success
+
+Calendar queries must exclude deleted plans.
+
+------------------------------------------------------------
+3) SCHEDULE / UNSCHEDULE LOGIC
+------------------------------------------------------------
+The ONLY way a plan appears on calendar:
+→ startDate != null
+
+Unschedule:
+→ startDate = null
+
+API:
+PATCH /api/plans/:id/start-date
+Body: { startDate: string | null }
+
+------------------------------------------------------------
+4) PLAN PAGE UX (IMPORTANT)
+------------------------------------------------------------
+Use a 3-dot overflow menu (top right of Plan Detail page).
+
+Menu options:
+- Move start date
+- Remove from calendar (only visible if startDate exists)
+- Add to calendar (only visible if startDate is null)
+- Delete plan
+
+Rules:
+- “Move start date” opens the existing conflict-aware date picker.
+- “Remove from calendar” sets startDate = null.
+- “Add to calendar” opens the date picker.
+- Do NOT place these as large buttons on the page.
+- Keep UI clean and mobile-friendly.
+
+------------------------------------------------------------
+5) REMOVE ANY OTHER CALENDAR ASSIGNMENT LOGIC
+------------------------------------------------------------
+Search and remove:
+- Any auto-assignment on plan creation
+- Any assignment based on createdAt
+- Any “selected plan” filtering in calendar
+- Any separate calendar event storage
+
+Calendar must be derived ONLY from:
+plans where startDate != null AND deletedAt == null.
+
+------------------------------------------------------------
+6) VALIDATION
+------------------------------------------------------------
+- Deleting a plan removes it from My Plans and Calendar.
+- Removing from calendar keeps it in My Plans but removes it from Calendar.
+- Re-adding schedules correctly and respects conflict blocking.
+- No hidden logic assigns plans automatically.

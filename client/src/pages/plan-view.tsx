@@ -12,12 +12,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   UtensilsCrossed, ArrowLeft, ChevronDown, Clock, Users,
   RefreshCw, Loader2, Printer, ShoppingCart, ChefHat, Flame,
   AlertCircle, Zap, Dumbbell, Heart, Trophy, Activity,
-  ThumbsUp, ThumbsDown, CalendarIcon,
+  ThumbsUp, ThumbsDown, CalendarIcon, MoreVertical, Trash2,
+  CalendarPlus, CalendarMinus, CalendarClock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -523,6 +531,7 @@ export default function PlanView() {
   };
 
   const [startDateOpen, setStartDateOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { data: occupiedDatesData } = useQuery<{ occupiedDates: string[] }>({
     queryKey: ["/api/calendar/occupied-dates", params.id],
@@ -577,10 +586,27 @@ export default function PlanView() {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", params.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/occupied-dates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
-      toast({ title: "Schedule removed", description: "This plan is no longer scheduled on your calendar." });
+      setStartDateOpen(false);
+      toast({ title: "Removed from calendar" });
     },
     onError: () => {
       toast({ title: "Failed to clear schedule", variant: "destructive" });
+    },
+  });
+
+  const deletePlanMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/plans/${params.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/occupied-dates"] });
+      toast({ title: "Plan deleted" });
+      navigate("/plans");
+    },
+    onError: () => {
+      toast({ title: "Failed to delete plan", variant: "destructive" });
     },
   });
 
@@ -631,6 +657,51 @@ export default function PlanView() {
               <Printer className="h-3.5 w-3.5 mr-1.5" />
               Print
             </Button>
+            {plan && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-plan-menu">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {data?.planStartDate ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => setStartDateOpen(true)}
+                        data-testid="menu-move-start-date"
+                      >
+                        <CalendarClock className="h-4 w-4 mr-2" />
+                        Move start date
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => clearStartDateMutation.mutate()}
+                        data-testid="menu-remove-from-calendar"
+                      >
+                        <CalendarMinus className="h-4 w-4 mr-2" />
+                        Remove from calendar
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={() => setStartDateOpen(true)}
+                      data-testid="menu-add-to-calendar"
+                    >
+                      <CalendarPlus className="h-4 w-4 mr-2" />
+                      Add to calendar
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                    data-testid="menu-delete-plan"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete plan
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </nav>
@@ -666,21 +737,12 @@ export default function PlanView() {
           </Card>
         ) : plan ? (
           <>
-            <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CalendarIcon className="h-4 w-4" />
-                <span>Start plan on:</span>
-              </div>
-              <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" data-testid="button-start-date">
-                    <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
-                    {data?.planStartDate
-                      ? format(new Date(data.planStartDate + "T00:00:00"), "EEEE, MMM d, yyyy")
-                      : "Not scheduled"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+            <Dialog open={startDateOpen} onOpenChange={setStartDateOpen}>
+              <DialogContent className="sm:max-w-[350px] p-0">
+                <DialogHeader className="px-4 pt-4 pb-0">
+                  <DialogTitle className="text-base">{data?.planStartDate ? "Move start date" : "Choose start date"}</DialogTitle>
+                </DialogHeader>
+                <div className="flex justify-center">
                   <Calendar
                     mode="single"
                     selected={data?.planStartDate ? new Date(data.planStartDate + "T00:00:00") : undefined}
@@ -701,26 +763,45 @@ export default function PlanView() {
                     }}
                     initialFocus
                   />
-                  {occupiedDateSet.size > 0 && (
-                    <p className="text-[11px] text-muted-foreground px-3 pb-2" data-testid="text-occupied-hint">
-                      Dates with existing meals are unavailable.
-                    </p>
-                  )}
-                </PopoverContent>
-              </Popover>
-              {data?.planStartDate && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-muted-foreground"
-                  onClick={() => clearStartDateMutation.mutate()}
-                  disabled={clearStartDateMutation.isPending}
-                  data-testid="button-clear-schedule"
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
+                </div>
+                {occupiedDateSet.size > 0 && (
+                  <p className="text-[11px] text-muted-foreground px-4 pb-3" data-testid="text-occupied-hint">
+                    Dates with existing meals are unavailable.
+                  </p>
+                )}
+              </DialogContent>
+            </Dialog>
+
+            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this plan?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will remove the plan from your list and calendar. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deletePlanMutation.mutate()}
+                    className="bg-destructive text-destructive-foreground"
+                    data-testid="button-confirm-delete"
+                  >
+                    {deletePlanMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {data?.planStartDate && (
+              <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
+                <CalendarIcon className="h-4 w-4" />
+                <span data-testid="text-schedule-info">
+                  Scheduled: {format(new Date(data.planStartDate + "T00:00:00"), "EEEE, MMM d, yyyy")}
+                </span>
+              </div>
+            )}
 
             <div className="mb-6 space-y-3">
               <p className="text-muted-foreground text-sm leading-relaxed">{plan.summary}</p>

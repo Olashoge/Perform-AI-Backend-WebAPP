@@ -75,7 +75,8 @@ shared/
 - `age`, `currentWeight`, `targetWeight` (optional numbers), `weightUnit` ("lb"|"kg"), `workoutDaysPerWeek` (0-7), `workoutDays` (optional string array of "Sun"|"Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat")
 - `spiceLevel` ("none"|"mild"|"medium"|"hot"), default "medium" — applied independently of cuisine
 - `authenticityMode` ("traditional"|"weeknight"|"mixed"), default "mixed" — controls recipe complexity
-- `planStartDate` is nullable varchar(10) storing YYYY-MM-DD; plans are created without a start date and must be scheduled from the Plan Detail page
+- `planStartDate` is nullable varchar(10) storing YYYY-MM-DD; plans are created without a start date and must be scheduled from the Plan Detail page via 3-dot overflow menu
+- `deletedAt` is nullable timestamp for soft delete; all queries exclude deleted plans; soft delete also clears planStartDate
 - `pricingStatus` column on mealPlans tracks grocery pricing independently (pending/ready/failed)
 - Day schema has optional breakfast, lunch, dinner to support dynamic meal slots
 - OpenAI prompts limited to 6-8 steps per meal, shorter summaries and whyItHelpsGoal
@@ -100,6 +101,7 @@ shared/
 - `GET /api/preferences` - Get user's full preference data (meals + ingredients with IDs)
 - `DELETE /api/preferences/meal/:id` - Remove a meal feedback entry
 - `DELETE /api/preferences/ingredient/:id` - Remove an ingredient preference
+- `DELETE /api/plans/:id` - Soft delete a plan (sets deletedAt, clears startDate)
 - `GET /api/calendar/all` - Merged calendar data from ALL scheduled plans (no plan selector)
 - `GET /api/calendar/occupied-dates?excludePlanId=X` - List of dates with existing meals (for date picker blocking)
 

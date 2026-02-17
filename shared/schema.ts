@@ -26,6 +26,7 @@ export const mealPlans = pgTable("meal_plans", {
   regenDayCount: integer("regen_day_count").default(0).notNull(),
   groceryPricingJson: jsonb("grocery_pricing_json"),
   planStartDate: varchar("plan_start_date", { length: 10 }),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const ownedGroceryItems = pgTable("owned_grocery_items", {
@@ -124,8 +125,8 @@ export const nutritionEstimateSchema = z.object({
 export const mealSchema = z.object({
   name: z.string(),
   cuisineTag: z.string(),
-  prepTimeMinutes: z.number(),
-  servings: z.number(),
+  prepTimeMinutes: z.coerce.number(),
+  servings: z.coerce.number(),
   ingredients: z.array(z.string()),
   steps: z.array(z.string()),
   nutritionEstimateRange: nutritionEstimateSchema,
@@ -144,7 +145,7 @@ export const grocerySectionSchema = z.object({
 });
 
 export const daySchema = z.object({
-  dayIndex: z.number(),
+  dayIndex: z.coerce.number(),
   dayName: z.string(),
   meals: z.object({
     breakfast: mealSchema.optional(),

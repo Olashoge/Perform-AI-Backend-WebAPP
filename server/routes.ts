@@ -199,7 +199,7 @@ export async function registerRoutes(
 
   app.get("/api/plan/:id/status", requireAuth, async (req: Request, res: Response) => {
     const plan = await storage.getMealPlan(req.params.id as string);
-    if (!plan || plan.userId !== req.session.userId) {
+    if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
       return res.status(404).json({ message: "Plan not found" });
     }
     return res.json({ id: plan.id, status: plan.status, pricingStatus: plan.pricingStatus });
@@ -207,7 +207,7 @@ export async function registerRoutes(
 
   app.get("/api/plan/:id", requireAuth, async (req: Request, res: Response) => {
     const plan = await storage.getMealPlan(req.params.id as string);
-    if (!plan || plan.userId !== req.session.userId) {
+    if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
       return res.status(404).json({ message: "Plan not found" });
     }
     return res.json(plan);
@@ -218,10 +218,27 @@ export async function registerRoutes(
     return res.json(plans);
   });
 
-  app.post("/api/plan/:id/swap", requireAuth, async (req: Request, res: Response) => {
+  app.delete("/api/plans/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
       if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      if (plan.deletedAt) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      await storage.softDeletePlan(plan.id);
+      return res.json({ ok: true });
+    } catch (err) {
+      log(`Delete plan error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to delete plan" });
+    }
+  });
+
+  app.post("/api/plan/:id/swap", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getMealPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
       if (plan.swapCount >= 3) {
@@ -273,7 +290,7 @@ export async function registerRoutes(
   app.post("/api/plan/:id/regenerate-day", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
       if (plan.regenDayCount >= 1) {
@@ -420,7 +437,7 @@ export async function registerRoutes(
   app.post("/api/plan/:id/grocery/regenerate", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
 
@@ -443,7 +460,7 @@ export async function registerRoutes(
   app.get("/api/plan/:id/grocery", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
 
@@ -488,7 +505,7 @@ export async function registerRoutes(
   app.post("/api/plan/:id/grocery/owned", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
 
@@ -509,7 +526,7 @@ export async function registerRoutes(
   app.patch("/api/plan/:id/start-date", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
       const { startDate } = req.body;
