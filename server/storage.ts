@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -22,7 +22,7 @@ export interface IStorage {
   updatePricingStatus(id: string, status: string): Promise<MealPlan | undefined>;
   getOwnedGroceryItems(userId: string, mealPlanId: string): Promise<OwnedGroceryItem[]>;
   upsertOwnedGroceryItem(userId: string, mealPlanId: string, itemKey: string, isOwned: boolean): Promise<OwnedGroceryItem>;
-  upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" }): Promise<MealFeedbackRecord>;
+  upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" | "neutral" }): Promise<MealFeedbackRecord | null>;
   getMealFeedbackForPlan(userId: string, planId: string): Promise<MealFeedbackRecord[]>;
   upsertIngredientPreference(userId: string, ingredientKey: string, preference: "avoid" | "prefer", source: "user" | "derived"): Promise<void>;
   getUserPreferenceContext(userId: string): Promise<UserPreferenceContext>;
@@ -42,6 +42,21 @@ export interface IStorage {
   getScheduledWorkoutPlans(userId: string): Promise<WorkoutPlan[]>;
   findByIdempotencyKeyWorkout(userId: string, idempotencyKey: string): Promise<WorkoutPlan | undefined>;
   findGeneratingWorkoutPlan(userId: string): Promise<WorkoutPlan | undefined>;
+  createGoalPlan(userId: string, goalType: string, startDate?: string, mealPlanId?: string, workoutPlanId?: string): Promise<GoalPlan>;
+  getGoalPlan(id: string): Promise<GoalPlan | undefined>;
+  getGoalPlansByUser(userId: string): Promise<GoalPlan[]>;
+  updateGoalPlan(id: string, updates: Partial<{ startDate: string | null; mealPlanId: string | null; workoutPlanId: string | null }>): Promise<GoalPlan | undefined>;
+  softDeleteGoalPlan(id: string): Promise<GoalPlan | undefined>;
+  upsertWorkoutFeedback(userId: string, data: { workoutPlanId?: string; dayIndex: number; sessionKey: string; feedback: "like" | "dislike" | "neutral" }): Promise<WorkoutFeedbackRecord | null>;
+  getWorkoutFeedbackForPlan(userId: string, planId: string): Promise<WorkoutFeedbackRecord[]>;
+  getAllWorkoutFeedback(userId: string): Promise<WorkoutFeedbackRecord[]>;
+  deleteWorkoutFeedback(id: string, userId: string): Promise<boolean>;
+  createIngredientProposal(userId: string, mealKey: string, mealName: string, ingredients: string[]): Promise<IngredientAvoidProposal>;
+  getPendingProposals(userId: string): Promise<IngredientAvoidProposal[]>;
+  resolveProposal(id: string, userId: string, chosenIngredients: string[], action: "accepted" | "declined"): Promise<IngredientAvoidProposal | undefined>;
+  createWeeklyCheckIn(userId: string, data: { goalPlanId?: string; weekStartDate: string; weightStart?: number; weightEnd?: number; energyRating?: number; complianceMeals?: number; complianceWorkouts?: number; notes?: string }): Promise<WeeklyCheckIn>;
+  getWeeklyCheckIns(userId: string, goalPlanId?: string): Promise<WeeklyCheckIn[]>;
+  deleteMealFeedbackByFingerprint(userId: string, fingerprint: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -226,10 +241,17 @@ export class DatabaseStorage implements IStorage {
     return record;
   }
 
-  async upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" }): Promise<MealFeedbackRecord> {
+  async upsertMealFeedback(userId: string, data: { mealPlanId?: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" | "neutral" }): Promise<MealFeedbackRecord | null> {
     const existing = await db.select().from(mealFeedback)
       .where(and(eq(mealFeedback.userId, userId), eq(mealFeedback.mealFingerprint, data.mealFingerprint)))
       .limit(1);
+
+    if (data.feedback === "neutral") {
+      if (existing.length > 0) {
+        await db.delete(mealFeedback).where(eq(mealFeedback.id, existing[0].id));
+      }
+      return null;
+    }
 
     if (existing.length > 0) {
       const [updated] = await db.update(mealFeedback)
@@ -414,6 +436,153 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(workoutPlans.createdAt))
       .limit(1);
     return plan;
+  }
+
+  async createGoalPlan(userId: string, goalType: string, startDate?: string, mealPlanId?: string, workoutPlanId?: string): Promise<GoalPlan> {
+    const [plan] = await db.insert(goalPlans).values({
+      userId,
+      goalType,
+      startDate: startDate || null,
+      mealPlanId: mealPlanId || null,
+      workoutPlanId: workoutPlanId || null,
+    }).returning();
+    return plan;
+  }
+
+  async getGoalPlan(id: string): Promise<GoalPlan | undefined> {
+    const [plan] = await db.select().from(goalPlans).where(eq(goalPlans.id, id)).limit(1);
+    return plan;
+  }
+
+  async getGoalPlansByUser(userId: string): Promise<GoalPlan[]> {
+    return db.select().from(goalPlans)
+      .where(and(eq(goalPlans.userId, userId), isNull(goalPlans.deletedAt)))
+      .orderBy(desc(goalPlans.createdAt));
+  }
+
+  async updateGoalPlan(id: string, updates: Partial<{ startDate: string | null; mealPlanId: string | null; workoutPlanId: string | null }>): Promise<GoalPlan | undefined> {
+    const [plan] = await db.update(goalPlans)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(goalPlans.id, id))
+      .returning();
+    return plan;
+  }
+
+  async softDeleteGoalPlan(id: string): Promise<GoalPlan | undefined> {
+    const [plan] = await db.update(goalPlans)
+      .set({ deletedAt: new Date() })
+      .where(eq(goalPlans.id, id))
+      .returning();
+    return plan;
+  }
+
+  async upsertWorkoutFeedback(userId: string, data: { workoutPlanId?: string; dayIndex: number; sessionKey: string; feedback: "like" | "dislike" | "neutral" }): Promise<WorkoutFeedbackRecord | null> {
+    const existing = await db.select().from(workoutFeedback)
+      .where(and(eq(workoutFeedback.userId, userId), eq(workoutFeedback.sessionKey, data.sessionKey)))
+      .limit(1);
+
+    if (data.feedback === "neutral") {
+      if (existing.length > 0) {
+        await db.delete(workoutFeedback).where(eq(workoutFeedback.id, existing[0].id));
+      }
+      return null;
+    }
+
+    if (existing.length > 0) {
+      const [updated] = await db.update(workoutFeedback)
+        .set({ feedback: data.feedback, workoutPlanId: data.workoutPlanId || null, createdAt: new Date() })
+        .where(eq(workoutFeedback.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+
+    const [record] = await db.insert(workoutFeedback).values({
+      userId,
+      workoutPlanId: data.workoutPlanId || null,
+      dayIndex: data.dayIndex,
+      sessionKey: data.sessionKey,
+      feedback: data.feedback,
+    }).returning();
+    return record;
+  }
+
+  async getWorkoutFeedbackForPlan(userId: string, planId: string): Promise<WorkoutFeedbackRecord[]> {
+    return db.select().from(workoutFeedback)
+      .where(and(eq(workoutFeedback.userId, userId), eq(workoutFeedback.workoutPlanId, planId)));
+  }
+
+  async getAllWorkoutFeedback(userId: string): Promise<WorkoutFeedbackRecord[]> {
+    return db.select().from(workoutFeedback)
+      .where(eq(workoutFeedback.userId, userId))
+      .orderBy(desc(workoutFeedback.createdAt));
+  }
+
+  async deleteWorkoutFeedback(id: string, userId: string): Promise<boolean> {
+    const [record] = await db.select().from(workoutFeedback)
+      .where(and(eq(workoutFeedback.id, id), eq(workoutFeedback.userId, userId)))
+      .limit(1);
+    if (!record) return false;
+    await db.delete(workoutFeedback).where(eq(workoutFeedback.id, id));
+    return true;
+  }
+
+  async createIngredientProposal(userId: string, mealKey: string, mealName: string, ingredients: string[]): Promise<IngredientAvoidProposal> {
+    const [proposal] = await db.insert(ingredientAvoidProposals).values({
+      userId,
+      mealKey,
+      mealName,
+      ingredients,
+    }).returning();
+    return proposal;
+  }
+
+  async getPendingProposals(userId: string): Promise<IngredientAvoidProposal[]> {
+    return db.select().from(ingredientAvoidProposals)
+      .where(and(eq(ingredientAvoidProposals.userId, userId), isNull(ingredientAvoidProposals.resolvedAt)))
+      .orderBy(desc(ingredientAvoidProposals.createdAt));
+  }
+
+  async resolveProposal(id: string, userId: string, chosenIngredients: string[], action: "accepted" | "declined"): Promise<IngredientAvoidProposal | undefined> {
+    const [proposal] = await db.update(ingredientAvoidProposals)
+      .set({ chosenIngredients, action, resolvedAt: new Date() })
+      .where(and(eq(ingredientAvoidProposals.id, id), eq(ingredientAvoidProposals.userId, userId)))
+      .returning();
+    return proposal;
+  }
+
+  async createWeeklyCheckIn(userId: string, data: { goalPlanId?: string; weekStartDate: string; weightStart?: number; weightEnd?: number; energyRating?: number; complianceMeals?: number; complianceWorkouts?: number; notes?: string }): Promise<WeeklyCheckIn> {
+    const [checkIn] = await db.insert(weeklyCheckIns).values({
+      userId,
+      goalPlanId: data.goalPlanId || null,
+      weekStartDate: data.weekStartDate,
+      weightStart: data.weightStart ?? null,
+      weightEnd: data.weightEnd ?? null,
+      energyRating: data.energyRating ?? null,
+      complianceMeals: data.complianceMeals ?? null,
+      complianceWorkouts: data.complianceWorkouts ?? null,
+      notes: data.notes || null,
+    }).returning();
+    return checkIn;
+  }
+
+  async getWeeklyCheckIns(userId: string, goalPlanId?: string): Promise<WeeklyCheckIn[]> {
+    if (goalPlanId) {
+      return db.select().from(weeklyCheckIns)
+        .where(and(eq(weeklyCheckIns.userId, userId), eq(weeklyCheckIns.goalPlanId, goalPlanId)))
+        .orderBy(desc(weeklyCheckIns.weekStartDate));
+    }
+    return db.select().from(weeklyCheckIns)
+      .where(eq(weeklyCheckIns.userId, userId))
+      .orderBy(desc(weeklyCheckIns.weekStartDate));
+  }
+
+  async deleteMealFeedbackByFingerprint(userId: string, fingerprint: string): Promise<boolean> {
+    const [record] = await db.select().from(mealFeedback)
+      .where(and(eq(mealFeedback.userId, userId), eq(mealFeedback.mealFingerprint, fingerprint)))
+      .limit(1);
+    if (!record) return false;
+    await db.delete(mealFeedback).where(eq(mealFeedback.id, record.id));
+    return true;
   }
 }
 

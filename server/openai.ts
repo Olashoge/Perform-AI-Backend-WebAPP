@@ -309,9 +309,18 @@ function cleanJsonString(raw: string): string {
   return cleaned.trim();
 }
 
-export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext): Promise<PlanOutput> {
+export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext, workoutDays?: string[]): Promise<PlanOutput> {
   const systemPrompt = buildSystemPrompt(prefs);
-  const userPrompt = buildPlanPrompt(prefs, prefCtx);
+  let userPrompt = buildPlanPrompt(prefs, prefCtx);
+
+  if (workoutDays && workoutDays.length > 0) {
+    const dayMapping = workoutDays.map((day, i) => `Day ${i + 1} = ${day}`).join(", ");
+    userPrompt += `\n\nWORKOUT-DAY AWARENESS:
+The user works out on: ${workoutDays.join(", ")}.
+On workout days, provide slightly higher protein and carb portions for recovery.
+On rest days, keep meals lighter with more vegetables and moderate portions.
+Do NOT drastically change the meal style — just subtly adjust portion guidance in the nutritionEstimateRange.`;
+  }
 
   let raw = await callOpenAI(systemPrompt, userPrompt);
   let cleaned = cleanJsonString(raw);

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, uniqueIndex, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -85,6 +85,56 @@ export const auditLogs = pgTable("audit_logs", {
   action: text("action").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   metaJson: jsonb("meta_json"),
+});
+
+export const goalPlans = pgTable("goal_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  goalType: varchar("goal_type", { length: 30 }).notNull(),
+  startDate: varchar("start_date", { length: 10 }),
+  mealPlanId: varchar("meal_plan_id"),
+  workoutPlanId: varchar("workout_plan_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const workoutFeedback = pgTable("workout_feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  workoutPlanId: varchar("workout_plan_id"),
+  dayIndex: integer("day_index").notNull(),
+  sessionKey: varchar("session_key").notNull(),
+  feedback: varchar("feedback", { length: 10 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("workout_feedback_user_session_idx").on(table.userId, table.sessionKey),
+]);
+
+export const ingredientAvoidProposals = pgTable("ingredient_avoid_proposals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  mealKey: varchar("meal_key").notNull(),
+  mealName: text("meal_name").notNull(),
+  ingredients: jsonb("ingredients").notNull(),
+  chosenIngredients: jsonb("chosen_ingredients"),
+  action: varchar("action", { length: 20 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
+export const weeklyCheckIns = pgTable("weekly_check_ins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  goalPlanId: varchar("goal_plan_id"),
+  weekStartDate: varchar("week_start_date", { length: 10 }).notNull(),
+  weightStart: real("weight_start"),
+  weightEnd: real("weight_end"),
+  energyRating: integer("energy_rating"),
+  complianceMeals: integer("compliance_meals"),
+  complianceWorkouts: integer("compliance_workouts"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -261,8 +311,37 @@ export const mealFeedbackSchema = z.object({
   mealFingerprint: z.string(),
   mealName: z.string(),
   cuisineTag: z.string(),
-  feedback: z.enum(["like", "dislike"]),
+  feedback: z.enum(["like", "dislike", "neutral"]),
   ingredients: z.array(z.string()).optional(),
+});
+
+export const workoutFeedbackSchema = z.object({
+  workoutPlanId: z.string().optional(),
+  dayIndex: z.number(),
+  sessionKey: z.string(),
+  feedback: z.enum(["like", "dislike", "neutral"]),
+});
+
+export const goalPlanCreateSchema = z.object({
+  goalType: z.enum(["weight_loss", "muscle_gain", "performance", "maintenance", "energy", "general_fitness"]),
+  planTypes: z.enum(["meals", "workouts", "both"]),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const weeklyCheckInSchema = z.object({
+  goalPlanId: z.string().optional(),
+  weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  weightStart: z.number().optional(),
+  weightEnd: z.number().optional(),
+  energyRating: z.number().int().min(1).max(5).optional(),
+  complianceMeals: z.number().int().min(0).max(100).optional(),
+  complianceWorkouts: z.number().int().min(0).max(100).optional(),
+  notes: z.string().optional(),
+});
+
+export const ingredientProposalResolveSchema = z.object({
+  chosenIngredients: z.array(z.string()),
+  action: z.enum(["accepted", "declined"]),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -286,6 +365,11 @@ export type WorkoutPlanOutput = z.infer<typeof workoutPlanOutputSchema>;
 export type WorkoutDay = z.infer<typeof workoutDaySchema>;
 export type WorkoutSession = z.infer<typeof workoutSessionSchema>;
 export type WorkoutExercise = z.infer<typeof workoutExerciseSchema>;
+
+export type GoalPlan = typeof goalPlans.$inferSelect;
+export type WorkoutFeedbackRecord = typeof workoutFeedback.$inferSelect;
+export type IngredientAvoidProposal = typeof ingredientAvoidProposals.$inferSelect;
+export type WeeklyCheckIn = typeof weeklyCheckIns.$inferSelect;
 
 export interface UserPreferenceContext {
   likedMeals: { name: string; cuisineTag: string }[];

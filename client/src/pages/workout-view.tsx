@@ -23,6 +23,7 @@ import {
   Flame, Target, MoreVertical, Trash2,
   CalendarPlus, CalendarMinus, CalendarClock,
   Zap, Activity, Timer, ChevronRight,
+  ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -67,9 +68,16 @@ function ExerciseRow({ exercise, index }: { exercise: WorkoutExercise; index: nu
   );
 }
 
-function SessionCard({ session, dayName, dayIndex }: { session: WorkoutSession; dayName: string; dayIndex: number }) {
+function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: {
+  session: WorkoutSession;
+  dayName: string;
+  dayIndex: number;
+  feedbackState?: "like" | "dislike" | null;
+  onFeedback: (sessionKey: string, feedback: "like" | "dislike" | "neutral") => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const ModeIcon = MODE_ICONS[session.mode] || Dumbbell;
+  const sessionKey = `day${dayIndex}_${session.focus.toLowerCase().replace(/\s+/g, "_")}`;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -101,7 +109,35 @@ function SessionCard({ session, dayName, dayIndex }: { session: WorkoutSession; 
                   </span>
                 </div>
               </div>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+              <div className="flex items-center gap-0.5 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFeedback(sessionKey, feedbackState === "like" ? "neutral" : "like");
+                  }}
+                  className={feedbackState === "like" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}
+                  title={feedbackState === "like" ? "Remove like" : "Like this session"}
+                  data-testid={`button-like-session-${dayIndex}`}
+                >
+                  <ThumbsUp className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFeedback(sessionKey, feedbackState === "dislike" ? "neutral" : "dislike");
+                  }}
+                  className={feedbackState === "dislike" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}
+                  title={feedbackState === "dislike" ? "Remove dislike" : "Dislike this session"}
+                  data-testid={`button-dislike-session-${dayIndex}`}
+                >
+                  <ThumbsDown className="h-3.5 w-3.5" />
+                </Button>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} />
+              </div>
             </div>
           </CardHeader>
         </CollapsibleTrigger>
@@ -217,6 +253,39 @@ export default function WorkoutView() {
       toast({ title: "Failed to delete", variant: "destructive" });
     },
   });
+
+  const { data: workoutFeedbackMap = {} } = useQuery<Record<string, "like" | "dislike">>({
+    queryKey: ["/api/feedback/workout", id],
+    enabled: !!user && !!id,
+  });
+
+  const [optimisticWFeedback, setOptimisticWFeedback] = useState<Record<string, "like" | "dislike" | null>>({});
+  const mergedWFeedback = useMemo(() => {
+    const m: Record<string, "like" | "dislike" | null> = { ...workoutFeedbackMap };
+    for (const [k, v] of Object.entries(optimisticWFeedback)) {
+      m[k] = v;
+    }
+    return m;
+  }, [workoutFeedbackMap, optimisticWFeedback]);
+
+  const workoutFeedbackMutation = useMutation({
+    mutationFn: async (body: { workoutPlanId: string; sessionKey: string; feedback: "like" | "dislike" | "neutral" }) => {
+      const res = await apiRequest("POST", "/api/feedback/workout", body);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/feedback/workout", id] });
+    },
+  });
+
+  const handleWorkoutFeedback = (sessionKey: string, feedback: "like" | "dislike" | "neutral") => {
+    if (feedback === "neutral") {
+      setOptimisticWFeedback(prev => ({ ...prev, [sessionKey]: null }));
+    } else {
+      setOptimisticWFeedback(prev => ({ ...prev, [sessionKey]: feedback }));
+    }
+    workoutFeedbackMutation.mutate({ workoutPlanId: id!, sessionKey, feedback });
+  };
 
   if (authLoading || isLoading) {
     return (
@@ -360,12 +429,15 @@ export default function WorkoutView() {
               );
             }
 
+            const sKey = `day${day.dayIndex}_${day.session.focus.toLowerCase().replace(/\s+/g, "_")}`;
             return (
               <SessionCard
                 key={day.dayIndex}
                 session={day.session}
                 dayName={day.dayName}
                 dayIndex={day.dayIndex}
+                feedbackState={mergedWFeedback[sKey] || null}
+                onFeedback={handleWorkoutFeedback}
               />
             );
           })}

@@ -61,7 +61,7 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
   planId: string;
   swapCount: number;
   feedbackState?: "like" | "dislike" | null;
-  onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike", ingredients: string[]) => void;
+  onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
@@ -118,10 +118,10 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                   size="icon"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onFeedback(fingerprint, meal.name, meal.cuisineTag, "like", meal.ingredients);
+                    onFeedback(fingerprint, meal.name, meal.cuisineTag, feedbackState === "like" ? "neutral" : "like", meal.ingredients);
                   }}
-                  className={`h-8 w-8 sm:h-9 sm:w-9 ${feedbackState === "like" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
-                  title="Like this meal"
+                  className={feedbackState === "like" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}
+                  title={feedbackState === "like" ? "Remove like" : "Like this meal"}
                   data-testid={`button-like-${dayIndex}-${mealType}`}
                 >
                   <ThumbsUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -131,10 +131,10 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                   size="icon"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onFeedback(fingerprint, meal.name, meal.cuisineTag, "dislike", meal.ingredients);
+                    onFeedback(fingerprint, meal.name, meal.cuisineTag, feedbackState === "dislike" ? "neutral" : "dislike", meal.ingredients);
                   }}
-                  className={`h-8 w-8 sm:h-9 sm:w-9 ${feedbackState === "dislike" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
-                  title="Dislike this meal"
+                  className={feedbackState === "dislike" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}
+                  title={feedbackState === "dislike" ? "Remove dislike" : "Dislike this meal"}
                   data-testid={`button-dislike-${dayIndex}-${mealType}`}
                 >
                   <ThumbsDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -211,8 +211,8 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
   planId: string;
   swapCount: number;
   regenDayCount: number;
-  feedbackMap: Record<string, "like" | "dislike">;
-  onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike", ingredients: string[]) => void;
+  feedbackMap: Record<string, "like" | "dislike" | null>;
+  onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
 }) {
   const { toast } = useToast();
 
@@ -513,21 +513,53 @@ export default function PlanView() {
     enabled: !!user && !!params.id,
   });
 
-  const [optimisticFeedback, setOptimisticFeedback] = useState<Record<string, "like" | "dislike">>({});
-  const mergedFeedback: Record<string, "like" | "dislike"> = { ...feedbackMap, ...optimisticFeedback };
+  const [optimisticFeedback, setOptimisticFeedback] = useState<Record<string, "like" | "dislike" | null>>({});
+  const mergedFeedback = useMemo(() => {
+    const m: Record<string, "like" | "dislike" | null> = { ...feedbackMap };
+    for (const [k, v] of Object.entries(optimisticFeedback)) {
+      m[k] = v;
+    }
+    return m;
+  }, [feedbackMap, optimisticFeedback]);
+
+  const [proposalModal, setProposalModal] = useState<{ mealName: string; ingredients: string[]; fingerprint: string; proposalId: string } | null>(null);
+  const [selectedAvoids, setSelectedAvoids] = useState<Set<string>>(new Set());
 
   const feedbackMutation = useMutation({
-    mutationFn: async (body: { planId: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike"; ingredients: string[] }) => {
+    mutationFn: async (body: { planId: string; mealFingerprint: string; mealName: string; cuisineTag: string; feedback: "like" | "dislike" | "neutral"; ingredients: string[] }) => {
       const res = await apiRequest("POST", "/api/feedback/meal", body);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/feedback/plan", params.id] });
+      if (variables.feedback === "dislike" && data.proposalId && data.proposalIngredients?.length > 0) {
+        setProposalModal({ mealName: variables.mealName, ingredients: data.proposalIngredients, fingerprint: variables.mealFingerprint, proposalId: data.proposalId });
+        setSelectedAvoids(new Set());
+      }
     },
   });
 
-  const handleFeedback = (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike", ingredients: string[]) => {
-    setOptimisticFeedback(prev => ({ ...prev, [fingerprint]: feedback }));
+  const proposalResolveMutation = useMutation({
+    mutationFn: async (body: { proposalId?: string; chosenIngredients: string[]; action: "accepted" | "declined" }) => {
+      if (body.proposalId) {
+        await apiRequest("POST", `/api/ingredient-proposals/${body.proposalId}/resolve`, {
+          chosenIngredients: body.chosenIngredients,
+          action: body.action,
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences"] });
+      setProposalModal(null);
+    },
+  });
+
+  const handleFeedback = (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => {
+    if (feedback === "neutral") {
+      setOptimisticFeedback(prev => ({ ...prev, [fingerprint]: null }));
+    } else {
+      setOptimisticFeedback(prev => ({ ...prev, [fingerprint]: feedback }));
+    }
     feedbackMutation.mutate({ planId: params.id!, mealFingerprint: fingerprint, mealName, cuisineTag, feedback, ingredients });
   };
 
@@ -991,6 +1023,71 @@ export default function PlanView() {
             )}
           </>
         ) : null}
+
+        <Dialog open={!!proposalModal} onOpenChange={(open) => { if (!open) setProposalModal(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Avoid ingredients from this meal?</DialogTitle>
+            </DialogHeader>
+            {proposalModal && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  You disliked <span className="font-medium text-foreground">{proposalModal.mealName}</span>. Would you like to avoid any of these ingredients in future plans?
+                </p>
+                <div className="space-y-2">
+                  {proposalModal.ingredients.map((ing) => (
+                    <label key={ing} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={selectedAvoids.has(ing)}
+                        onCheckedChange={(checked) => {
+                          setSelectedAvoids(prev => {
+                            const next = new Set(prev);
+                            if (checked) next.add(ing); else next.delete(ing);
+                            return next;
+                          });
+                        }}
+                        data-testid={`checkbox-avoid-${ing.toLowerCase().replace(/\s+/g, "-")}`}
+                      />
+                      <span className="text-sm">{ing}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (proposalModal?.proposalId) {
+                        proposalResolveMutation.mutate({
+                          proposalId: proposalModal.proposalId,
+                          chosenIngredients: [],
+                          action: "declined",
+                        });
+                      } else {
+                        setProposalModal(null);
+                      }
+                    }}
+                    data-testid="button-skip-avoid"
+                  >
+                    Skip
+                  </Button>
+                  <Button
+                    disabled={selectedAvoids.size === 0}
+                    onClick={() => {
+                      proposalResolveMutation.mutate({
+                        proposalId: proposalModal?.proposalId,
+                        chosenIngredients: Array.from(selectedAvoids),
+                        action: "accepted",
+                      });
+                    }}
+                    data-testid="button-confirm-avoid"
+                  >
+                    Avoid Selected
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

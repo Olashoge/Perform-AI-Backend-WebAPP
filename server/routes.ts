@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
 import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
@@ -179,8 +179,9 @@ export async function registerRoutes(
       (async () => {
         try {
           const prefCtx = await storage.getUserPreferenceContext(userId);
+          const workoutDays = parsed.data.workoutDays || undefined;
           log(`Generating full plan for user ${userId} (plan ${pendingPlan.id})`, "openai");
-          const planJson = await generateFullPlan(parsed.data, prefCtx);
+          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays);
           await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
@@ -352,10 +353,15 @@ export async function registerRoutes(
         feedback,
       });
 
+      let proposalId: string | null = null;
+      let proposalIngredients: string[] = [];
+
       if (feedback === "dislike" && ingredients && ingredients.length > 0) {
         const keyIngredients = extractKeyIngredients(ingredients);
-        for (const ing of keyIngredients) {
-          await storage.upsertIngredientPreference(userId, ing, "avoid", "derived");
+        if (keyIngredients.length > 0) {
+          const proposal = await storage.createIngredientProposal(userId, mealFingerprint, mealName, keyIngredients);
+          proposalId = proposal.id;
+          proposalIngredients = keyIngredients;
         }
       }
 
@@ -366,7 +372,7 @@ export async function registerRoutes(
         }
       }
 
-      return res.json(record);
+      return res.json({ record, feedback, proposalId, proposalIngredients });
     } catch (err) {
       log(`Feedback error: ${err}`, "feedback");
       return res.status(500).json({ message: "Failed to save feedback" });
@@ -719,7 +725,7 @@ export async function registerRoutes(
 
   app.get("/api/workout/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plan = await storage.getWorkoutPlan(req.params.id);
+      const plan = await storage.getWorkoutPlan(req.params.id as string);
       if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
@@ -731,7 +737,7 @@ export async function registerRoutes(
 
   app.get("/api/workout/:id/status", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plan = await storage.getWorkoutPlan(req.params.id);
+      const plan = await storage.getWorkoutPlan(req.params.id as string);
       if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
@@ -752,7 +758,7 @@ export async function registerRoutes(
 
   app.post("/api/workout/:id/start-date", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plan = await storage.getWorkoutPlan(req.params.id);
+      const plan = await storage.getWorkoutPlan(req.params.id as string);
       if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
@@ -766,7 +772,7 @@ export async function registerRoutes(
 
   app.delete("/api/workouts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plan = await storage.getWorkoutPlan(req.params.id);
+      const plan = await storage.getWorkoutPlan(req.params.id as string);
       if (!plan || plan.userId !== req.session.userId) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
@@ -774,6 +780,184 @@ export async function registerRoutes(
       return res.json({ success: true });
     } catch (err) {
       return res.status(500).json({ message: "Failed to delete workout plan" });
+    }
+  });
+
+  app.post("/api/feedback/workout", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const parsed = workoutFeedbackSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid feedback data" });
+      }
+      const userId = req.session.userId!;
+      const record = await storage.upsertWorkoutFeedback(userId, parsed.data);
+      return res.json({ record, feedback: parsed.data.feedback });
+    } catch (err) {
+      log(`Workout feedback error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to save workout feedback" });
+    }
+  });
+
+  app.get("/api/feedback/workout/:planId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const feedbacks = await storage.getWorkoutFeedbackForPlan(userId, req.params.planId as string);
+      const feedbackMap: Record<string, "like" | "dislike"> = {};
+      for (const f of feedbacks) {
+        feedbackMap[f.sessionKey] = f.feedback as "like" | "dislike";
+      }
+      return res.json(feedbackMap);
+    } catch (err) {
+      log(`Workout feedback fetch error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to load workout feedback" });
+    }
+  });
+
+  app.post("/api/goal-plans", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const parsed = goalPlanCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid goal plan data" });
+      }
+      const userId = req.session.userId!;
+      const plan = await storage.createGoalPlan(userId, parsed.data.goalType, parsed.data.startDate);
+      return res.json(plan);
+    } catch (err) {
+      log(`Goal plan creation error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to create goal plan" });
+    }
+  });
+
+  app.get("/api/goal-plans", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plans = await storage.getGoalPlansByUser(req.session.userId!);
+      return res.json(plans);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load goal plans" });
+    }
+  });
+
+  app.get("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getGoalPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      return res.json(plan);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load goal plan" });
+    }
+  });
+
+  app.patch("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getGoalPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      const { startDate, mealPlanId, workoutPlanId } = req.body;
+      const updates: any = {};
+      if (startDate !== undefined) updates.startDate = startDate;
+      if (mealPlanId !== undefined) updates.mealPlanId = mealPlanId;
+      if (workoutPlanId !== undefined) updates.workoutPlanId = workoutPlanId;
+      const updated = await storage.updateGoalPlan(plan.id, updates);
+      return res.json(updated);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to update goal plan" });
+    }
+  });
+
+  app.delete("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getGoalPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      await storage.softDeleteGoalPlan(plan.id);
+      return res.json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to delete goal plan" });
+    }
+  });
+
+  app.get("/api/ingredient-proposals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const proposals = await storage.getPendingProposals(req.session.userId!);
+      return res.json(proposals);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load proposals" });
+    }
+  });
+
+  app.post("/api/ingredient-proposals/:id/resolve", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const parsed = ingredientProposalResolveSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid resolve data" });
+      }
+      const userId = req.session.userId!;
+      const { chosenIngredients, action } = parsed.data;
+      const proposal = await storage.resolveProposal(req.params.id as string, userId, chosenIngredients, action);
+      if (!proposal) {
+        return res.status(404).json({ message: "Proposal not found" });
+      }
+      if (action === "accepted" && chosenIngredients.length > 0) {
+        for (const ing of chosenIngredients) {
+          await storage.upsertIngredientPreference(userId, ing, "avoid", "derived");
+        }
+      }
+      return res.json(proposal);
+    } catch (err) {
+      log(`Resolve proposal error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to resolve proposal" });
+    }
+  });
+
+  app.post("/api/check-ins", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const parsed = weeklyCheckInSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid check-in data" });
+      }
+      const userId = req.session.userId!;
+      const checkIn = await storage.createWeeklyCheckIn(userId, parsed.data);
+      return res.json(checkIn);
+    } catch (err) {
+      log(`Check-in creation error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to save check-in" });
+    }
+  });
+
+  app.get("/api/check-ins", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const goalPlanId = req.query.goalPlanId as string | undefined;
+      const checkIns = await storage.getWeeklyCheckIns(userId, goalPlanId);
+      return res.json(checkIns);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load check-ins" });
+    }
+  });
+
+  app.get("/api/calendar/workout-occupied-dates", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const excludePlanId = req.query.excludePlanId as string | undefined;
+      const plans = await storage.getScheduledWorkoutPlans(userId);
+      const occupiedDates = new Set<string>();
+      for (const plan of plans) {
+        if (excludePlanId && plan.id === excludePlanId) continue;
+        if (!plan.planStartDate || !plan.planJson) continue;
+        const planJson = plan.planJson as WorkoutPlanOutput;
+        for (let i = 0; i < planJson.days.length; i++) {
+          const date = new Date(plan.planStartDate + "T00:00:00");
+          date.setDate(date.getDate() + i);
+          occupiedDates.add(date.toISOString().slice(0, 10));
+        }
+      }
+      return res.json({ occupiedDates: Array.from(occupiedDates) });
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load occupied dates" });
     }
   });
 

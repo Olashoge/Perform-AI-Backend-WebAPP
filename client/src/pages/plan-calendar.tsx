@@ -465,6 +465,7 @@ export default function PlanCalendar() {
     } catch { return 0; }
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [calFilter, setCalFilter] = useState<"combined" | "meals" | "workouts">("combined");
 
   const { data: rawCalendarData, isLoading: calLoading } = useQuery<AllCalendarData>({
     queryKey: ["/api/calendar/all"],
@@ -498,8 +499,15 @@ export default function PlanCalendar() {
     }
 
     mergedDays.sort((a, b) => a.date.localeCompare(b.date));
+
+    if (calFilter === "meals") {
+      return { ...base, days: mergedDays.map(d => ({ ...d, workout: undefined })).filter(d => Object.keys(d.meals).length > 0) };
+    }
+    if (calFilter === "workouts") {
+      return { ...base, days: mergedDays.filter(d => d.workout).map(d => ({ ...d, meals: {} })) };
+    }
     return { ...base, days: mergedDays };
-  }, [rawCalendarData, workoutCalData]);
+  }, [rawCalendarData, workoutCalData, calFilter]);
 
   const { data: allFeedback } = useQuery<{ likedMeals: { mealFingerprint: string; feedback: string }[]; dislikedMeals: { mealFingerprint: string; feedback: string }[] }>({
     queryKey: ["/api/preferences"],
@@ -577,7 +585,38 @@ export default function PlanCalendar() {
       </nav>
 
       <div className="max-w-5xl mx-auto px-2 sm:px-4 py-3">
-        <div className="flex items-center justify-end gap-2 mb-3">
+        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+          <div className="flex items-center gap-1 bg-muted rounded-md p-0.5">
+            <Button
+              variant={calFilter === "combined" ? "default" : "ghost"}
+              size="sm"
+              className="text-xs"
+              onClick={() => setCalFilter("combined")}
+              data-testid="button-filter-combined"
+            >
+              Combined
+            </Button>
+            <Button
+              variant={calFilter === "meals" ? "default" : "ghost"}
+              size="sm"
+              className="text-xs"
+              onClick={() => setCalFilter("meals")}
+              data-testid="button-filter-meals"
+            >
+              <UtensilsCrossed className="h-3 w-3 mr-1" />
+              Meals
+            </Button>
+            <Button
+              variant={calFilter === "workouts" ? "default" : "ghost"}
+              size="sm"
+              className="text-xs"
+              onClick={() => setCalFilter("workouts")}
+              data-testid="button-filter-workouts"
+            >
+              <Dumbbell className="h-3 w-3 mr-1" />
+              Workouts
+            </Button>
+          </div>
           <div className="flex items-center gap-1 bg-muted rounded-md p-0.5">
             <Button
               variant={viewMode === "week" ? "default" : "ghost"}

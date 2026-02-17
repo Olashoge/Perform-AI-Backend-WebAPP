@@ -65,11 +65,21 @@ shared/
 - Rate limiting: 10 AI calls per user per day
 - Print-friendly layout
 - Plan Settings panel: collapsible view of plan preferences including personalization, swap/regen limits
-- Meal feedback learning: like/dislike meals to improve future AI suggestions
+- Tri-state meal feedback: like/dislike/neutral (neutral removes feedback record)
   - MealFeedback table stores per-meal feedback with fingerprinting
   - IngredientPreference table tracks derived ingredient avoids/prefers
+  - Dislike triggers ingredient avoid confirmation modal (user chooses which ingredients to avoid)
+  - IngredientAvoidProposal table: pending proposals from dislikes, reviewed in Preferences page
   - Preferences wired into all OpenAI prompts (plan gen, swap, regen day)
-- Preferences management page (/preferences): view and delete liked/disliked meals and avoided ingredients
+- Workout session feedback: like/dislike/neutral per workout session (WorkoutFeedback table)
+- GoalPlan entity: links meal plan + workout plan with shared goal type and start date
+  - CRUD API for goal plans
+  - Supports unified plan management
+- Preferences management page (/preferences): view and delete liked/disliked meals, avoided ingredients, pending ingredient proposals
+- Plan lifecycle status badges: Draft, Scheduled, Active, Completed (derived from start date)
+- Calendar filter toggle: Combined/Meals/Workouts view filtering
+- Workout-day-aware meal generation: OpenAI prompts adapt nutrition based on workout schedule
+- Weekly check-in tracking: weight, energy rating, compliance, notes (WeeklyCheckIn table)
 - AI-generated 7-day workout plans with customizable preferences
   - Goals: weight loss, muscle gain, performance, maintenance
   - Location: home (no equipment), home (dumbbells/bands), gym, outdoor, mixed
@@ -128,6 +138,18 @@ shared/
 - `POST /api/workout/:id/start-date` - Set/clear workout plan start date
 - `DELETE /api/workouts/:id` - Soft delete a workout plan
 - `GET /api/calendar/workouts` - Merged workout calendar data from ALL scheduled workout plans
+- `GET /api/calendar/workout-occupied-dates?excludePlanId=X` - List of dates with existing workouts
+- `POST /api/feedback/workout` - Like/dislike/neutral a workout session
+- `GET /api/feedback/workout/:planId` - Get feedback map for workout sessions
+- `POST /api/goal-plans` - Create a goal plan
+- `GET /api/goal-plans` - List user's goal plans
+- `GET /api/goal-plans/:id` - Get a goal plan
+- `PATCH /api/goal-plans/:id` - Update a goal plan
+- `DELETE /api/goal-plans/:id` - Soft delete a goal plan
+- `GET /api/ingredient-proposals` - Get pending ingredient avoid proposals
+- `POST /api/ingredient-proposals/:id/resolve` - Accept/decline a proposal
+- `POST /api/check-ins` - Create a weekly check-in
+- `GET /api/check-ins` - List check-ins (optional goalPlanId filter)
 
 ## Environment Variables
 - `DATABASE_URL` - PostgreSQL connection string

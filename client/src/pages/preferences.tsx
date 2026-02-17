@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -6,9 +6,10 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, UtensilsCrossed, ThumbsUp, ThumbsDown, Loader2, Trash2, AlertCircle, Ban } from "lucide-react";
+import { ArrowLeft, UtensilsCrossed, ThumbsUp, ThumbsDown, Loader2, Trash2, AlertCircle, Ban, AlertTriangle, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface MealFeedbackItem {
@@ -25,6 +26,14 @@ interface IngredientPrefItem {
   ingredientKey: string;
   preference: string;
   source: string;
+  createdAt: string;
+}
+
+interface IngredientProposal {
+  id: string;
+  mealName: string;
+  proposedIngredients: string[];
+  status: string;
   createdAt: string;
 }
 
@@ -116,6 +125,27 @@ export default function PreferencesPage() {
     queryKey: ["/api/preferences"],
   });
 
+  const { data: proposals = [] } = useQuery<IngredientProposal[]>({
+    queryKey: ["/api/ingredient-proposals"],
+    enabled: !!user,
+  });
+
+  const [proposalSelections, setProposalSelections] = useState<Record<string, Set<string>>>({});
+
+  const resolveProposalMutation = useMutation({
+    mutationFn: async ({ proposalId, chosenIngredients, action }: { proposalId: string; chosenIngredients: string[]; action: "accepted" | "declined" }) => {
+      await apiRequest("POST", `/api/ingredient-proposals/${proposalId}/resolve`, { chosenIngredients, action });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ingredient-proposals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences"] });
+      toast({ title: "Proposal resolved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to resolve", variant: "destructive" });
+    },
+  });
+
   const deleteMealMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/preferences/meal/${id}`);
@@ -177,6 +207,76 @@ export default function PreferencesPage() {
           <h1 className="text-xl sm:text-2xl font-bold mb-2">Meal Preferences</h1>
           <p className="text-muted-foreground text-sm">Manage your liked and disliked meals and ingredient preferences. These are used to personalize your future meal plans.</p>
         </div>
+
+        {proposals.length > 0 && (
+          <div className="mb-6 space-y-3">
+            <h2 className="font-semibold flex items-center gap-2 text-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Pending Ingredient Reviews ({proposals.length})
+            </h2>
+            <p className="text-xs text-muted-foreground mb-2">
+              These ingredients were flagged from meals you disliked. Choose which to avoid in future plans.
+            </p>
+            {proposals.map(proposal => {
+              const selected = proposalSelections[proposal.id] || new Set<string>();
+              return (
+                <Card key={proposal.id}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">From: {proposal.mealName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Select ingredients to avoid</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {proposal.proposedIngredients.map(ing => (
+                        <label key={ing} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={selected.has(ing)}
+                            onCheckedChange={(checked) => {
+                              setProposalSelections(prev => {
+                                const s = new Set(prev[proposal.id] || []);
+                                if (checked) s.add(ing); else s.delete(ing);
+                                return { ...prev, [proposal.id]: s };
+                              });
+                            }}
+                            data-testid={`checkbox-proposal-${proposal.id}-${ing.toLowerCase().replace(/\s+/g, "-")}`}
+                          />
+                          <span className="text-sm capitalize">{ing}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => resolveProposalMutation.mutate({ proposalId: proposal.id, chosenIngredients: [], action: "declined" })}
+                        disabled={resolveProposalMutation.isPending}
+                        data-testid={`button-decline-proposal-${proposal.id}`}
+                      >
+                        <X className="h-3.5 w-3.5 mr-1" />
+                        Dismiss
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={selected.size === 0 || resolveProposalMutation.isPending}
+                        onClick={() => resolveProposalMutation.mutate({
+                          proposalId: proposal.id,
+                          chosenIngredients: Array.from(selected),
+                          action: "accepted",
+                        })}
+                        data-testid={`button-accept-proposal-${proposal.id}`}
+                      >
+                        <Check className="h-3.5 w-3.5 mr-1" />
+                        Avoid Selected
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
 
         {isLoading ? (
           <PreferencesSkeleton />

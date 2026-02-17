@@ -1,0 +1,340 @@
+You are the Replit Agent working inside my existing MealPlanAI webapp repo.
+
+GOAL
+Implement the full “Transformation Engine” described below: structured scheduling, unified goal plans, calendar layering, preference memory, feedback loops, conflict-aware scheduling, and clean mobile UX.
+
+NON-NEGOTIABLE RULES
+1) The ONLY way to assign a plan to dates is via a startDate on the plan itself (chosen at creation or changed on plan page).
+2) Calendar events are derived by expanding each scheduled plan’s internal Day1..Day7 onto real dates using startDate.
+3) Enforce conflict rules via disabled dates in date pickers (meal vs meal, workout vs workout; and for unified “goal plan”, enforce both).
+4) Use tri-state like/dislike everywhere (neutral/like/dislike). Clicking same state toggles back to neutral.
+5) Disliking a meal must NOT automatically add ingredients to Avoided. It must open a confirmation UI to optionally avoid selected ingredients.
+6) Keep UI mobile-clean: use a 3-dot menu on plan pages for actions.
+7) Meals ordering everywhere: Breakfast → Lunch → Dinner. Workouts are separate layer.
+
+ASSUMPTIONS (If code differs, adapt)
+- App uses Next.js/React + Prisma + Postgres (or similar) with authenticated user accounts.
+- There are Meal Plans and Workout Plans already. Extend, don’t rewrite.
+- There is a Calendar page with week/month view.
+
+========================================================
+PART A — DATA MODEL (Prisma) — DO FIRST
+========================================================
+Update Prisma schema to support:
+1) MealPlan and WorkoutPlan startDate, deletedAt, archivedAt, status, and computed endDate in UI.
+2) GoalPlan (unified plan) that can link 1 meal plan + 1 workout plan and keep shared goal + shared startDate (optional).
+3) Preference storage for BOTH meals and workouts with tri-state.
+4) “Avoid ingredients” confirmation flow: store proposed ingredients separately until user confirms.
+5) Weekly check-ins / progress logging.
+
+ADD/UPDATE MODELS (names can adapt to your existing schema):
+
+- MealPlan:
+  - id
+  - userId
+  - title
+  - goalType (enum: WEIGHT_LOSS, MUSCLE_GAIN, PERFORMANCE, MAINTENANCE, ENERGY_FOCUS, GENERAL_FITNESS)
+  - cuisines/tags
+  - createdAt
+  - updatedAt
+  - startDate DateTime?  (null means not scheduled)
+  - deletedAt DateTime?
+  - archivedAt DateTime?
+  - status enum (DRAFT, SCHEDULED, ACTIVE, COMPLETED, ARCHIVED)  // can compute but store for UX
+  - goalPlanId String? (optional link)
+
+- WorkoutPlan:
+  - id
+  - userId
+  - title
+  - goalType (same enum)
+  - trainingMode enum (STRENGTH, CARDIO, BOTH)
+  - location enum/string (GYM, HOME, OUTDOOR, OTHER)
+  - createdAt/updatedAt
+  - startDate DateTime?
+  - deletedAt DateTime?
+  - archivedAt DateTime?
+  - status enum (DRAFT, SCHEDULED, ACTIVE, COMPLETED, ARCHIVED)
+  - goalPlanId String?
+
+- GoalPlan:
+  - id
+  - userId
+  - goalType
+  - startDate DateTime?  // if set, apply to both linked plans
+  - createdAt/updatedAt
+  - deletedAt DateTime?
+  - archivedAt DateTime?
+  - mealPlanId String? unique
+  - workoutPlanId String? unique
+
+- MealPreference (tri-state per meal instance or signature):
+  - id
+  - userId
+  - planId (MealPlan.id)
+  - planDay Int (1..7)
+  - mealSlot enum (BREAKFAST, LUNCH, DINNER)
+  - mealKey String (stable signature; fallback: meal title + slot + day)
+  - state enum (NEUTRAL, LIKED, DISLIKED)
+  - createdAt/updatedAt
+
+- WorkoutPreference:
+  - id
+  - userId
+  - planId (WorkoutPlan.id)
+  - planDay Int (1..7)
+  - workoutKey String (stable signature; fallback: workout title + day)
+  - state enum (NEUTRAL, LIKED, DISLIKED)
+  - createdAt/updatedAt
+
+- IngredientAvoidProposal (for dislike → suggest avoids, user must confirm):
+  - id
+  - userId
+  - mealKey String
+  - ingredients String[] (or JSON)
+  - createdAt
+  - resolvedAt DateTime?
+  - chosenIngredients String[] (empty if user declines)
+  - action enum (DECLINED, ACCEPTED)
+
+- AvoidedIngredient:
+  - id
+  - userId
+  - ingredient String
+  - source enum (USER_SELECTED, CONFIRMED_FROM_DISLIKE)
+  - createdAt
+
+- WeeklyCheckIn:
+  - id
+  - userId
+  - goalPlanId String?
+  - weekStartDate DateTime
+  - weightStart Float?
+  - weightEnd Float?
+  - energyRating Int? (1..5)
+  - complianceMeals Int? (0..100)
+  - complianceWorkouts Int? (0..100)
+  - notes String?
+  - createdAt
+
+MIGRATIONS
+- Add migration(s) safely.
+- Ensure existing data is backfilled with null startDate and status=DRAFT.
+- Implement “deleted” via deletedAt (soft delete).
+- Update queries to exclude deletedAt != null by default.
+
+========================================================
+PART B — SCHEDULING + CONFLICT ENGINE
+========================================================
+Implement shared scheduling utilities:
+- expandMealPlanEvents(plan):
+  returns array of {date, slot, title, planId, type:"MEAL", state, icons}
+- expandWorkoutPlanEvents(plan):
+  returns array of {date, title, planId, type:"WORKOUT", state, intensity?, mode}
+
+DATE RANGE
+- A 7-day plan occupies startDate..startDate+6 days.
+
+CONFLICT RULES
+- MealPlan startDate picker: block start dates that overlap ANY scheduled meals from other meal plans (startDate != null and deletedAt null) in the 7-day window.
+- WorkoutPlan startDate picker: same but only against other workout plans.
+- Unified GoalPlan builder: enforce both simultaneously if generating both.
+
+VISUALS
+- In date picker, visually highlight blocked dates and disable selection.
+- Also show a hint: “Blocked dates have existing scheduled plans.”
+
+========================================================
+PART C — CREATE FLOWS
+========================================================
+1) Update Create New Meal Plan page:
+- Add “Start this plan on:” date picker BEFORE generation.
+- It must be conflict-aware for meal plans.
+- Save startDate into MealPlan at creation (if user chooses a date).
+- Button label: “New Meal Plan” everywhere (rename from “New Plan”).
+
+2) Update Create New Workout Plan page:
+- Add “Start this plan on:” date picker BEFORE generation.
+- Conflict-aware for workout plans.
+- Save startDate at creation.
+- Keep existing workout form fields.
+
+3) Add NEW “Create Goal Plan” page (unified builder):
+- Step 1: goalType
+- Step 2: choose: Meals only / Workouts only / Both
+- Step 3: select startDate (conflict-aware for whichever types chosen)
+- Step 4: show meal inputs and/or workout inputs (same forms, but in one flow)
+- Generate both plans (if both), link them via GoalPlan, share same goalType and startDate.
+- Save goalPlanId on both plans.
+
+========================================================
+PART D — PLAN PAGES (ACTION MENU + START DATE)
+========================================================
+On MealPlan detail page and WorkoutPlan detail page:
+- Show “Scheduled: Start → End” if startDate exists.
+- Provide 3-dot menu (top right) with actions:
+  - Move start date (opens conflict-aware picker)
+  - Remove from calendar (sets startDate = null)
+  - Delete plan (sets deletedAt = now; also removes from calendar by definition)
+- Remove any other UI that assigns date besides this.
+
+STATUS LOGIC
+- Update stored status when startDate set/unset:
+  - startDate null → DRAFT
+  - startDate set → SCHEDULED
+- ACTIVE/COMPLETED can be computed on the fly by comparing today to range, but also optionally update nightly; for now compute in UI.
+
+========================================================
+PART E — CALENDAR (MEALS / WORKOUTS / COMBINED)
+========================================================
+Calendar page must show ALL scheduled plans (non-deleted, startDate != null).
+
+REMOVE plan selector dropdown completely.
+
+Add top toggle:
+- Meals
+- Workouts
+- Combined
+
+DATA
+- Meals mode: expand all meal plans into events
+- Workouts mode: expand all workout plans into events
+- Combined: merge both event lists
+
+RENDERING RULES
+- Month view:
+  - show tiny abbreviated items in each day cell
+  - if > X items, show “+N more”
+  - ordering: Breakfast → Lunch → Dinner → Workouts (or workouts separate line)
+- Week view:
+  - Meals grid columns in order Breakfast, Lunch, Dinner
+  - Workouts column shown in Workouts/Combined modes
+- Keep mobile readability: tiny fonts like existing design.
+
+LIKE/DISLIKE ICONS
+- Show tiny 👍 or 👎 next to items in both week and month view based on preference state.
+- Keep subtle.
+
+========================================================
+PART F — MEAL + WORKOUT TRI-STATE PREFERENCES
+========================================================
+MEALS
+- Like/dislike buttons on each meal instance must be tri-state:
+  - neutral (no highlight)
+  - liked (thumb up active)
+  - disliked (thumb down active)
+- Clicking active state toggles back to neutral.
+- Persist in MealPreference keyed by mealKey + planDay + slot.
+
+WORKOUTS
+- Add Like/Dislike/Regenerate to workout session cards.
+- Same tri-state logic saved into WorkoutPreference.
+
+PREFERENCES PAGE
+- Expand preferences page to include:
+  - Meal Preferences: Liked / Disliked / Avoided Ingredients
+  - Workout Preferences: Liked / Disliked (and optional Avoided Movements later)
+- Ensure tabs show counts and allow removal.
+- Deleting avoided ingredient should remove it (trash icon).
+
+DISLIKE → AVOID CONFIRMATION (MEALS)
+- When user dislikes a meal, DO NOT auto-add ingredients to Avoided.
+- Instead open modal:
+  “You disliked this meal. Avoid any ingredients?”
+  list extracted main ingredients with checkboxes
+  user confirms → create AvoidedIngredient entries + store IngredientAvoidProposal as ACCEPTED
+  user declines → store IngredientAvoidProposal as DECLINED
+- Ensure “Avoided” tab only contains confirmed avoids.
+
+========================================================
+PART G — REGENERATION INTELLIGENCE
+========================================================
+MEAL regenerate:
+- When regenerating meal, preserve constraints (goalType, cuisines, allergies, avoids, trainingMode/workout-day-aware logic).
+- If meal was disliked, attempt “similar macros, different cuisine/recipe” (best-effort).
+
+WORKOUT regenerate:
+- Keep same focus area + trainingMode + duration.
+- If disliked, change movement pattern while targeting same muscle group.
+
+========================================================
+PART H — WORKOUT-DAY-AWARE + TRAININGMODE-DRIVEN MEALS
+========================================================
+Meal generation should consider:
+- Workout days selected (days of week)
+- TrainingMode (Strength/Cardio/Both) from workout plan IF unified goal plan exists OR if user selected in meal form
+
+Rules:
+- Strength days: higher carbs + higher protein
+- Cardio days: moderate carbs, steady protein
+- Rest days: lower carbs, recovery-focused, high micronutrients
+- If TrainingMode=BOTH: treat strength days as high carb and cardio days moderate; rest low.
+
+If user creates Meal Plan alone, allow them to select:
+- “Do you have training days?” (optional weekday selection)
+- “Training mode” (Strength/Cardio/Both) optional
+Use these inputs for workout-day-aware meals.
+
+========================================================
+PART I — LIST PAGES IMPROVEMENTS
+========================================================
+Meal Plans list and Workout Plans list:
+- Show start → end dates if scheduled.
+- Show status badge.
+- Add delete action accessible from:
+  - plan card 3-dot menu OR within plan page menu
+- Ensure “New Meal Plan” button label is correct.
+- Workouts tab already shows scheduled date; match formatting on meal plans.
+
+========================================================
+PART J — PROGRESS TRACKING OVERLAY (MVP)
+========================================================
+Add “Weekly Check-in” simple UI:
+- For each GoalPlan (or standalone plans if not unified), user can add check-in:
+  - weightStart/weightEnd (optional)
+  - energy rating 1–5
+  - meal compliance %
+  - workout compliance %
+  - notes
+- Add a simple “Momentum” label:
+  - Positive if compliance >= 70 and (weight trending toward goal or notes positive)
+  - Neutral otherwise
+(keep logic simple for now; do not overbuild)
+
+Add a “Weekly Overview” page:
+- Select week
+- Show summary:
+  - Meals planned count, liked/disliked counts
+  - Workouts planned count, liked/disliked counts
+  - compliance + energy
+- Keep UI minimal.
+
+========================================================
+QA / ACCEPTANCE TESTS
+========================================================
+- Creating meal plan with start date schedules it and it appears on calendar.
+- Creating workout plan with start date schedules it and it appears on calendar.
+- Creating goal plan with both schedules both and calendar combined mode shows both.
+- Calendar has filter toggle: Meals / Workouts / Combined.
+- No plan dropdown selector exists on calendar.
+- Meal order is correct everywhere.
+- Date pickers block conflicts correctly.
+- Like/dislike toggles back to neutral.
+- Dislike meal triggers avoid confirmation modal; avoids only added if confirmed.
+- Deleting plan removes from lists and calendar.
+- Removing from calendar sets startDate null and hides from calendar but keeps plan.
+- List pages show start → end and status.
+
+IMPLEMENTATION ORDER
+1) Prisma schema + migrations
+2) Scheduling expand utilities
+3) Create flows with start date + conflict pickers
+4) Plan pages actions menu + start date move/remove/delete
+5) Calendar filters + multi-plan rendering + ordering + +N more
+6) Preferences tri-state + dislike→avoid modal
+7) Workout like/dislike/regenerate + preferences tab
+8) Goal Plan unified builder
+9) Weekly check-in + overview page
+10) Polish + QA
+
+Deliver as working code. If something in repo differs, adapt but preserve behaviors above.

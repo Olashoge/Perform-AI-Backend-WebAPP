@@ -11,8 +11,42 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   UtensilsCrossed, Plus, CalendarDays, LogOut, Sparkles, Loader2,
   Flame, Dumbbell, Zap, Heart, Trophy, Settings, Activity,
+  CheckCircle2, Clock, CalendarCheck,
 } from "lucide-react";
 import { format } from "date-fns";
+
+type PlanLifecycleStatus = "draft" | "scheduled" | "active" | "completed";
+
+function derivePlanStatus(startDate: string | null | undefined): PlanLifecycleStatus {
+  if (!startDate) return "draft";
+  const start = new Date(startDate + "T00:00:00");
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  if (today < start) return "scheduled";
+  if (today < end) return "active";
+  return "completed";
+}
+
+const STATUS_BADGE_CONFIG: Record<PlanLifecycleStatus, { label: string; className: string; icon: typeof Clock }> = {
+  draft: { label: "Draft", className: "bg-muted text-muted-foreground", icon: Clock },
+  scheduled: { label: "Scheduled", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300", icon: CalendarCheck },
+  active: { label: "Active", className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300", icon: Activity },
+  completed: { label: "Completed", className: "bg-muted text-muted-foreground", icon: CheckCircle2 },
+};
+
+function StatusBadge({ startDate }: { startDate: string | null | undefined }) {
+  const status = derivePlanStatus(startDate);
+  const config = STATUS_BADGE_CONFIG[status];
+  const Icon = config.icon;
+  return (
+    <Badge variant="secondary" className={`no-default-hover-elevate no-default-active-elevate ${config.className}`} data-testid={`badge-status-${status}`}>
+      <Icon className="h-3 w-3 mr-1" />
+      {config.label}
+    </Badge>
+  );
+}
 
 const GOAL_LABELS: Record<string, string> = {
   weight_loss: "Weight Loss",
@@ -213,10 +247,13 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
                       ) : status === "failed" ? (
                         <Badge variant="destructive">Failed</Badge>
                       ) : (
-                        <Badge variant="secondary">
-                          <GoalIcon className="h-3 w-3 mr-1" />
-                          {GOAL_LABELS[prefs?.goal] || "Maintenance"}
-                        </Badge>
+                        <>
+                          <StatusBadge startDate={mp.planStartDate} />
+                          <Badge variant="secondary">
+                            <GoalIcon className="h-3 w-3 mr-1" />
+                            {GOAL_LABELS[prefs?.goal] || "Maintenance"}
+                          </Badge>
+                        </>
                       )}
                       {prefs?.dietStyles && prefs.dietStyles.length > 0 && prefs.dietStyles[0] !== "No Preference" && (
                         <Badge variant="outline">{prefs.dietStyles.join(", ")}</Badge>
@@ -225,6 +262,11 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
                         <CalendarDays className="h-3 w-3" />
                         {format(new Date(mp.createdAt), "MMM d, yyyy")}
                       </span>
+                      {mp.planStartDate && (
+                        <span className="text-xs text-muted-foreground">
+                          Starts {format(new Date(mp.planStartDate + "T00:00:00"), "MMM d")}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -302,6 +344,7 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
                         <Badge variant="destructive">Failed</Badge>
                       ) : (
                         <>
+                          <StatusBadge startDate={wp.planStartDate} />
                           <Badge variant="secondary">
                             <Dumbbell className="h-3 w-3 mr-1" />
                             {WORKOUT_GOAL_LABELS[prefs?.goal] || "Fitness"}
@@ -316,9 +359,9 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
                         {format(new Date(wp.createdAt), "MMM d, yyyy")}
                       </span>
                       {wp.planStartDate && (
-                        <Badge variant="outline" className="text-xs">
-                          Scheduled: {wp.planStartDate}
-                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          Starts {format(new Date(wp.planStartDate + "T00:00:00"), "MMM d")}
+                        </span>
                       )}
                     </div>
                   </div>
