@@ -174,39 +174,57 @@ export default function GoalPlans() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <Link href="/plans">
               <Button variant="ghost" size="icon" data-testid="button-back">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <Target className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-base sm:text-lg">Goal Plans</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <Target className="h-4 w-4 text-primary" />
+              </div>
+              <span className="font-semibold text-base sm:text-lg tracking-tight">Goal Plans</span>
+            </div>
           </div>
           <Button onClick={() => setCreateOpen(true)} data-testid="button-create-goal">
-            <Plus className="h-4 w-4 mr-1" />
+            <Plus className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">New Goal</span>
             <span className="sm:hidden">New</span>
           </Button>
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         {goalLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[1, 2].map(i => (
-              <Card key={i}><CardContent className="p-5"><Skeleton className="h-5 w-48 mb-2" /><Skeleton className="h-4 w-72" /></CardContent></Card>
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-40" />
+                      <Skeleton className="h-3.5 w-56" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Skeleton className="h-20 rounded-md" />
+                    <Skeleton className="h-20 rounded-md" />
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         ) : !goalPlans || goalPlans.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
-              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <Target className="h-6 w-6 text-primary" />
+            <CardContent className="p-16 text-center">
+              <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-5">
+                <Target className="h-8 w-8 text-primary" />
               </div>
-              <h2 className="font-semibold text-lg mb-1">No goal plans yet</h2>
-              <p className="text-sm text-muted-foreground mb-4">
+              <h2 className="font-semibold text-lg mb-2">No goal plans yet</h2>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
                 Create a goal plan to link your meal and workout plans together for unified tracking.
               </p>
               <Button onClick={() => setCreateOpen(true)} data-testid="button-create-first-goal">
@@ -216,26 +234,29 @@ export default function GoalPlans() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {goalPlans.map((gp) => {
               const GoalIcon = GOAL_ICONS[gp.goalType] || Target;
               return (
                 <Card key={gp.id} data-testid={`card-goal-${gp.id}`}>
-                  <CardContent className="p-4 sm:p-5">
-                    <div className="flex items-start justify-between gap-3 mb-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
-                          <GoalIcon className="h-4 w-4 text-primary" />
+                  <CardContent className="p-5 sm:p-6">
+                    <div className="flex items-start justify-between gap-3 mb-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <GoalIcon className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-sm sm:text-base" data-testid={`text-goal-type-${gp.id}`}>
-                            {GOAL_LABELS[gp.goalType] || gp.goalType}
-                          </h3>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-base" data-testid={`text-goal-type-${gp.id}`}>
+                              {GOAL_LABELS[gp.goalType] || gp.goalType}
+                            </h3>
+                            <Badge variant="secondary">{GOAL_LABELS[gp.goalType] || gp.goalType}</Badge>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
                             <CalendarDays className="h-3 w-3" />
-                            Created {format(new Date(gp.createdAt), "MMM d, yyyy")}
+                            <span>Created {format(new Date(gp.createdAt), "MMM d, yyyy")}</span>
                             {gp.startDate && (
-                              <span> &middot; Starts {format(new Date(gp.startDate + "T00:00:00"), "MMM d")}</span>
+                              <span className="text-muted-foreground/60">&middot; Starts {format(new Date(gp.startDate + "T00:00:00"), "MMM d")}</span>
                             )}
                           </div>
                         </div>
@@ -251,11 +272,11 @@ export default function GoalPlans() {
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="border rounded-md p-3">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-1.5 text-sm font-medium">
-                            <UtensilsCrossed className="h-3.5 w-3.5" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="rounded-md border p-4">
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
                             Meal Plan
                           </div>
                           {gp.mealPlanId ? (
@@ -271,7 +292,7 @@ export default function GoalPlans() {
                         </div>
                         {gp.mealPlanId ? (
                           <Link href={`/plan/${gp.mealPlanId}`}>
-                            <p className="text-sm text-primary hover:underline cursor-pointer" data-testid={`text-linked-meal-${gp.id}`}>
+                            <p className="text-sm text-primary hover:underline cursor-pointer font-medium" data-testid={`text-linked-meal-${gp.id}`}>
                               {getMealPlanTitle(gp.mealPlanId)}
                             </p>
                           </Link>
@@ -289,10 +310,10 @@ export default function GoalPlans() {
                         )}
                       </div>
 
-                      <div className="border rounded-md p-3">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-1.5 text-sm font-medium">
-                            <Dumbbell className="h-3.5 w-3.5" />
+                      <div className="rounded-md border p-4">
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <Dumbbell className="h-4 w-4 text-muted-foreground" />
                             Workout Plan
                           </div>
                           {gp.workoutPlanId ? (
@@ -308,7 +329,7 @@ export default function GoalPlans() {
                         </div>
                         {gp.workoutPlanId ? (
                           <Link href={`/workout/${gp.workoutPlanId}`}>
-                            <p className="text-sm text-primary hover:underline cursor-pointer" data-testid={`text-linked-workout-${gp.id}`}>
+                            <p className="text-sm text-primary hover:underline cursor-pointer font-medium" data-testid={`text-linked-workout-${gp.id}`}>
                               {getWorkoutPlanTitle(gp.workoutPlanId)}
                             </p>
                           </Link>
@@ -327,7 +348,7 @@ export default function GoalPlans() {
                       </div>
                     </div>
 
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-4 pt-4 border-t flex gap-2">
                       <Link href={`/check-ins?goalPlanId=${gp.id}`}>
                         <Button variant="outline" size="sm" data-testid={`button-checkins-${gp.id}`}>
                           Weekly Check-ins
@@ -347,22 +368,27 @@ export default function GoalPlans() {
           <DialogHeader>
             <DialogTitle>Create Goal Plan</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Goal Type</Label>
+          <div className="space-y-5 pt-2">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Goal Type</Label>
               <Select value={selectedGoal} onValueChange={setSelectedGoal}>
                 <SelectTrigger data-testid="select-goal-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {GOAL_OPTIONS.map(g => (
-                    <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                    <SelectItem key={g.value} value={g.value}>
+                      <div className="flex items-center gap-2">
+                        <g.icon className="h-4 w-4 text-muted-foreground" />
+                        <span>{g.label}</span>
+                      </div>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>What would you like to create?</Label>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">What would you like to create?</Label>
               <Select value={selectedPlanType} onValueChange={(v) => setSelectedPlanType(v as "both" | "meal" | "workout")}>
                 <SelectTrigger data-testid="select-plan-type">
                   <SelectValue />
@@ -374,8 +400,8 @@ export default function GoalPlans() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Start Date (optional)</Label>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Start Date (optional)</Label>
               <Input
                 type="date"
                 value={startDate}
@@ -384,7 +410,7 @@ export default function GoalPlans() {
                 data-testid="input-goal-start-date"
               />
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={() => setCreateOpen(false)} data-testid="button-cancel-goal">
                 Cancel
               </Button>
@@ -406,10 +432,13 @@ export default function GoalPlans() {
           <DialogHeader>
             <DialogTitle>Link {linkType === "meal" ? "Meal" : "Workout"} Plan</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3 pt-2">
             {linkType === "meal" ? (
               readyMealPlans.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No meal plans available. Create one first.</p>
+                <div className="text-center py-8">
+                  <UtensilsCrossed className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No meal plans available. Create one first.</p>
+                </div>
               ) : (
                 readyMealPlans.map(mp => {
                   const plan = mp.planJson as PlanOutput | null;
@@ -420,8 +449,10 @@ export default function GoalPlans() {
                       onClick={() => linkingPlanId && linkMutation.mutate({ goalPlanId: linkingPlanId, planId: mp.id, type: "meal" })}
                       data-testid={`card-link-meal-${mp.id}`}
                     >
-                      <CardContent className="p-3 flex items-center gap-2">
-                        <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
+                      <CardContent className="p-4 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                          <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
+                        </div>
                         <span className="text-sm font-medium">{plan?.title || "Meal Plan"}</span>
                       </CardContent>
                     </Card>
@@ -430,7 +461,10 @@ export default function GoalPlans() {
               )
             ) : (
               readyWorkoutPlans.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No workout plans available. Create one first.</p>
+                <div className="text-center py-8">
+                  <Dumbbell className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No workout plans available. Create one first.</p>
+                </div>
               ) : (
                 readyWorkoutPlans.map(wp => {
                   const plan = wp.planJson as WorkoutPlanOutput | null;
@@ -441,8 +475,10 @@ export default function GoalPlans() {
                       onClick={() => linkingPlanId && linkMutation.mutate({ goalPlanId: linkingPlanId, planId: wp.id, type: "workout" })}
                       data-testid={`card-link-workout-${wp.id}`}
                     >
-                      <CardContent className="p-3 flex items-center gap-2">
-                        <Dumbbell className="h-4 w-4 text-muted-foreground" />
+                      <CardContent className="p-4 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                          <Dumbbell className="h-4 w-4 text-muted-foreground" />
+                        </div>
                         <span className="text-sm font-medium">{plan?.title || "Workout Plan"}</span>
                       </CardContent>
                     </Card>

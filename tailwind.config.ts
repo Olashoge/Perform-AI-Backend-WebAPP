@@ -75,6 +75,16 @@ export default {
           foreground: "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
           border: "var(--sidebar-accent-border)"
         },
+        "meal-accent": {
+          DEFAULT: "hsl(var(--meal-accent) / <alpha-value>)",
+          foreground: "hsl(var(--meal-accent-foreground) / <alpha-value>)",
+          bg: "hsl(var(--meal-accent-bg) / <alpha-value>)",
+        },
+        "workout-accent": {
+          DEFAULT: "hsl(var(--workout-accent) / <alpha-value>)",
+          foreground: "hsl(var(--workout-accent-foreground) / <alpha-value>)",
+          bg: "hsl(var(--workout-accent-bg) / <alpha-value>)",
+        },
         status: {
           online: "rgb(34 197 94)",
           away: "rgb(245 158 11)",

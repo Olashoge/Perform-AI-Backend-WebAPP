@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { UtensilsCrossed, CalendarDays, ShoppingCart, Sparkles, ChefHat, Clock } from "lucide-react";
+import { Sparkles, CalendarDays, ShoppingCart, Dumbbell, TrendingUp, Zap, Zap as ZapIcon } from "lucide-react";
 
 export default function Landing() {
   const { user } = useAuth();
@@ -11,43 +11,62 @@ export default function Landing() {
     {
       icon: Sparkles,
       title: "AI-Powered Plans",
-      description: "Get personalized 7-day meal plans tailored to your goals, diet, and lifestyle using advanced AI.",
+      description: "Get personalized meal and workout plans tailored to your goals and lifestyle using advanced AI.",
+      accentClass: "text-meal-accent",
+      bgClass: "bg-meal-accent-bg",
     },
     {
       icon: CalendarDays,
       title: "Weekly Organization",
-      description: "View your entire week at a glance with breakfast, lunch, and dinner planned for every day.",
+      description: "View your entire week at a glance with meals and workouts planned for every day.",
+      accentClass: "text-primary",
+      bgClass: "bg-primary/10",
     },
     {
       icon: ShoppingCart,
       title: "Smart Grocery Lists",
       description: "Auto-generated, organized grocery lists grouped by section for efficient shopping trips.",
+      accentClass: "text-meal-accent",
+      bgClass: "bg-meal-accent-bg",
     },
     {
-      icon: ChefHat,
-      title: "Step-by-Step Recipes",
-      description: "Detailed cooking instructions for every meal with ingredients, nutrition info, and tips.",
+      icon: Dumbbell,
+      title: "Workout Programs",
+      description: "Structured workout routines designed to complement your nutrition and match your fitness level.",
+      accentClass: "text-workout-accent",
+      bgClass: "bg-workout-accent-bg",
     },
     {
-      icon: UtensilsCrossed,
-      title: "Flexible Swaps",
-      description: "Not loving a meal? Swap individual meals or regenerate entire days to keep things fresh.",
+      icon: TrendingUp,
+      title: "Progress Tracking",
+      description: "Monitor your performance metrics and see how meals and workouts impact your results.",
+      accentClass: "text-workout-accent",
+      bgClass: "bg-workout-accent-bg",
     },
     {
-      icon: Clock,
-      title: "Time-Aware Cooking",
-      description: "Choose quick or normal prep times. Batch cooking options for busy schedules.",
+      icon: Zap,
+      title: "Smart Adaptation",
+      description: "Plans automatically adjust based on your feedback, preferences, and performance data.",
+      accentClass: "text-primary",
+      bgClass: "bg-primary/10",
     },
+  ];
+
+  const steps = [
+    { step: "1", title: "Set Preferences", desc: "Define your goals, dietary preferences, fitness level, and schedule." },
+    { step: "2", title: "Generate Plans", desc: "AI creates personalized meal and workout plans tailored to you." },
+    { step: "3", title: "Execute", desc: "Follow your daily plans with clear instructions and flexible options." },
+    { step: "4", title: "Track Progress", desc: "Monitor your performance and let AI adapt your plans over time." },
   ];
 
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer">
-              <UtensilsCrossed className="h-5 w-5 text-primary" />
-              <span className="font-semibold text-lg">MealPlan AI</span>
+              <Sparkles className="h-5 w-5 text-primary" />
+              <span className="font-semibold text-lg">Perform AI</span>
             </div>
           </Link>
           <div className="flex items-center gap-2">
@@ -74,20 +93,24 @@ export default function Landing() {
         </div>
       </nav>
 
-      <section className="py-20 px-4">
+      <section className="py-24 md:py-32 px-4 relative">
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full -mr-48 -mt-48" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-primary/5 rounded-full -ml-40 -mb-40" />
+        </div>
         <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1 text-sm text-primary mb-6">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/8 px-3 py-1.5 text-sm font-medium text-primary mb-6 border border-primary/10">
             <Sparkles className="h-3.5 w-3.5" />
-            Powered by AI
+            <span>Powered by AI</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-            Your Personal
-            <span className="text-primary"> Meal Planner</span>
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6 leading-tight">
+            Your Personal<br />
+            <span className="text-primary">Performance System</span>
           </h1>
-          <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-8">
-            Tell us your goals, dietary preferences, and schedule. We'll create a complete 7-day meal plan with recipes, nutrition info, and a ready-to-use grocery list.
+          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
+            AI-powered meal planning and workout programming designed to work together. Get personalized nutrition and fitness plans tailored to your goals, all in one unified system.
           </p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
+          <div className="flex items-center justify-center gap-4 flex-wrap">
             {user ? (
               <Link href="/new-plan">
                 <Button size="lg" data-testid="button-get-started">
@@ -113,21 +136,26 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="py-16 px-4 bg-card/50">
+      <section className="py-20 px-4 bg-muted/30">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl font-semibold text-center mb-10">
-            Everything you need for meal planning
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+              Everything you need to perform
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Unified meal and workout planning with seamless integration and intelligent adaptation.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((f) => (
-              <Card key={f.title} className="hover-elevate">
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-md bg-primary/10 p-2 shrink-0">
-                      <f.icon className="h-4 w-4 text-primary" />
+              <Card key={f.title} className="hover-elevate border-0 bg-background">
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    <div className={`rounded-md ${f.bgClass} p-2.5 shrink-0`}>
+                      <f.icon className={`h-5 w-5 ${f.accentClass}`} />
                     </div>
                     <div>
-                      <h3 className="font-medium mb-1">{f.title}</h3>
+                      <h3 className="font-semibold mb-2 text-base">{f.title}</h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
                     </div>
                   </div>
@@ -138,35 +166,47 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="py-16 px-4">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-2xl font-semibold mb-3">How it works</h2>
-          <p className="text-muted-foreground mb-10">Three simple steps to your personalized meal plan</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { step: "1", title: "Set Preferences", desc: "Choose your goal, diet style, household size, and cooking preferences." },
-              { step: "2", title: "Generate Plan", desc: "AI creates a 7-day meal plan with recipes, nutrition info, and grocery list." },
-              { step: "3", title: "Cook & Enjoy", desc: "Follow step-by-step instructions. Swap meals anytime you want." },
-            ].map((s) => (
-              <div key={s.step} className="flex flex-col items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-primary-foreground font-semibold text-lg">
+      <section className="py-20 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">How it works</h2>
+          <p className="text-lg text-muted-foreground mb-16 max-w-2xl mx-auto">
+            Four simple steps to transform your performance through coordinated nutrition and fitness.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            {steps.map((s, index) => (
+              <div key={s.step} className="flex flex-col items-center gap-4 relative">
+                {index < steps.length - 1 && (
+                  <div className="hidden md:block absolute top-5 -right-4 w-8 h-0.5 bg-border" />
+                )}
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 text-primary font-semibold text-lg border border-primary/20">
                   {s.step}
                 </div>
-                <h3 className="font-medium">{s.title}</h3>
-                <p className="text-sm text-muted-foreground">{s.desc}</p>
+                <div>
+                  <h3 className="font-semibold text-base mb-2">{s.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <footer className="border-t py-8 px-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <UtensilsCrossed className="h-4 w-4" />
-            MealPlan AI
+      <footer className="border-t py-12 px-4 bg-background/50">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <span className="font-semibold text-lg">Perform AI</span>
+            </div>
+            <p className="text-sm font-medium text-muted-foreground">
+              Your unified performance operating system.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">AI-generated meal plans. Always consult a nutritionist for medical dietary needs.</p>
+          <div className="border-t border-border pt-6">
+            <p className="text-xs text-muted-foreground text-center">
+              AI-generated plans. Always consult professionals for medical or specialized dietary and fitness needs.
+            </p>
+          </div>
         </div>
       </footer>
     </div>

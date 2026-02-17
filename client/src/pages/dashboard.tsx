@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, CalendarDays, TrendingUp, TrendingDown, Minus,
   Dumbbell, UtensilsCrossed, Target, Flame, Trophy, Heart, Zap,
-  Activity, CheckCircle2, ClipboardCheck, BarChart3,
+  Activity, CheckCircle2, ClipboardCheck,
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addDays, isWithinInterval, parseISO } from "date-fns";
 
@@ -145,14 +145,14 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Link href="/plans">
               <Button variant="ghost" size="icon" data-testid="button-back">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <BarChart3 className="h-5 w-5 text-primary" />
+            <Activity className="h-5 w-5 text-primary" />
             <span className="font-semibold text-base sm:text-lg">Weekly Overview</span>
           </div>
           <span className="text-sm text-muted-foreground">
@@ -161,7 +161,7 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-8 sm:py-10 space-y-8">
         {dataLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[1, 2, 3, 4].map(i => (
@@ -173,38 +173,46 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Card data-testid="stat-active-meals">
                 <CardContent className="p-4 text-center">
-                  <UtensilsCrossed className="h-5 w-5 text-primary mx-auto mb-1" />
-                  <div className="text-2xl font-bold" data-testid="text-active-meals-count">{stats.activeMeals.length}</div>
-                  <div className="text-xs text-muted-foreground">Active Meal Plans</div>
+                  <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-2">
+                    <UtensilsCrossed className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="text-3xl font-bold" data-testid="text-active-meals-count">{stats.activeMeals.length}</div>
+                  <div className="text-xs text-muted-foreground tracking-wide uppercase mt-1">Active Meal Plans</div>
                 </CardContent>
               </Card>
               <Card data-testid="stat-active-workouts">
                 <CardContent className="p-4 text-center">
-                  <Dumbbell className="h-5 w-5 text-primary mx-auto mb-1" />
-                  <div className="text-2xl font-bold" data-testid="text-active-workouts-count">{stats.activeWorkouts.length}</div>
-                  <div className="text-xs text-muted-foreground">Active Workouts</div>
+                  <div className="h-10 w-10 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
+                    <Dumbbell className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div className="text-3xl font-bold" data-testid="text-active-workouts-count">{stats.activeWorkouts.length}</div>
+                  <div className="text-xs text-muted-foreground tracking-wide uppercase mt-1">Active Workouts</div>
                 </CardContent>
               </Card>
               <Card data-testid="stat-total-plans">
                 <CardContent className="p-4 text-center">
-                  <CalendarDays className="h-5 w-5 text-primary mx-auto mb-1" />
-                  <div className="text-2xl font-bold" data-testid="text-total-plans-count">{stats.totalMealPlans + stats.totalWorkoutPlans}</div>
-                  <div className="text-xs text-muted-foreground">Total Plans</div>
+                  <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-2">
+                    <CalendarDays className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="text-3xl font-bold" data-testid="text-total-plans-count">{stats.totalMealPlans + stats.totalWorkoutPlans}</div>
+                  <div className="text-xs text-muted-foreground tracking-wide uppercase mt-1">Total Plans</div>
                 </CardContent>
               </Card>
               <Card data-testid="stat-goals">
                 <CardContent className="p-4 text-center">
-                  <Target className="h-5 w-5 text-primary mx-auto mb-1" />
-                  <div className="text-2xl font-bold" data-testid="text-goals-count">{stats.totalGoals}</div>
-                  <div className="text-xs text-muted-foreground">Goal Plans</div>
+                  <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mx-auto mb-2">
+                    <Target className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div className="text-3xl font-bold" data-testid="text-goals-count">{stats.totalGoals}</div>
+                  <div className="text-xs text-muted-foreground tracking-wide uppercase mt-1">Goal Plans</div>
                 </CardContent>
               </Card>
             </div>
 
             <Card data-testid="card-momentum">
               <CardContent className="p-4 sm:p-5">
-                <h2 className="font-semibold text-base mb-3 flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-primary" />
+                <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
                   Goal Momentum
                 </h2>
                 {stats.recentCheckIns.length === 0 ? (
@@ -218,7 +226,7 @@ export default function Dashboard() {
                     </Link>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     <div className="flex items-center gap-3 flex-wrap">
                       <Badge
                         variant="secondary"
@@ -248,35 +256,35 @@ export default function Dashboard() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="border rounded-md p-3">
-                        <div className="text-xs text-muted-foreground mb-1">Avg Meal Compliance</div>
-                        <div className="text-lg font-semibold" data-testid="text-meal-compliance">
+                      <div className="border rounded-md p-4">
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Avg Meal Compliance</div>
+                        <div className="text-xl font-semibold" data-testid="text-meal-compliance">
                           {stats.avgMealCompliance !== null ? `${stats.avgMealCompliance}%` : "N/A"}
                         </div>
                         {stats.avgMealCompliance !== null && (
-                          <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
                             <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${stats.avgMealCompliance}%` }} />
                           </div>
                         )}
                       </div>
-                      <div className="border rounded-md p-3">
-                        <div className="text-xs text-muted-foreground mb-1">Avg Workout Compliance</div>
-                        <div className="text-lg font-semibold" data-testid="text-workout-compliance">
+                      <div className="border rounded-md p-4">
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Avg Workout Compliance</div>
+                        <div className="text-xl font-semibold" data-testid="text-workout-compliance">
                           {stats.avgWorkoutCompliance !== null ? `${stats.avgWorkoutCompliance}%` : "N/A"}
                         </div>
                         {stats.avgWorkoutCompliance !== null && (
-                          <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
                             <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${stats.avgWorkoutCompliance}%` }} />
                           </div>
                         )}
                       </div>
-                      <div className="border rounded-md p-3">
-                        <div className="text-xs text-muted-foreground mb-1">Avg Energy Level</div>
-                        <div className="text-lg font-semibold" data-testid="text-energy-level">
+                      <div className="border rounded-md p-4">
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Avg Energy Level</div>
+                        <div className="text-xl font-semibold" data-testid="text-energy-level">
                           {stats.avgEnergy !== null ? `${stats.avgEnergy}/5` : "N/A"}
                         </div>
                         {stats.avgEnergy !== null && (
-                          <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
                             <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(parseFloat(stats.avgEnergy) / 5) * 100}%` }} />
                           </div>
                         )}
@@ -290,16 +298,16 @@ export default function Dashboard() {
             {stats.activeMeals.length > 0 && (
               <Card data-testid="card-active-meal-plans">
                 <CardContent className="p-4 sm:p-5">
-                  <h2 className="font-semibold text-base mb-3 flex items-center gap-2">
-                    <UtensilsCrossed className="h-4 w-4 text-primary" />
+                  <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                    <UtensilsCrossed className="h-5 w-5 text-primary" />
                     This Week's Meal Plans
                   </h2>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {stats.activeMeals.map(mp => {
                       const plan = mp.planJson as PlanOutput | null;
                       return (
                         <Link key={mp.id} href={`/plan/${mp.id}`}>
-                          <div className="flex items-center justify-between p-2 rounded-md hover-elevate cursor-pointer" data-testid={`active-meal-${mp.id}`}>
+                          <div className="flex items-center justify-between p-3 rounded-md hover-elevate cursor-pointer" data-testid={`active-meal-${mp.id}`}>
                             <span className="text-sm font-medium">{plan?.title || "Meal Plan"}</span>
                             <span className="text-xs text-muted-foreground">
                               {format(new Date(mp.planStartDate + "T00:00:00"), "MMM d")} - {format(addDays(new Date(mp.planStartDate + "T00:00:00"), 6), "MMM d")}
@@ -316,16 +324,16 @@ export default function Dashboard() {
             {stats.activeWorkouts.length > 0 && (
               <Card data-testid="card-active-workout-plans">
                 <CardContent className="p-4 sm:p-5">
-                  <h2 className="font-semibold text-base mb-3 flex items-center gap-2">
-                    <Dumbbell className="h-4 w-4 text-primary" />
+                  <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                    <Dumbbell className="h-5 w-5 text-primary" />
                     This Week's Workout Plans
                   </h2>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {stats.activeWorkouts.map(wp => {
                       const plan = wp.planJson as WorkoutPlanOutput | null;
                       return (
                         <Link key={wp.id} href={`/workout/${wp.id}`}>
-                          <div className="flex items-center justify-between p-2 rounded-md hover-elevate cursor-pointer" data-testid={`active-workout-${wp.id}`}>
+                          <div className="flex items-center justify-between p-3 rounded-md hover-elevate cursor-pointer" data-testid={`active-workout-${wp.id}`}>
                             <span className="text-sm font-medium">{plan?.title || "Workout Plan"}</span>
                             <span className="text-xs text-muted-foreground">
                               {format(new Date(wp.planStartDate + "T00:00:00"), "MMM d")} - {format(addDays(new Date(wp.planStartDate + "T00:00:00"), 6), "MMM d")}
@@ -342,25 +350,25 @@ export default function Dashboard() {
             {stats.recentCheckIns.length > 0 && (
               <Card data-testid="card-recent-checkins">
                 <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-base flex items-center gap-2">
-                      <ClipboardCheck className="h-4 w-4 text-primary" />
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-semibold text-lg flex items-center gap-2">
+                      <ClipboardCheck className="h-5 w-5 text-primary" />
                       Recent Check-ins
                     </h2>
                     <Link href="/check-ins">
                       <Button variant="ghost" size="sm" data-testid="button-all-checkins">View All</Button>
                     </Link>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {stats.recentCheckIns.map(ci => (
-                      <div key={ci.id} className="flex items-center justify-between p-2 border rounded-md" data-testid={`checkin-${ci.id}`}>
+                      <div key={ci.id} className="flex items-center justify-between p-3 border rounded-md" data-testid={`checkin-${ci.id}`}>
                         <div className="flex items-center gap-3">
                           <span className="text-sm font-medium">Week of {format(new Date(ci.weekStartDate + "T00:00:00"), "MMM d")}</span>
                           {ci.weightEnd && (
                             <span className="text-xs text-muted-foreground">{ci.weightEnd} lbs</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-3 text-xs font-medium">
                           {ci.complianceMeals !== null && <span>Meals: {ci.complianceMeals}%</span>}
                           {ci.complianceWorkouts !== null && <span>Workouts: {ci.complianceWorkouts}%</span>}
                         </div>
@@ -371,7 +379,7 @@ export default function Dashboard() {
               </Card>
             )}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               <Link href="/plans">
                 <Button variant="outline" data-testid="button-goto-plans">
                   <CalendarDays className="h-4 w-4 mr-2" />

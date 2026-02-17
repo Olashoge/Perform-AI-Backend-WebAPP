@@ -46,12 +46,17 @@ interface PreferencesData {
 
 function PreferencesSkeleton() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {[1, 2, 3].map(i => (
         <Card key={i}>
-          <CardContent className="p-4">
-            <Skeleton className="h-5 w-2/3 mb-2" />
-            <Skeleton className="h-4 w-1/3" />
+          <CardContent className="p-5">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-10 w-10 rounded-md" />
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -62,10 +67,15 @@ function PreferencesSkeleton() {
 function MealItem({ item, onRemove, isPending }: { item: MealFeedbackItem; onRemove: () => void; isPending: boolean }) {
   return (
     <Card>
-      <CardContent className="p-4 flex items-center justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate" data-testid={`text-meal-${item.id}`}>{item.mealName}</p>
-          <Badge variant="secondary" className="mt-1 text-xs">{item.cuisineTag}</Badge>
+      <CardContent className="p-4 sm:p-5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+            <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate" data-testid={`text-meal-${item.id}`}>{item.mealName}</p>
+            <Badge variant="secondary" className="mt-1.5">{item.cuisineTag}</Badge>
+          </div>
         </div>
         <Button
           variant="ghost"
@@ -85,11 +95,14 @@ function MealItem({ item, onRemove, isPending }: { item: MealFeedbackItem; onRem
 function IngredientItem({ item, onRemove, isPending }: { item: IngredientPrefItem; onRemove: () => void; isPending: boolean }) {
   return (
     <Card>
-      <CardContent className="p-4 flex items-center justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm capitalize" data-testid={`text-ingredient-${item.id}`}>{item.ingredientKey}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="secondary" className="text-xs">{item.source}</Badge>
+      <CardContent className="p-4 sm:p-5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+            <Ban className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm capitalize" data-testid={`text-ingredient-${item.id}`}>{item.ingredientKey}</p>
+            <Badge variant="secondary" className="mt-1.5">{item.source}</Badge>
           </div>
         </div>
         <Button
@@ -109,9 +122,11 @@ function IngredientItem({ item, onRemove, isPending }: { item: IngredientPrefIte
 
 function EmptyState({ icon: Icon, message }: { icon: typeof ThumbsUp; message: string }) {
   return (
-    <div className="text-center py-12">
-      <Icon className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-      <p className="text-sm text-muted-foreground">{message}</p>
+    <div className="text-center py-16">
+      <div className="mx-auto w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
+        <Icon className="h-7 w-7 text-muted-foreground/50" />
+      </div>
+      <p className="text-sm text-muted-foreground max-w-xs mx-auto">{message}</p>
     </div>
   );
 }
@@ -189,48 +204,52 @@ export default function PreferencesPage() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
           <Link href="/plans">
             <Button variant="ghost" size="icon" data-testid="button-back">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div className="flex items-center gap-2">
-            <UtensilsCrossed className="h-5 w-5 text-primary hidden sm:block" />
-            <span className="font-semibold text-sm sm:text-base">Your Preferences</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+              <UtensilsCrossed className="h-4 w-4 text-primary" />
+            </div>
+            <span className="font-semibold text-base sm:text-lg tracking-tight">Your Preferences</span>
           </div>
         </div>
       </nav>
 
-      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
-        <div className="mb-6">
-          <h1 className="text-xl sm:text-2xl font-bold mb-2">Meal Preferences</h1>
-          <p className="text-muted-foreground text-sm">Manage your liked and disliked meals and ingredient preferences. These are used to personalize your future meal plans.</p>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+        <div className="mb-8">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">Meal Preferences</h1>
+          <p className="text-muted-foreground text-sm leading-relaxed">Manage your liked and disliked meals and ingredient preferences. These are used to personalize your future meal plans.</p>
         </div>
 
         {proposals.length > 0 && (
-          <div className="mb-6 space-y-3">
-            <h2 className="font-semibold flex items-center gap-2 text-sm">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Pending Ingredient Reviews ({proposals.length})
-            </h2>
-            <p className="text-xs text-muted-foreground mb-2">
-              These ingredients were flagged from meals you disliked. Choose which to avoid in future plans.
-            </p>
+          <div className="mb-8 space-y-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-md bg-amber-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-sm">Pending Ingredient Reviews ({proposals.length})</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Choose which ingredients to avoid in future plans.
+                </p>
+              </div>
+            </div>
             {proposals.map(proposal => {
               const selected = proposalSelections[proposal.id] || new Set<string>();
               return (
                 <Card key={proposal.id}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium">From: {proposal.mealName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Select ingredients to avoid</p>
-                      </div>
+                  <CardContent className="p-5 space-y-4">
+                    <div>
+                      <p className="text-sm font-semibold">From: {proposal.mealName}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Select ingredients to avoid</p>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {proposal.proposedIngredients.map(ing => (
-                        <label key={ing} className="flex items-center gap-2 cursor-pointer">
+                        <label key={ing} className="flex items-center gap-2.5 cursor-pointer">
                           <Checkbox
                             checked={selected.has(ing)}
                             onCheckedChange={(checked) => {
@@ -246,7 +265,7 @@ export default function PreferencesPage() {
                         </label>
                       ))}
                     </div>
-                    <div className="flex gap-2 justify-end">
+                    <div className="flex gap-3 justify-end pt-2 border-t">
                       <Button
                         variant="outline"
                         size="sm"
@@ -254,7 +273,7 @@ export default function PreferencesPage() {
                         disabled={resolveProposalMutation.isPending}
                         data-testid={`button-decline-proposal-${proposal.id}`}
                       >
-                        <X className="h-3.5 w-3.5 mr-1" />
+                        <X className="h-3.5 w-3.5 mr-1.5" />
                         Dismiss
                       </Button>
                       <Button
@@ -267,7 +286,7 @@ export default function PreferencesPage() {
                         })}
                         data-testid={`button-accept-proposal-${proposal.id}`}
                       >
-                        <Check className="h-3.5 w-3.5 mr-1" />
+                        <Check className="h-3.5 w-3.5 mr-1.5" />
                         Avoid Selected
                       </Button>
                     </div>
@@ -282,13 +301,15 @@ export default function PreferencesPage() {
           <PreferencesSkeleton />
         ) : !data ? (
           <Card>
-            <CardContent className="p-8 text-center">
-              <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-3" />
+            <CardContent className="p-12 text-center">
+              <div className="mx-auto w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+                <AlertCircle className="h-7 w-7 text-destructive" />
+              </div>
               <p className="text-sm text-muted-foreground">Failed to load preferences.</p>
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue="liked" className="space-y-4">
+          <Tabs defaultValue="liked" className="space-y-5">
             <TabsList>
               <TabsTrigger value="liked" data-testid="tab-liked">
                 <ThumbsUp className="h-4 w-4 mr-1.5" />
@@ -304,7 +325,7 @@ export default function PreferencesPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="liked" className="space-y-2">
+            <TabsContent value="liked" className="space-y-3">
               {data.likedMeals.length === 0 ? (
                 <EmptyState icon={ThumbsUp} message="No liked meals yet. Like meals in your plans to improve future suggestions." />
               ) : (
@@ -319,7 +340,7 @@ export default function PreferencesPage() {
               )}
             </TabsContent>
 
-            <TabsContent value="disliked" className="space-y-2">
+            <TabsContent value="disliked" className="space-y-3">
               {data.dislikedMeals.length === 0 ? (
                 <EmptyState icon={ThumbsDown} message="No disliked meals yet. Dislike meals to avoid similar suggestions." />
               ) : (
@@ -334,7 +355,7 @@ export default function PreferencesPage() {
               )}
             </TabsContent>
 
-            <TabsContent value="avoided" className="space-y-2">
+            <TabsContent value="avoided" className="space-y-3">
               {data.avoidIngredients.length === 0 ? (
                 <EmptyState icon={Ban} message="No avoided ingredients yet. These are derived from your disliked meals." />
               ) : (

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  ArrowLeft, CalendarDays, Rows3, Grid3X3,
+  ArrowLeft, CalendarDays, Activity, Rows3, Grid3X3,
   Loader2, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown,
   Settings2, Ban, Dumbbell, UtensilsCrossed,
 } from "lucide-react";
@@ -125,11 +125,11 @@ function WeekView({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2 gap-2">
+      <div className="flex items-center justify-between mb-4 gap-2">
         <Button variant="ghost" size="icon" onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))} data-testid="button-prev-week">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-xs font-medium text-muted-foreground" data-testid="text-week-range">
+        <span className="text-sm font-medium text-muted-foreground tracking-wide" data-testid="text-week-range">
           {format(currentWeekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
         </span>
         <Button variant="ghost" size="icon" onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))} data-testid="button-next-week">
@@ -137,68 +137,78 @@ function WeekView({
         </Button>
       </div>
 
-      <div className="border rounded-md overflow-x-auto -mx-1 px-1">
-        <div className="min-w-[400px]">
-          <div className="grid border-b bg-muted/40" style={{ gridTemplateColumns: `44px repeat(${slots.length}, 1fr)` }}>
-            <div className="p-1" />
-            {slots.map(slot => (
-              <div key={slot} className="text-[11px] font-medium text-muted-foreground p-1.5 text-center border-l">
-                {SLOT_FULL[slot] || slot}
-              </div>
-            ))}
-          </div>
+      <div className="space-y-2">
+        {weekDates.map((date) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const calDay = dayMap.get(dateStr);
+          const isToday = isSameDay(date, new Date());
+          const dayOfWeek = date.getDay();
+          const hasMeals = calDay && Object.keys(calDay.meals).length > 0;
+          const hasWorkout = calDay?.workout?.isWorkoutDay;
 
-          {weekDates.map((date) => {
-            const dateStr = format(date, "yyyy-MM-dd");
-            const calDay = dayMap.get(dateStr);
-            const isToday = isSameDay(date, new Date());
-            const dayOfWeek = date.getDay();
-
-            return (
-              <div
-                key={dateStr}
-                className={`grid border-b last:border-b-0 cursor-pointer ${isToday ? "bg-primary/5" : ""}`}
-                style={{ gridTemplateColumns: `44px repeat(${slots.length}, 1fr)` }}
-                onClick={() => calDay && onDayClick(calDay)}
-                data-testid={`week-row-${dateStr}`}
-              >
-                <div className="p-1 flex flex-col items-center justify-center border-r">
-                  <span className={`text-[13px] font-semibold leading-none ${isToday ? "text-primary" : ""}`}>
-                    {format(date, "d")}
-                  </span>
-                  <span className={`text-[10px] leading-none mt-0.5 ${isToday ? "text-primary" : "text-muted-foreground"}`}>
-                    {DAY_ABBR[dayOfWeek]}
-                  </span>
-                  {calDay?.workout?.isWorkoutDay && (
-                    <Dumbbell className="h-2.5 w-2.5 text-violet-500 mt-0.5" />
-                  )}
-                </div>
-
-                {slots.map(slot => {
-                  const meal = calDay?.meals[slot] as Meal | undefined;
-                  if (!meal) {
-                    return <div key={slot} className="border-l min-h-[44px]" />;
-                  }
-                  const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
-                  const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
-
-                  return (
-                    <div key={slot} className={`border-l min-h-[44px] p-1 flex items-start gap-1`}>
-                      <div className={`border-l-2 ${SLOT_BORDER[slot] || ""} pl-1.5 flex-1 min-w-0`}>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[11px] leading-tight line-clamp-2" data-testid={`text-week-meal-${dateStr}-${slot}`}>
+          return (
+            <Card
+              key={dateStr}
+              className={`cursor-pointer overflow-visible hover-elevate transition-shadow ${isToday ? "ring-1 ring-primary/30" : ""}`}
+              onClick={() => calDay && onDayClick(calDay)}
+              data-testid={`week-row-${dateStr}`}
+            >
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex flex-col items-center min-w-[40px]">
+                    <span className={`text-lg font-bold leading-none ${isToday ? "text-primary" : ""}`}>
+                      {format(date, "d")}
+                    </span>
+                    <span className={`text-[10px] leading-none mt-1 uppercase tracking-wider ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+                      {DAY_ABBR[dayOfWeek]}
+                    </span>
+                    <div className="flex items-center gap-1 mt-1.5">
+                      {hasMeals && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                      {hasWorkout && <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    {slots.map(slot => {
+                      const meal = calDay?.meals[slot] as Meal | undefined;
+                      if (!meal) return null;
+                      const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
+                      const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
+                      const SLOT_DOT_COLOR: Record<string, string> = {
+                        breakfast: "bg-amber-500",
+                        lunch: "bg-emerald-500",
+                        dinner: "bg-indigo-500",
+                      };
+                      return (
+                        <div key={slot} className="flex items-center gap-2">
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SLOT_DOT_COLOR[slot] || "bg-muted-foreground"}`} />
+                          <span className="text-xs text-muted-foreground font-medium uppercase w-10 shrink-0">
+                            {(SLOT_FULL[slot] || slot).slice(0, 3)}
+                          </span>
+                          <span className="text-sm leading-tight truncate" data-testid={`text-week-meal-${dateStr}-${slot}`}>
                             {meal.name}
                           </span>
                           <FeedbackDot feedback={feedback} />
                         </div>
+                      );
+                    })}
+                    {hasWorkout && calDay?.workout?.session && (
+                      <div className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-teal-500" />
+                        <Dumbbell className="h-3 w-3 text-teal-500 shrink-0" />
+                        <span className="text-sm leading-tight truncate text-teal-700 dark:text-teal-400">
+                          {calDay.workout.session.focus}
+                        </span>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
+                    )}
+                    {!hasMeals && !hasWorkout && (
+                      <span className="text-xs text-muted-foreground/60 italic">No plans</span>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
@@ -252,11 +262,11 @@ function MonthView({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2 gap-2">
+      <div className="flex items-center justify-between mb-4 gap-2">
         <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))} data-testid="button-prev-month">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <h2 className="text-sm font-semibold" data-testid="text-current-month">
+        <h2 className="text-sm font-semibold tracking-wide" data-testid="text-current-month">
           {format(currentMonth, "MMMM yyyy")}
         </h2>
         <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))} data-testid="button-next-month">
@@ -264,42 +274,45 @@ function MonthView({
         </Button>
       </div>
 
-      <div className="border rounded-md overflow-x-auto -mx-1 px-1">
+      <div className="overflow-x-auto">
         <div className="min-w-[320px]">
-          <div className="grid grid-cols-7 bg-muted/40">
+          <div className="grid grid-cols-7 gap-1 mb-1">
             {dayNames.map((dn, i) => (
-              <div key={dn} className={`text-center text-[10px] sm:text-[11px] font-medium py-1 ${i === 0 || i === 6 ? "text-rose-500" : "text-muted-foreground"} ${i > 0 ? "border-l" : ""}`}>
+              <div key={dn} className={`text-center text-[10px] sm:text-[11px] font-medium py-1.5 ${i === 0 || i === 6 ? "text-rose-500/70" : "text-muted-foreground"}`}>
                 {dn}
               </div>
             ))}
           </div>
           {weeks.map((week, wi) => (
-            <div key={wi} className="grid grid-cols-7 border-t">
-              {week.map((date, di) => {
+            <div key={wi} className="grid grid-cols-7 gap-1 mb-1">
+              {week.map((date) => {
                 const dateStr = format(date, "yyyy-MM-dd");
                 const calDay = dayMap.get(dateStr);
                 const isCurrentMonth = isSameMonth(date, currentMonth);
                 const isToday = isSameDay(date, new Date());
                 const dayOfWeek = date.getDay();
                 const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                const hasMealData = calDay && Object.keys(calDay.meals).length > 0;
+                const hasWorkoutData = calDay?.workout?.isWorkoutDay;
 
                 return (
                   <div
                     key={dateStr}
-                    className={`min-h-[60px] sm:min-h-[72px] p-0.5 cursor-pointer ${di > 0 ? "border-l" : ""} ${!isCurrentMonth ? "opacity-30" : ""} ${isToday ? "bg-primary/5" : ""}`}
+                    className={`min-h-[60px] sm:min-h-[72px] p-1 cursor-pointer rounded-md border border-transparent transition-all hover-elevate ${!isCurrentMonth ? "opacity-25" : ""} ${isToday ? "ring-1 ring-primary/30 bg-primary/5" : ""}`}
                     onClick={() => calDay && onDayClick(calDay)}
                     data-testid={`cell-date-${dateStr}`}
                   >
-                    <div className="flex items-center gap-0.5">
-                      <span className={`text-[10px] sm:text-[11px] font-medium leading-none pl-0.5 ${isToday ? "text-primary font-bold" : isWeekend ? "text-rose-500" : "text-muted-foreground"}`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[11px] sm:text-xs font-medium leading-none ${isToday ? "text-primary font-bold" : isWeekend ? "text-rose-500/70" : "text-muted-foreground"}`}>
                         {format(date, "d")}
                       </span>
-                      {calDay?.workout?.isWorkoutDay && (
-                        <Dumbbell className="h-2 w-2 text-violet-500 shrink-0" />
-                      )}
+                      <div className="flex items-center gap-0.5">
+                        {hasMealData && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                        {hasWorkoutData && <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />}
+                      </div>
                     </div>
                     {calDay && (
-                      <div className="space-y-px mt-0.5">
+                      <div className="space-y-px mt-1">
                         {slots.map(slot => {
                           const meal = calDay.meals[slot] as Meal | undefined;
                           if (!meal) return null;
@@ -307,9 +320,9 @@ function MonthView({
                           const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
                           const fb = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
                           return (
-                            <div key={slot} className="flex items-center gap-0 px-0.5">
+                            <div key={slot} className="flex items-center gap-1 px-0.5">
                               <span className={`text-[8px] sm:text-[9px] leading-tight font-semibold shrink-0 ${SLOT_TEXT_COLOR[slot] || ""}`}>{SLOT_LABEL[slot] || slot[0]?.toUpperCase()}</span>
-                              <span className={`text-[8px] sm:text-[9px] leading-tight truncate ml-0.5 ${SLOT_BORDER[slot] || ""} border-l pl-0.5`}>
+                              <span className="text-[8px] sm:text-[9px] leading-tight truncate text-muted-foreground">
                                 {truncName}
                               </span>
                               {fb && <FeedbackDot feedback={fb} />}
@@ -324,6 +337,11 @@ function MonthView({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="flex items-center justify-center gap-4 mt-4 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Meals</span>
+        <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-teal-500" /> Workouts</span>
       </div>
     </div>
   );
@@ -351,21 +369,21 @@ function DayDetailModal({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 flex-wrap">
+          <DialogTitle className="flex items-center gap-2 flex-wrap text-base">
             {format(date, "EEEE, MMM d, yyyy")}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 mt-2">
+        <div className="space-y-5 mt-3">
           {day.workout?.isWorkoutDay && day.workout.session && (
-            <div className="border-l-2 border-l-violet-500 pl-3">
-              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+            <div className="rounded-md bg-teal-50 dark:bg-teal-950/30 p-3">
+              <div className="text-[10px] font-semibold text-teal-600 dark:text-teal-400 uppercase tracking-widest mb-1.5">
                 Workout
               </div>
-              <div className="flex items-center gap-1.5">
-                <Dumbbell className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+              <div className="flex items-center gap-2">
+                <Dumbbell className="h-4 w-4 text-teal-500 shrink-0" />
                 <p className="font-medium text-sm">{day.workout.session.focus}</p>
               </div>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <Badge variant="outline" className="text-xs capitalize">{day.workout.session.mode}</Badge>
                 <span className="text-[11px] text-muted-foreground">{day.workout.session.durationMinutes} min</span>
                 <Badge variant="outline" className="text-xs capitalize">{day.workout.session.intensity}</Badge>
@@ -377,17 +395,25 @@ function DayDetailModal({
             if (!meal) return null;
             const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
             const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
+            const SLOT_DOT_MODAL: Record<string, string> = {
+              breakfast: "bg-amber-500",
+              lunch: "bg-emerald-500",
+              dinner: "bg-indigo-500",
+            };
 
             return (
-              <div key={slot} className={`border-l-2 ${SLOT_BORDER[slot] || ""} pl-3`}>
-                <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                  {SLOT_FULL[slot] || slot}
+              <div key={slot} className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${SLOT_DOT_MODAL[slot] || "bg-muted-foreground"}`} />
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+                    {SLOT_FULL[slot] || slot}
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 pl-4">
                   <p className="font-medium text-sm">{meal.name}</p>
                   <FeedbackDot feedback={feedback} />
                 </div>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <div className="flex items-center gap-2 pl-4 flex-wrap">
                   <Badge variant="outline" className="text-xs">{meal.cuisineTag}</Badge>
                   <span className="text-[11px] text-muted-foreground">{meal.prepTimeMinutes} min</span>
                   <span className="text-[11px] text-muted-foreground">{meal.nutritionEstimateRange.calories} cal</span>
@@ -416,16 +442,16 @@ function SettingsModal({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Calendar Settings</DialogTitle>
+          <DialogTitle className="text-base">Calendar Settings</DialogTitle>
         </DialogHeader>
-        <div className="mt-2 space-y-4">
+        <div className="mt-4 space-y-5">
           <div>
-            <p className="text-sm font-medium mb-2">Start of the week</p>
-            <div className="space-y-1">
+            <p className="text-sm font-medium mb-3">Start of the week</p>
+            <div className="space-y-2">
               {([{ value: 0, label: "Sunday" }, { value: 1, label: "Monday" }] as const).map(opt => (
                 <div
                   key={opt.value}
-                  className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer border ${weekStartsOn === opt.value ? "border-primary bg-primary/5" : "border-transparent hover-elevate"}`}
+                  className={`flex items-center justify-between gap-2 px-4 py-3 rounded-md cursor-pointer border transition-colors ${weekStartsOn === opt.value ? "border-primary/30 bg-primary/5" : "border-transparent hover-elevate"}`}
                   onClick={() => {
                     setWeekStartsOn(opt.value);
                     try { localStorage.setItem("cal_weekStart", String(opt.value)); } catch {}
@@ -566,15 +592,15 @@ export default function PlanCalendar() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-2 sm:px-4 h-12 flex items-center justify-between gap-1 sm:gap-2">
-          <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="max-w-5xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/plans">
               <Button variant="ghost" size="icon" data-testid="button-back">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <CalendarDays className="h-4 w-4 text-primary hidden sm:block" />
-            <span className="font-semibold text-sm">Calendar</span>
+            <Activity className="h-4.5 w-4.5 text-primary hidden sm:block" />
+            <span className="font-semibold text-sm tracking-wide">Calendar</span>
           </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} data-testid="button-settings">
@@ -584,13 +610,12 @@ export default function PlanCalendar() {
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-2 sm:px-4 py-3">
-        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-          <div className="flex items-center gap-1 bg-muted rounded-md p-0.5">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-8 sm:py-10">
+        <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+          <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
             <Button
               variant={calFilter === "combined" ? "default" : "ghost"}
               size="sm"
-              className="text-xs"
               onClick={() => setCalFilter("combined")}
               data-testid="button-filter-combined"
             >
@@ -599,43 +624,39 @@ export default function PlanCalendar() {
             <Button
               variant={calFilter === "meals" ? "default" : "ghost"}
               size="sm"
-              className="text-xs"
               onClick={() => setCalFilter("meals")}
               data-testid="button-filter-meals"
             >
-              <UtensilsCrossed className="h-3 w-3 mr-1" />
+              <UtensilsCrossed className="h-3.5 w-3.5 mr-1.5" />
               Meals
             </Button>
             <Button
               variant={calFilter === "workouts" ? "default" : "ghost"}
               size="sm"
-              className="text-xs"
               onClick={() => setCalFilter("workouts")}
               data-testid="button-filter-workouts"
             >
-              <Dumbbell className="h-3 w-3 mr-1" />
+              <Dumbbell className="h-3.5 w-3.5 mr-1.5" />
               Workouts
             </Button>
           </div>
-          <div className="flex items-center gap-1 bg-muted rounded-md p-0.5">
+          <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
             <Button
               variant={viewMode === "week" ? "default" : "ghost"}
               size="sm"
-              className="text-xs"
               onClick={() => setViewMode("week")}
               data-testid="button-view-week"
             >
-              <Rows3 className="h-3.5 w-3.5 mr-1" />
+              <Rows3 className="h-3.5 w-3.5 mr-1.5" />
               Week
             </Button>
             <Button
               variant={viewMode === "month" ? "default" : "ghost"}
               size="sm"
-              className="text-xs"
               onClick={() => setViewMode("month")}
               data-testid="button-view-month"
             >
-              <Grid3X3 className="h-3.5 w-3.5 mr-1" />
+              <Grid3X3 className="h-3.5 w-3.5 mr-1.5" />
               Month
             </Button>
           </div>
@@ -649,10 +670,10 @@ export default function PlanCalendar() {
           </div>
         ) : !hasAnyData ? (
           <Card>
-            <CardContent className="p-10 text-center">
-              <CalendarDays className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-              <h2 className="font-semibold mb-1" data-testid="text-no-scheduled-plans">No scheduled plans</h2>
-              <p className="text-xs text-muted-foreground mb-3">Schedule your meal or workout plans from each plan's detail page to see them here.</p>
+            <CardContent className="p-12 text-center">
+              <CalendarDays className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+              <h2 className="font-semibold text-base mb-1.5" data-testid="text-no-scheduled-plans">No scheduled plans</h2>
+              <p className="text-sm text-muted-foreground mb-4">Schedule your meal or workout plans from each plan's detail page to see them here.</p>
               <Link href="/plans">
                 <Button size="sm" data-testid="button-go-to-plans">View Plans</Button>
               </Link>

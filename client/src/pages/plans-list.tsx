@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  UtensilsCrossed, Plus, CalendarDays, LogOut, Sparkles, Loader2,
+  Plus, LogOut, Sparkles, Loader2, CalendarDays,
   Flame, Dumbbell, Zap, Heart, Trophy, Settings, Activity,
   CheckCircle2, Clock, CalendarCheck, Target, ClipboardCheck, BarChart3,
 } from "lucide-react";
@@ -41,7 +41,7 @@ function StatusBadge({ startDate }: { startDate: string | null | undefined }) {
   const config = STATUS_BADGE_CONFIG[status];
   const Icon = config.icon;
   return (
-    <Badge variant="secondary" className={`no-default-hover-elevate no-default-active-elevate ${config.className}`} data-testid={`badge-status-${status}`}>
+    <Badge size="sm" variant="secondary" className={`no-default-hover-elevate no-default-active-elevate ${config.className}`} data-testid={`badge-status-${status}`}>
       <Icon className="h-3 w-3 mr-1" />
       {config.label}
     </Badge>
@@ -105,10 +105,10 @@ export default function PlansList() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <UtensilsCrossed className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-base sm:text-lg">My Plans</span>
+            <Activity className="h-5 w-5 text-primary" />
+            <span className="font-semibold text-base sm:text-lg">Plans</span>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <span className="text-sm text-muted-foreground hidden sm:block">{user.email}</span>
@@ -119,12 +119,12 @@ export default function PlansList() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-8 sm:py-10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-8">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
             <TabsList data-testid="tabs-plan-type">
               <TabsTrigger value="meals" data-testid="tab-meals">
-                <UtensilsCrossed className="h-3.5 w-3.5 mr-1.5" />
+                <Flame className="h-3.5 w-3.5 mr-1.5" />
                 Meal Plans
               </TabsTrigger>
               <TabsTrigger value="workouts" data-testid="tab-workouts">
@@ -230,11 +230,11 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
     return (
       <Card>
         <CardContent className="p-12 text-center">
-          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Sparkles className="h-6 w-6 text-primary" />
+          <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+            <Sparkles className="h-8 w-8 text-primary" />
           </div>
-          <h2 className="font-semibold text-lg mb-1">No meal plans yet</h2>
-          <p className="text-sm text-muted-foreground mb-4">Create your first AI-powered meal plan to get started.</p>
+          <h2 className="font-semibold text-lg mb-2">No meal plans yet</h2>
+          <p className="text-sm text-muted-foreground mb-6">Create your first AI-powered meal plan to get started.</p>
           <Link href="/new-plan">
             <Button data-testid="button-create-first-plan">
               <Plus className="h-4 w-4 mr-2" />
@@ -256,47 +256,46 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
         return (
           <Link key={mp.id} href={`/plan/${mp.id}`}>
             <Card className="hover-elevate cursor-pointer" data-testid={`card-plan-${mp.id}`}>
-              <CardContent className="p-3 sm:p-5">
+              <CardContent className="p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate text-sm sm:text-base" data-testid={`text-plan-title-${mp.id}`}>
+                    <h3 className="font-medium text-base" data-testid={`text-plan-title-${mp.id}`}>
                       {status === "generating" ? "Generating..." : status === "failed" ? "Generation Failed" : plan?.title || "Meal Plan"}
                     </h3>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                    <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
                       {status === "generating" ? "Your meal plan is being generated by AI..." : status === "failed" ? "Something went wrong. Click to try again." : plan?.summary || "7-day personalized meal plan"}
                     </p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <div className="flex items-center gap-2 mt-3 flex-wrap">
                       {status === "generating" ? (
-                        <Badge variant="secondary">
+                        <Badge size="sm" variant="secondary">
                           <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                           Generating
                         </Badge>
                       ) : status === "failed" ? (
-                        <Badge variant="destructive">Failed</Badge>
+                        <Badge size="sm" variant="destructive">Failed</Badge>
                       ) : (
                         <>
                           <StatusBadge startDate={mp.planStartDate} />
-                          <Badge variant="secondary">
+                          <Badge size="sm" variant="secondary">
                             <GoalIcon className="h-3 w-3 mr-1" />
                             {GOAL_LABELS[prefs?.goal] || "Maintenance"}
                           </Badge>
                         </>
                       )}
                       {prefs?.dietStyles && prefs.dietStyles.length > 0 && prefs.dietStyles[0] !== "No Preference" && (
-                        <Badge variant="outline">{prefs.dietStyles.join(", ")}</Badge>
+                        <Badge size="sm" variant="outline">{prefs.dietStyles.join(", ")}</Badge>
                       )}
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <CalendarDays className="h-3 w-3" />
-                        {format(new Date(mp.createdAt), "MMM d, yyyy")}
+                      <span className="text-xs text-muted-foreground">
+                        {mp.planStartDate ? (
+                          <>
+                            {format(new Date(mp.planStartDate + "T00:00:00"), "MMM d")} – {format(addDays(new Date(mp.planStartDate + "T00:00:00"), 6), "MMM d, yyyy")}
+                          </>
+                        ) : (
+                          <>
+                            Created: {format(new Date(mp.createdAt), "MMM d, yyyy")}
+                          </>
+                        )}
                       </span>
-                      {mp.planStartDate && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <CalendarDays className="h-3 w-3" />
-                          {format(new Date(mp.planStartDate + "T00:00:00"), "MMM d, yyyy")}
-                          {" \u2192 "}
-                          {format(addDays(new Date(mp.planStartDate + "T00:00:00"), 6), "MMM d, yyyy")}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -330,11 +329,11 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
     return (
       <Card>
         <CardContent className="p-12 text-center">
-          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Dumbbell className="h-6 w-6 text-primary" />
+          <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+            <Dumbbell className="h-8 w-8 text-primary" />
           </div>
-          <h2 className="font-semibold text-lg mb-1">No workout plans yet</h2>
-          <p className="text-sm text-muted-foreground mb-4">Create your first AI-powered workout plan to get started.</p>
+          <h2 className="font-semibold text-lg mb-2">No workout plans yet</h2>
+          <p className="text-sm text-muted-foreground mb-6">Create your first AI-powered workout plan to get started.</p>
           <Link href="/workouts/new">
             <Button data-testid="button-create-first-workout">
               <Plus className="h-4 w-4 mr-2" />
@@ -355,47 +354,46 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
         return (
           <Link key={wp.id} href={status === "generating" ? `/workout/${wp.id}/generating` : `/workout/${wp.id}`}>
             <Card className="hover-elevate cursor-pointer" data-testid={`card-workout-${wp.id}`}>
-              <CardContent className="p-3 sm:p-5">
+              <CardContent className="p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate text-sm sm:text-base" data-testid={`text-workout-title-${wp.id}`}>
+                    <h3 className="font-medium text-base" data-testid={`text-workout-title-${wp.id}`}>
                       {status === "generating" ? "Generating..." : status === "failed" ? "Generation Failed" : planJson?.title || "Workout Plan"}
                     </h3>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                    <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
                       {status === "generating" ? "Your workout plan is being generated..." : status === "failed" ? "Something went wrong. Click to try again." : planJson?.summary || "7-day workout plan"}
                     </p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <div className="flex items-center gap-2 mt-3 flex-wrap">
                       {status === "generating" ? (
-                        <Badge variant="secondary">
+                        <Badge size="sm" variant="secondary">
                           <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                           Generating
                         </Badge>
                       ) : status === "failed" ? (
-                        <Badge variant="destructive">Failed</Badge>
+                        <Badge size="sm" variant="destructive">Failed</Badge>
                       ) : (
                         <>
                           <StatusBadge startDate={wp.planStartDate} />
-                          <Badge variant="secondary">
+                          <Badge size="sm" variant="secondary">
                             <Dumbbell className="h-3 w-3 mr-1" />
                             {WORKOUT_GOAL_LABELS[prefs?.goal] || "Fitness"}
                           </Badge>
                           {prefs?.trainingMode && (
-                            <Badge variant="outline" className="capitalize">{prefs.trainingMode}</Badge>
+                            <Badge size="sm" variant="outline" className="capitalize">{prefs.trainingMode}</Badge>
                           )}
                         </>
                       )}
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <CalendarDays className="h-3 w-3" />
-                        {format(new Date(wp.createdAt), "MMM d, yyyy")}
+                      <span className="text-xs text-muted-foreground">
+                        {wp.planStartDate ? (
+                          <>
+                            {format(new Date(wp.planStartDate + "T00:00:00"), "MMM d")} – {format(addDays(new Date(wp.planStartDate + "T00:00:00"), 6), "MMM d, yyyy")}
+                          </>
+                        ) : (
+                          <>
+                            Created: {format(new Date(wp.createdAt), "MMM d, yyyy")}
+                          </>
+                        )}
                       </span>
-                      {wp.planStartDate && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <CalendarDays className="h-3 w-3" />
-                          {format(new Date(wp.planStartDate + "T00:00:00"), "MMM d, yyyy")}
-                          {" \u2192 "}
-                          {format(addDays(new Date(wp.planStartDate + "T00:00:00"), 6), "MMM d, yyyy")}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>

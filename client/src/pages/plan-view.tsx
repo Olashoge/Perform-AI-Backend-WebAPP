@@ -96,20 +96,27 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card className="overflow-visible">
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover-elevate pb-3 px-3 sm:px-6">
+          <CardHeader className="cursor-pointer hover-elevate p-4 sm:p-5">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${mealTypeColors[mealType] || ""}`}>
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 flex-wrap">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${mealTypeColors[mealType] || ""}`}>
                     {mealTypeLabel}
                   </span>
                   <Badge variant="secondary">{meal.cuisineTag}</Badge>
                 </div>
-                <h3 className="font-medium text-sm" data-testid={`text-meal-name-${dayIndex}-${mealType}`}>{meal.name}</h3>
-                <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                <h3 className="font-medium text-base" data-testid={`text-meal-name-${dayIndex}-${mealType}`}>{meal.name}</h3>
+                <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
                   <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{meal.prepTimeMinutes}m</span>
                   <span className="flex items-center gap-1"><Users className="h-3 w-3" />{meal.servings}</span>
+                  <span className="text-border">|</span>
                   <span className="flex items-center gap-1"><Flame className="h-3 w-3" />{meal.nutritionEstimateRange.calories} cal</span>
+                  <span className="text-border">|</span>
+                  <span>{meal.nutritionEstimateRange.protein_g}g P</span>
+                  <span className="text-border">|</span>
+                  <span>{meal.nutritionEstimateRange.carbs_g}g C</span>
+                  <span className="text-border">|</span>
+                  <span>{meal.nutritionEstimateRange.fat_g}g F</span>
                 </div>
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
@@ -120,7 +127,7 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                     e.stopPropagation();
                     onFeedback(fingerprint, meal.name, meal.cuisineTag, feedbackState === "like" ? "neutral" : "like", meal.ingredients);
                   }}
-                  className={feedbackState === "like" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}
+                  className={`transition-colors duration-200 ${feedbackState === "like" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400" : "text-muted-foreground"}`}
                   title={feedbackState === "like" ? "Remove like" : "Like this meal"}
                   data-testid={`button-like-${dayIndex}-${mealType}`}
                 >
@@ -133,7 +140,7 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                     e.stopPropagation();
                     onFeedback(fingerprint, meal.name, meal.cuisineTag, feedbackState === "dislike" ? "neutral" : "dislike", meal.ingredients);
                   }}
-                  className={feedbackState === "dislike" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}
+                  className={`transition-colors duration-200 ${feedbackState === "dislike" ? "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400" : "text-muted-foreground"}`}
                   title={feedbackState === "dislike" ? "Remove dislike" : "Dislike this meal"}
                   data-testid={`button-dislike-${dayIndex}-${mealType}`}
                 >
@@ -147,7 +154,6 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                     swapMutation.mutate();
                   }}
                   disabled={swapMutation.isPending || swapCount >= 3}
-                  className="h-8 w-8 sm:h-9 sm:w-9"
                   title={swapCount >= 3 ? "No swaps remaining" : "Swap this meal"}
                   data-testid={`button-swap-${dayIndex}-${mealType}`}
                 >
@@ -159,15 +165,15 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
           </CardHeader>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className="pt-0 space-y-4 px-3 sm:px-6">
+          <CardContent className="pt-0 space-y-4 px-4 sm:px-5 pb-4 sm:pb-5">
             <p className="text-sm text-muted-foreground italic">{meal.whyItHelpsGoal}</p>
 
             <div>
               <h4 className="text-sm font-medium mb-2">Ingredients</h4>
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {meal.ingredients.map((ing, i) => (
                   <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="text-primary mt-1 shrink-0">&#8226;</span>
+                    <span className="text-primary mt-0.5 shrink-0">&#8226;</span>
                     {ing}
                   </li>
                 ))}
@@ -176,9 +182,9 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
 
             <div>
               <h4 className="text-sm font-medium mb-2">Steps</h4>
-              <ol className="space-y-2">
+              <ol className="space-y-3">
                 {meal.steps.map((step, i) => (
-                  <li key={i} className="text-sm text-muted-foreground flex gap-2">
+                  <li key={i} className="text-sm text-muted-foreground flex gap-2.5">
                     <span className="text-primary font-medium shrink-0">{i + 1}.</span>
                     <span>{step}</span>
                   </li>
@@ -186,18 +192,14 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
               </ol>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[
-                { label: "Calories", value: meal.nutritionEstimateRange.calories },
-                { label: "Protein", value: meal.nutritionEstimateRange.protein_g + "g" },
-                { label: "Carbs", value: meal.nutritionEstimateRange.carbs_g + "g" },
-                { label: "Fat", value: meal.nutritionEstimateRange.fat_g + "g" },
-              ].map((n) => (
-                <div key={n.label} className="text-center p-2 rounded-md bg-muted/50">
-                  <div className="text-xs text-muted-foreground">{n.label}</div>
-                  <div className="text-sm font-medium">{n.value}</div>
-                </div>
-              ))}
+            <div className="flex items-center gap-3 py-2 px-3 rounded-md bg-muted/50 text-sm flex-wrap">
+              <span><span className="text-muted-foreground">Cal</span> <span className="font-medium">{meal.nutritionEstimateRange.calories}</span></span>
+              <span className="text-border">|</span>
+              <span><span className="text-muted-foreground">Protein</span> <span className="font-medium">{meal.nutritionEstimateRange.protein_g}g</span></span>
+              <span className="text-border">|</span>
+              <span><span className="text-muted-foreground">Carbs</span> <span className="font-medium">{meal.nutritionEstimateRange.carbs_g}g</span></span>
+              <span className="text-border">|</span>
+              <span><span className="text-muted-foreground">Fat</span> <span className="font-medium">{meal.nutritionEstimateRange.fat_g}g</span></span>
             </div>
           </CardContent>
         </CollapsibleContent>
@@ -407,7 +409,7 @@ function GroceryListView({ planId }: { planId: string }) {
 
       {hasPricing ? (
         <Card data-testid="card-grocery-totals">
-          <CardContent className="p-4 space-y-2">
+          <CardContent className="p-4 sm:p-5 space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-sm font-medium">Estimated Total</span>
               <span className="text-sm font-semibold" data-testid="text-total-range">
@@ -427,7 +429,7 @@ function GroceryListView({ planId }: { planId: string }) {
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-4 flex items-center gap-2">
+          <CardContent className="p-4 sm:p-5 flex items-center gap-2">
             {pollCount < 10 ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -442,21 +444,21 @@ function GroceryListView({ planId }: { planId: string }) {
 
       {sections.map((section) => (
         <Card key={section.name}>
-          <CardHeader className="pb-2">
+          <CardHeader className="p-4 sm:p-5 pb-2">
             <h3 className="font-medium text-sm">{section.name}</h3>
           </CardHeader>
           <CardContent className="pt-0">
-            <ul className="space-y-1.5">
+            <ul className="divide-y divide-border/50">
               {section.items.map((item, i) => {
                 const itemKey = normalizeItemKeyClient(item.item);
                 const isOwned = mergedOwned[itemKey] || false;
                 const priceRange = pricingMap[itemKey];
                 return (
-                  <li key={`${section.name}-${i}`} className="flex items-start gap-2" data-testid={`grocery-item-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}>
+                  <li key={`${section.name}-${i}`} className="flex items-center gap-3 p-3" data-testid={`grocery-item-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}>
                     <Checkbox
                       checked={isOwned}
                       onCheckedChange={() => toggleOwned(itemKey)}
-                      className="mt-0.5 shrink-0"
+                      className="shrink-0"
                       data-testid={`checkbox-owned-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}
                     />
                     <div className={`flex-1 min-w-0 text-sm ${isOwned ? "line-through text-muted-foreground" : ""}`}>
@@ -464,7 +466,7 @@ function GroceryListView({ planId }: { planId: string }) {
                       <span className="text-muted-foreground"> — {item.quantity}</span>
                       {item.notes && <span className="text-xs text-muted-foreground ml-1">({item.notes})</span>}
                     </div>
-                    <span className="text-xs shrink-0 tabular-nums text-muted-foreground" data-testid={`text-price-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}>
+                    <span className="text-xs shrink-0 tabular-nums text-muted-foreground/70" data-testid={`text-price-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}>
                       {isOwned ? "$0" : priceRange ? `$${priceRange.min.toFixed(2)}–$${priceRange.max.toFixed(2)}` : ""}
                     </span>
                   </li>
@@ -483,7 +485,7 @@ function PlanSkeleton() {
     <div className="space-y-4">
       {[1, 2, 3].map((i) => (
         <Card key={i}>
-          <CardContent className="p-5 space-y-3">
+          <CardContent className="p-4 sm:p-5 space-y-3">
             <Skeleton className="h-5 w-32" />
             <div className="space-y-2">
               <Skeleton className="h-16 w-full" />
@@ -672,7 +674,7 @@ export default function PlanView() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 print:hidden">
-        <div className="max-w-4xl mx-auto px-2 sm:px-4 h-14 flex items-center justify-between gap-2">
+        <div className="max-w-4xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
             <Link href="/plans">
               <Button variant="ghost" size="icon" data-testid="button-back-plans">
@@ -742,7 +744,7 @@ export default function PlanView() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-8 sm:py-10">
         {isLoading ? (
           <PlanSkeleton />
         ) : error ? (
@@ -839,7 +841,8 @@ export default function PlanView() {
               </div>
             )}
 
-            <div className="mb-6 space-y-3">
+            <div className="mb-8 space-y-4">
+              <h1 className="text-xl sm:text-2xl font-semibold">{plan.title}</h1>
               <p className="text-muted-foreground text-sm leading-relaxed">{plan.summary}</p>
               {plan.nutritionNotes && (
                 <div className="flex items-start gap-2 p-3 rounded-md bg-primary/5 border border-primary/10">
@@ -864,7 +867,7 @@ export default function PlanView() {
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div className="bg-muted/50 rounded-md p-3 text-xs space-y-1.5">
+                    <div className="bg-muted/50 rounded-md p-4 text-xs space-y-2.5">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <span className="text-muted-foreground">Goal:</span>
                         <span className="font-medium capitalize">{prefs.goal?.replace(/_/g, " ")}</span>
@@ -955,8 +958,8 @@ export default function PlanView() {
               )}
             </div>
 
-            <Tabs defaultValue="meals" className="space-y-4">
-              <TabsList className="print:hidden">
+            <Tabs defaultValue="meals" className="space-y-6">
+              <TabsList className="print:hidden w-full sm:w-auto">
                 <TabsTrigger value="meals" data-testid="tab-meals">
                   <ChefHat className="h-4 w-4 mr-1.5" />
                   Meals
@@ -988,14 +991,14 @@ export default function PlanView() {
 
             {plan.batchPrepPlan && (
               <Card className="mt-8 print:break-before-page">
-                <CardHeader className="pb-3">
+                <CardHeader className="p-4 sm:p-5 pb-3">
                   <h2 className="font-semibold flex items-center gap-2">
                     <ChefHat className="h-5 w-5 text-primary" />
                     Batch Prep Plan
                   </h2>
                   <p className="text-sm text-muted-foreground">Prep day: {plan.batchPrepPlan.prepDay}</p>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-4 px-4 sm:px-5 pb-4 sm:pb-5">
                   <div>
                     <h4 className="text-sm font-medium mb-2">Prep Steps</h4>
                     <ol className="space-y-1.5">

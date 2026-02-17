@@ -42,26 +42,35 @@ const MODE_ICONS: Record<string, typeof Dumbbell> = {
 
 function ExerciseRow({ exercise, index }: { exercise: WorkoutExercise; index: number }) {
   return (
-    <div className="flex items-start gap-3 py-2" data-testid={`exercise-${index}`}>
-      <span className="text-xs font-mono text-muted-foreground mt-0.5 w-5 shrink-0">{index + 1}</span>
+    <div className="flex items-start gap-3 py-3" data-testid={`exercise-${index}`}>
+      <span className="text-xs font-mono text-muted-foreground/60 mt-0.5 w-5 shrink-0 text-right">{index + 1}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">{exercise.name}</p>
-        <div className="flex flex-wrap gap-2 mt-1">
+        <p className="text-sm font-medium leading-snug">{exercise.name}</p>
+        <div className="flex flex-wrap gap-2 mt-1.5">
           {exercise.type && (
             <Badge variant="outline" className="text-[10px]">{exercise.type}</Badge>
           )}
           {exercise.sets && exercise.reps && (
-            <span className="text-xs text-muted-foreground">{exercise.sets} x {exercise.reps}</span>
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Target className="h-3 w-3" />
+              {exercise.sets} x {exercise.reps}
+            </span>
           )}
           {exercise.time && (
-            <span className="text-xs text-muted-foreground">{exercise.time}</span>
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Timer className="h-3 w-3" />
+              {exercise.time}
+            </span>
           )}
           {exercise.restSeconds && (
-            <span className="text-xs text-muted-foreground">Rest: {exercise.restSeconds}s</span>
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              Rest: {exercise.restSeconds}s
+            </span>
           )}
         </div>
         {exercise.notes && (
-          <p className="text-xs text-muted-foreground mt-1 italic">{exercise.notes}</p>
+          <p className="text-xs text-muted-foreground/80 mt-1.5 italic">{exercise.notes}</p>
         )}
       </div>
     </div>
@@ -83,19 +92,17 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card className="overflow-visible">
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover-elevate pb-3 px-3 sm:px-6">
-            <div className="flex items-start justify-between gap-2">
+          <CardHeader className="cursor-pointer hover-elevate p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-muted-foreground">{dayName}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">{dayName}</span>
+                <h3 className="text-base font-medium mt-1 leading-snug line-clamp-2" data-testid={`text-session-focus-${dayIndex}`}>
+                  {session.focus}
+                </h3>
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <Badge className={`text-[10px] no-default-hover-elevate no-default-active-elevate ${INTENSITY_COLORS[session.intensity] || ""}`} variant="secondary">
                     {session.intensity}
                   </Badge>
-                </div>
-                <h3 className="text-sm font-semibold mt-1 line-clamp-2" data-testid={`text-session-focus-${dayIndex}`}>
-                  {session.focus}
-                </h3>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
                     <ModeIcon className="h-3 w-3" />
                     {session.mode}
@@ -109,7 +116,7 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-0.5 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -117,7 +124,7 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
                     e.stopPropagation();
                     onFeedback(sessionKey, feedbackState === "like" ? "neutral" : "like");
                   }}
-                  className={feedbackState === "like" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}
+                  className={`transition-colors duration-200 ${feedbackState === "like" ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" : "text-muted-foreground/50"}`}
                   title={feedbackState === "like" ? "Remove like" : "Like this session"}
                   data-testid={`button-like-session-${dayIndex}`}
                 >
@@ -130,26 +137,26 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
                     e.stopPropagation();
                     onFeedback(sessionKey, feedbackState === "dislike" ? "neutral" : "dislike");
                   }}
-                  className={feedbackState === "dislike" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}
+                  className={`transition-colors duration-200 ${feedbackState === "dislike" ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" : "text-muted-foreground/50"}`}
                   title={feedbackState === "dislike" ? "Remove dislike" : "Dislike this session"}
                   data-testid={`button-dislike-session-${dayIndex}`}
                 >
                   <ThumbsDown className="h-3.5 w-3.5" />
                 </Button>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-4 w-4 text-muted-foreground/50 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? "rotate-180" : ""}`} />
               </div>
             </div>
           </CardHeader>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className="px-3 sm:px-6 pb-4 space-y-4">
+          <CardContent className="px-4 sm:px-5 pb-5 space-y-5">
             {session.warmup && session.warmup.length > 0 && (
-              <div>
+              <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded-md p-3">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Warm-up</h4>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {session.warmup.map((item, i) => (
                     <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                      <span className="text-primary mt-0.5">-</span>
+                      <span className="text-blue-500 dark:text-blue-400 mt-0.5 shrink-0">-</span>
                       {item}
                     </li>
                   ))}
@@ -158,8 +165,8 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
             )}
 
             <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Main Workout</h4>
-              <div className="divide-y divide-border">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Main Workout</h4>
+              <div className="divide-y divide-border/60">
                 {session.main.map((ex, i) => (
                   <ExerciseRow key={i} exercise={ex} index={i} />
                 ))}
@@ -167,9 +174,9 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
             </div>
 
             {session.finisher && session.finisher.length > 0 && (
-              <div>
+              <div className="bg-orange-50/50 dark:bg-orange-950/20 rounded-md p-3">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Finisher</h4>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {session.finisher.map((item, i) => (
                     <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
                       <Flame className="h-3 w-3 text-orange-500 mt-0.5 shrink-0" />
@@ -181,12 +188,12 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
             )}
 
             {session.cooldown && session.cooldown.length > 0 && (
-              <div>
+              <div className="bg-sky-50/50 dark:bg-sky-950/20 rounded-md p-3">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Cool-down</h4>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {session.cooldown.map((item, i) => (
                     <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                      <span className="text-blue-500 mt-0.5">-</span>
+                      <span className="text-sky-500 dark:text-sky-400 mt-0.5 shrink-0">-</span>
                       {item}
                     </li>
                   ))}
@@ -197,7 +204,7 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
             {session.coachingCues && session.coachingCues.length > 0 && (
               <div className="bg-muted/50 rounded-md p-3">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Coaching Tips</h4>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {session.coachingCues.map((cue, i) => (
                     <li key={i} className="text-sm text-muted-foreground">{cue}</li>
                   ))}
@@ -290,13 +297,13 @@ export default function WorkoutView() {
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b px-3 sm:px-4 py-3">
-          <div className="max-w-3xl mx-auto flex items-center gap-2">
+        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b h-16 flex items-center px-4 sm:px-6">
+          <div className="max-w-3xl mx-auto w-full flex items-center gap-3">
             <Skeleton className="h-9 w-9" />
-            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-5 w-48" />
           </div>
         </div>
-        <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 space-y-4">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-4">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-32 w-full" />
           ))}
@@ -331,15 +338,15 @@ export default function WorkoutView() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b px-3 sm:px-4 py-3">
-        <div className="max-w-3xl mx-auto flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b h-16 flex items-center px-4 sm:px-6">
+        <div className="max-w-3xl mx-auto w-full flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Link href="/plans">
               <Button variant="ghost" size="icon" data-testid="button-back">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <Dumbbell className="h-5 w-5 text-primary shrink-0" />
+            <Activity className="h-5 w-5 text-primary shrink-0" />
             <h1 className="text-sm sm:text-base font-semibold truncate" data-testid="text-plan-title">
               {planJson.title}
             </h1>
@@ -370,10 +377,10 @@ export default function WorkoutView() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-4">
         <Card>
-          <CardContent className="p-4 sm:p-6 space-y-3">
-            <p className="text-sm text-muted-foreground" data-testid="text-plan-summary">{planJson.summary}</p>
+          <CardContent className="p-4 sm:p-5 space-y-4">
+            <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-plan-summary">{planJson.summary}</p>
             <div className="flex items-center gap-2 flex-wrap">
               {plan.planStartDate && (
                 <Badge variant="outline" className="text-xs" data-testid="badge-start-date">
@@ -393,18 +400,18 @@ export default function WorkoutView() {
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground" data-testid="button-toggle-settings">
                   <span className="text-xs">Plan Settings</span>
-                  <ChevronDown className={`h-3 w-3 transition-transform ${settingsOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${settingsOpen ? "rotate-180" : ""}`} />
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="grid grid-cols-2 gap-2 mt-2 text-xs text-muted-foreground">
-                  <div><span className="font-medium">Goal:</span> {prefs?.goal?.replace("_", " ")}</div>
-                  <div><span className="font-medium">Location:</span> {prefs?.location?.replace("_", " ")}</div>
-                  <div><span className="font-medium">Mode:</span> {prefs?.trainingMode}</div>
-                  <div><span className="font-medium">Session:</span> {prefs?.sessionLength} min</div>
-                  <div><span className="font-medium">Level:</span> {prefs?.experienceLevel}</div>
-                  <div><span className="font-medium">Focus:</span> {prefs?.focusAreas?.join(", ")}</div>
-                  {prefs?.limitations && <div className="col-span-2"><span className="font-medium">Limitations:</span> {prefs.limitations}</div>}
+                <div className="grid grid-cols-2 gap-3 mt-3 text-xs text-muted-foreground bg-muted/40 rounded-md p-3">
+                  <div><span className="font-medium text-foreground/80">Goal:</span> {prefs?.goal?.replace("_", " ")}</div>
+                  <div><span className="font-medium text-foreground/80">Location:</span> {prefs?.location?.replace("_", " ")}</div>
+                  <div><span className="font-medium text-foreground/80">Mode:</span> {prefs?.trainingMode}</div>
+                  <div><span className="font-medium text-foreground/80">Session:</span> {prefs?.sessionLength} min</div>
+                  <div><span className="font-medium text-foreground/80">Level:</span> {prefs?.experienceLevel}</div>
+                  <div><span className="font-medium text-foreground/80">Focus:</span> {prefs?.focusAreas?.join(", ")}</div>
+                  {prefs?.limitations && <div className="col-span-2"><span className="font-medium text-foreground/80">Limitations:</span> {prefs.limitations}</div>}
                 </div>
               </CollapsibleContent>
             </Collapsible>
@@ -416,13 +423,13 @@ export default function WorkoutView() {
             if (!day.isWorkoutDay || !day.session) {
               return (
                 <Card key={day.dayIndex} className="overflow-visible" data-testid={`card-rest-day-${day.dayIndex}`}>
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                      <span className="text-xs text-muted-foreground">R</span>
+                  <CardContent className="p-4 sm:p-5 flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                      <span className="text-xs font-medium text-muted-foreground">R</span>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">{day.dayName}</p>
-                      <p className="text-xs text-muted-foreground">Rest Day</p>
+                      <p className="text-xs text-muted-foreground/70">Rest Day</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -445,15 +452,15 @@ export default function WorkoutView() {
 
         {planJson.progressionNotes && planJson.progressionNotes.length > 0 && (
           <Card>
-            <CardContent className="p-4 sm:p-6 space-y-3">
+            <CardContent className="p-4 sm:p-5 space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <Target className="h-4 w-4 text-primary" />
                 Progression Notes
               </h3>
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 {planJson.progressionNotes.map((note, i) => (
-                  <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                    <ChevronRight className="h-3 w-3 mt-1 text-primary shrink-0" />
+                  <li key={i} className="text-sm text-muted-foreground flex items-start gap-2 leading-relaxed">
+                    <ChevronRight className="h-3 w-3 mt-1.5 text-primary shrink-0" />
                     {note}
                   </li>
                 ))}

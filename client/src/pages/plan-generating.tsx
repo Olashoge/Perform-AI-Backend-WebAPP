@@ -60,7 +60,7 @@ function PreferenceSummary({ prefs }: { prefs: Preferences | null }) {
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="bg-muted/50 rounded-md p-3 mt-1 text-xs space-y-1.5">
+        <div className="bg-muted/40 rounded-md p-4 mt-2 text-xs space-y-2.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-muted-foreground">Goal:</span>
             <span className="font-medium">{GOAL_LABELS[prefs.goal] || prefs.goal}</span>
@@ -296,18 +296,16 @@ export default function PlanGenerating() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
-          <div className="flex items-center gap-2">
-            <UtensilsCrossed className="h-5 w-5 text-primary" />
-            <span className="font-semibold">MealPlan AI</span>
-          </div>
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
+          <UtensilsCrossed className="h-5 w-5 text-primary" />
+          <span className="font-semibold">MealPlan AI</span>
         </div>
       </nav>
 
-      <div className="max-w-lg mx-auto px-3 sm:px-4 py-10 sm:py-16">
+      <div className="max-w-lg mx-auto px-4 sm:px-6 py-8 sm:py-10">
         {status === "polling" && (
           <Card>
-            <CardContent className="p-8 space-y-6">
+            <CardContent className="p-6 sm:p-8 space-y-6">
               <div className="text-center">
                 <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" data-testid="spinner-generating" />
                 <h2 className="font-semibold text-xl mb-1" data-testid="text-generating-title">
@@ -325,24 +323,24 @@ export default function PlanGenerating() {
                 />
               </div>
 
-              <div className="space-y-2" data-testid="timeline-stages">
+              <div className="space-y-3" data-testid="timeline-stages">
                 {TIMELINE_STAGES.map((stage, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-sm">
+                  <div key={idx} className="flex items-center gap-3 text-sm">
                     {idx < currentStageIndex ? (
                       <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
                     ) : idx === currentStageIndex ? (
                       <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
                     ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                      <Circle className="h-4 w-4 text-muted-foreground/30 shrink-0" />
                     )}
-                    <span className={idx <= currentStageIndex ? "text-foreground" : "text-muted-foreground/40"}>
+                    <span className={idx < currentStageIndex ? "text-foreground" : idx === currentStageIndex ? "text-foreground font-medium" : "text-muted-foreground/40"}>
                       {stage.label}
                     </span>
                   </div>
                 ))}
               </div>
 
-              <div className="bg-muted/50 rounded-md p-3 text-center" data-testid="text-tip">
+              <div className="bg-muted/40 rounded-md p-4 text-center" data-testid="text-tip">
                 <p className="text-xs text-muted-foreground italic transition-opacity duration-500">
                   Tip: {TIPS[tipIndex]}
                 </p>
@@ -364,7 +362,7 @@ export default function PlanGenerating() {
 
         {status === "timeout" && (
           <Card>
-            <CardContent className="p-12 text-center">
+            <CardContent className="p-8 sm:p-12 text-center">
               <Loader2 className="h-14 w-14 text-muted-foreground mx-auto mb-6" />
               <h2 className="font-semibold text-xl mb-2" data-testid="text-timeout-title">Still working...</h2>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-6">
@@ -388,7 +386,7 @@ export default function PlanGenerating() {
 
         {status === "failed" && (
           <Card>
-            <CardContent className="p-12 text-center">
+            <CardContent className="p-8 sm:p-12 text-center">
               <AlertCircle className="h-14 w-14 text-destructive mx-auto mb-6" />
               <h2 className="font-semibold text-xl mb-2" data-testid="text-failed-title">Plan generation failed</h2>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-6">
@@ -416,7 +414,7 @@ export default function PlanGenerating() {
 
         {status === "not_found" && (
           <Card>
-            <CardContent className="p-12 text-center">
+            <CardContent className="p-8 sm:p-12 text-center">
               <AlertCircle className="h-14 w-14 text-destructive mx-auto mb-6" />
               <h2 className="font-semibold text-xl mb-2">Plan not found</h2>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-6">

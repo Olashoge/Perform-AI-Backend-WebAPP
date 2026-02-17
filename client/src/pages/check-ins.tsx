@@ -129,33 +129,39 @@ export default function CheckIns() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <Link href={goalPlanId ? "/goals" : "/plans"}>
               <Button variant="ghost" size="icon" data-testid="button-back">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <ClipboardCheck className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-base sm:text-lg">Weekly Check-ins</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <ClipboardCheck className="h-4 w-4 text-primary" />
+              </div>
+              <span className="font-semibold text-base sm:text-lg tracking-tight">Weekly Check-ins</span>
+            </div>
           </div>
           <Button onClick={() => setCreateOpen(true)} data-testid="button-new-checkin">
-            <Plus className="h-4 w-4 mr-1" />
+            <Plus className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">New Check-in</span>
             <span className="sm:hidden">New</span>
           </Button>
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         {currentGoal && (
           <Card className="mb-6">
-            <CardContent className="p-4 flex items-center gap-3">
-              <Target className="h-5 w-5 text-primary" />
+            <CardContent className="p-5 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Target className="h-5 w-5 text-primary" />
+              </div>
               <div>
-                <p className="text-sm font-medium">Tracking: {currentGoal.goalType.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}</p>
+                <p className="text-sm font-semibold">Tracking: {currentGoal.goalType.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}</p>
                 {currentGoal.startDate && (
-                  <p className="text-xs text-muted-foreground">Started {format(parseISO(currentGoal.startDate), "MMM d, yyyy")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Started {format(parseISO(currentGoal.startDate), "MMM d, yyyy")}</p>
                 )}
               </div>
             </CardContent>
@@ -164,42 +170,61 @@ export default function CheckIns() {
 
         {weightTrend && (
           <Card className="mb-6">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-sm">
-                {weightTrend.direction === "up" ? (
-                  <TrendingUp className="h-4 w-4 text-orange-500" />
-                ) : weightTrend.direction === "down" ? (
-                  <TrendingDown className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Minus className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="font-medium">Weight Trend:</span>
-                {weightTrend.direction === "flat" ? (
-                  <span className="text-muted-foreground">Stable</span>
-                ) : (
-                  <span className={weightTrend.direction === "down" ? "text-green-600 dark:text-green-400" : "text-orange-600 dark:text-orange-400"}>
-                    {weightTrend.direction === "up" ? "+" : "-"}{weightTrend.diff.toFixed(1)} lbs
-                  </span>
-                )}
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3 text-sm">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{
+                  backgroundColor: weightTrend.direction === "down" ? "hsl(var(--primary) / 0.1)" :
+                    weightTrend.direction === "up" ? "hsl(30 100% 50% / 0.1)" : "hsl(var(--muted))"
+                }}>
+                  {weightTrend.direction === "up" ? (
+                    <TrendingUp className="h-4 w-4 text-orange-500" />
+                  ) : weightTrend.direction === "down" ? (
+                    <TrendingDown className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Minus className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <span className="font-semibold">Weight Trend</span>
+                  <div className="mt-0.5">
+                    {weightTrend.direction === "flat" ? (
+                      <span className="text-muted-foreground text-xs">Stable</span>
+                    ) : (
+                      <span className={`text-xs font-medium ${weightTrend.direction === "down" ? "text-green-600 dark:text-green-400" : "text-orange-600 dark:text-orange-400"}`}>
+                        {weightTrend.direction === "up" ? "+" : "-"}{weightTrend.diff.toFixed(1)} lbs
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
         )}
 
         {checkInsLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[1, 2, 3].map(i => (
-              <Card key={i}><CardContent className="p-5"><Skeleton className="h-5 w-48 mb-2" /><Skeleton className="h-4 w-72" /></CardContent></Card>
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <Skeleton className="h-5 w-48 mb-3" />
+                  <div className="grid grid-cols-4 gap-4">
+                    <Skeleton className="h-12" />
+                    <Skeleton className="h-12" />
+                    <Skeleton className="h-12" />
+                    <Skeleton className="h-12" />
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         ) : !checkIns || checkIns.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
-              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <ClipboardCheck className="h-6 w-6 text-primary" />
+            <CardContent className="p-16 text-center">
+              <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-5">
+                <ClipboardCheck className="h-8 w-8 text-primary" />
               </div>
-              <h2 className="font-semibold text-lg mb-1">No check-ins yet</h2>
-              <p className="text-sm text-muted-foreground mb-4">
+              <h2 className="font-semibold text-lg mb-2">No check-ins yet</h2>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
                 Log your weekly progress to track your transformation journey.
               </p>
               <Button onClick={() => setCreateOpen(true)} data-testid="button-create-first-checkin">
@@ -209,55 +234,55 @@ export default function CheckIns() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {checkIns.map((ci) => (
               <Card key={ci.id} data-testid={`card-checkin-${ci.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2">
+                <CardContent className="p-5 sm:p-6">
+                  <div className="flex items-center gap-2.5 mb-4 pb-4 border-b">
+                    <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
                       <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        Week of {format(parseISO(ci.weekStartDate), "MMM d, yyyy")}
-                      </span>
                     </div>
+                    <span className="text-sm font-semibold">
+                      Week of {format(parseISO(ci.weekStartDate), "MMM d, yyyy")}
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {(ci.weightStart != null || ci.weightEnd != null) && (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Weight</p>
-                        <p className="text-sm font-medium">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Weight</p>
+                        <p className="text-sm font-semibold tabular-nums">
                           {ci.weightStart != null && <span>{ci.weightStart}</span>}
-                          {ci.weightStart != null && ci.weightEnd != null && <span> → </span>}
+                          {ci.weightStart != null && ci.weightEnd != null && <span className="text-muted-foreground mx-1">&rarr;</span>}
                           {ci.weightEnd != null && <span>{ci.weightEnd}</span>}
                         </p>
                       </div>
                     )}
                     {ci.energyRating != null && (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Energy</p>
-                        <div className="flex items-center gap-1">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Energy</p>
+                        <div className="flex items-center gap-1.5">
                           <Zap className="h-3.5 w-3.5 text-yellow-500" />
-                          <span className="text-sm font-medium">{ENERGY_LABELS[ci.energyRating] || ci.energyRating}/5</span>
+                          <span className="text-sm font-semibold">{ENERGY_LABELS[ci.energyRating] || ci.energyRating}/5</span>
                         </div>
                       </div>
                     )}
                     {ci.complianceMeals != null && (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Meal Compliance</p>
-                        <p className="text-sm font-medium">{ci.complianceMeals}%</p>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Meals</p>
+                        <p className="text-sm font-semibold tabular-nums">{ci.complianceMeals}%</p>
                       </div>
                     )}
                     {ci.complianceWorkouts != null && (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Workout Compliance</p>
-                        <p className="text-sm font-medium">{ci.complianceWorkouts}%</p>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Workouts</p>
+                        <p className="text-sm font-semibold tabular-nums">{ci.complianceWorkouts}%</p>
                       </div>
                     )}
                   </div>
 
                   {ci.notes && (
-                    <p className="text-sm text-muted-foreground mt-3 border-t pt-3">{ci.notes}</p>
+                    <p className="text-sm text-muted-foreground mt-4 pt-4 border-t leading-relaxed">{ci.notes}</p>
                   )}
                 </CardContent>
               </Card>
@@ -271,9 +296,9 @@ export default function CheckIns() {
           <DialogHeader>
             <DialogTitle>Weekly Check-in</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Week Starting</Label>
+          <div className="space-y-5 pt-2">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Week Starting</Label>
               <Input
                 type="date"
                 value={weekStartDate}
@@ -282,9 +307,9 @@ export default function CheckIns() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Weight Start (optional)</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Weight Start</Label>
                 <Input
                   type="number"
                   step="0.1"
@@ -293,9 +318,10 @@ export default function CheckIns() {
                   onChange={(e) => setWeightStart(e.target.value)}
                   data-testid="input-weight-start"
                 />
+                <p className="text-xs text-muted-foreground">Optional</p>
               </div>
-              <div>
-                <Label>Weight End (optional)</Label>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Weight End</Label>
                 <Input
                   type="number"
                   step="0.1"
@@ -304,54 +330,61 @@ export default function CheckIns() {
                   onChange={(e) => setWeightEnd(e.target.value)}
                   data-testid="input-weight-end"
                 />
+                <p className="text-xs text-muted-foreground">Optional</p>
               </div>
             </div>
 
-            <div>
-              <Label>Energy Level: {ENERGY_LABELS[energyRating]}</Label>
+            <div className="space-y-3 rounded-md border p-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Energy Level</Label>
+                <span className="text-xs font-medium text-primary">{ENERGY_LABELS[energyRating]}</span>
+              </div>
               <Slider
                 value={[energyRating]}
                 onValueChange={([v]) => setEnergyRating(v)}
                 min={1}
                 max={5}
                 step={1}
-                className="mt-2"
                 data-testid="slider-energy"
               />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Very Low</span>
                 <span>Great</span>
               </div>
             </div>
 
-            <div>
-              <Label>Meal Plan Compliance: {complianceMeals}%</Label>
+            <div className="space-y-3 rounded-md border p-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Meal Compliance</Label>
+                <span className="text-xs font-medium text-primary tabular-nums">{complianceMeals}%</span>
+              </div>
               <Slider
                 value={[complianceMeals]}
                 onValueChange={([v]) => setComplianceMeals(v)}
                 min={0}
                 max={100}
                 step={5}
-                className="mt-2"
                 data-testid="slider-meals"
               />
             </div>
 
-            <div>
-              <Label>Workout Compliance: {complianceWorkouts}%</Label>
+            <div className="space-y-3 rounded-md border p-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Workout Compliance</Label>
+                <span className="text-xs font-medium text-primary tabular-nums">{complianceWorkouts}%</span>
+              </div>
               <Slider
                 value={[complianceWorkouts]}
                 onValueChange={([v]) => setComplianceWorkouts(v)}
                 min={0}
                 max={100}
                 step={5}
-                className="mt-2"
                 data-testid="slider-workouts"
               />
             </div>
 
-            <div>
-              <Label>Notes (optional)</Label>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Notes (optional)</Label>
               <Textarea
                 placeholder="How did your week go? Any challenges or wins?"
                 value={notes}
@@ -360,7 +393,7 @@ export default function CheckIns() {
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={() => setCreateOpen(false)} data-testid="button-cancel-checkin">
                 Cancel
               </Button>

@@ -1,0 +1,296 @@
+PREMIUM REDESIGN DIRECTIVE
+
+(Preserve existing infrastructure. Redesign visual system only.)
+
+We are redesigning this app into an ultra-premium consumer SaaS product in the fitness + performance space.
+
+This is NOT a feature rebuild.
+This is NOT a database change.
+This is NOT a logic rewrite.
+
+The backend logic, scheduling rules, plan generation, preferences system, calendar architecture, and workout/meal infrastructure must remain intact.
+
+We are redesigning:
+
+• Visual hierarchy
+• Design system
+• Spacing
+• Typography
+• Color system
+• Card structure
+• Interaction polish
+• Micro-interactions
+• Layout rhythm
+
+The goal is to elevate this into a premium “Performance Operating System.”
+
+🎯 DESIGN INTENT
+
+This product should feel like:
+
+• A high-end fitness SaaS
+• Calm but powerful
+• Minimal but intentional
+• Structured but fluid
+• Modern but not trendy
+
+Visual inspiration level:
+Clean Apple-level restraint + modern SaaS polish.
+
+Avoid:
+• Over-coloring
+• Heavy gradients
+• Harsh shadows
+• Clutter
+• Busy borders
+
+🧠 CORE PRINCIPLE
+
+The app is not a meal planner.
+It is not a workout planner.
+
+It is a unified personal performance system.
+
+Everything in the UI should reflect:
+
+Goal → Plan → Execution → Feedback → Adaptation
+
+🖋 TYPOGRAPHY SYSTEM
+
+Implement a true typographic hierarchy:
+
+• Page Title: Large, confident, spacious
+• Section Headers: Distinct but subtle
+• Card Titles: Medium weight
+• Metadata: Muted, small, controlled
+
+Increase contrast between:
+
+Primary text
+
+Secondary metadata
+
+Tertiary labels
+
+Tighten line heights slightly.
+Increase whitespace between major sections.
+
+Typography should feel intentional and breathable.
+
+🎨 COLOR SYSTEM
+
+Define a refined design system:
+
+Primary Accent:
+Deep green (performance-focused)
+
+Meal Accent:
+Warm amber
+
+Workout Accent:
+Cool mint/teal
+
+Neutral System:
+True neutral gray scale (avoid muddy beige)
+
+Background:
+Soft off-white or light neutral, not flat gray.
+
+Cards:
+White with extremely subtle shadow or surface elevation.
+
+Remove visual flatness.
+Introduce subtle elevation layers.
+
+📐 SPACING SYSTEM
+
+Adopt consistent spacing scale:
+4 / 8 / 12 / 16 / 24 / 32 / 48
+
+Increase vertical rhythm between:
+
+Dashboard sections
+
+Calendar and side panel
+
+Plan cards
+
+Add breathing room.
+
+Premium products feel intentional because spacing is consistent.
+
+🧩 CARD REDESIGN
+
+All cards should:
+
+• Have consistent corner radius
+• Subtle elevation
+• Clear header section
+• Defined metadata grouping
+• Clean action alignment
+
+Active plans should feel slightly emphasized but not loud.
+
+🗓 DASHBOARD REFINEMENT
+
+Structure:
+
+Active Goal Section (Hero-style but subtle)
+
+Week Overview Strip
+
+Today’s Performance (Meals + Workout)
+
+Active Plans Panel
+
+Make Today feel important.
+Add subtle section separation.
+
+Do NOT redesign logic.
+Only improve presentation.
+
+📆 CALENDAR REFINEMENT
+
+Keep current functionality:
+• Meals only
+• Workouts only
+• Combined view
+• Date selection
+• Dot indicators
+
+Refine:
+
+• Improve month grid spacing
+• Add subtle hover elevation
+• Improve selected-day styling
+• Improve legend clarity
+• Make side detail panel more refined
+
+Calendar should feel like a premium scheduling tool.
+
+🍽 MEAL & WORKOUT CARDS
+
+Improve hierarchy:
+
+Meal:
+Title
+Macros
+Time
+Cuisine tag
+Like / Dislike / Regenerate
+
+Workout:
+Title
+Intensity
+Duration
+Exercise list
+Like / Dislike / Regenerate
+
+Make icons smaller and more subtle.
+Use consistent alignment.
+
+Remove clutter.
+Increase clarity.
+
+❤️ LIKE / DISLIKE UX REFINEMENT
+
+When liked:
+Soft green highlight
+Icon fills smoothly
+
+When disliked:
+Soft red accent
+Do NOT aggressively style
+
+Neutral state should be clean and quiet.
+
+Add subtle micro-interaction (fade/scale 150ms).
+
+📋 PLANS LIST PAGE
+
+For both Meal and Workout:
+
+Each card should show:
+• Plan name
+• Start → End date
+• Goal tag
+• Key metadata
+• Active badge
+
+Refine badge styling to look premium.
+
+🏗 INFRASTRUCTURE RULE
+
+IMPORTANT:
+
+Do NOT modify:
+
+Database schema
+
+Plan logic
+
+Scheduling logic
+
+Preference storage
+
+API routes
+
+Generation logic
+
+You are redesigning UI layer only.
+
+Refactor components if needed.
+Do not break functionality.
+
+🎥 MICRO INTERACTIONS
+
+Add subtle polish:
+
+• Hover elevation on cards
+• Button press micro-scale
+• Smooth tab transitions
+• Subtle fade on view switches
+• Light slide for panels
+
+Keep motion under 200ms.
+Premium motion is restrained.
+
+🧭 NAVIGATION
+
+Left sidebar:
+
+• Increase clarity
+• Improve active state highlight
+• Slightly increase icon size
+• Improve spacing rhythm
+
+Active state should feel confident but not aggressive.
+
+🧘 EMOTIONAL DESIGN GOAL
+
+User should feel:
+
+Calm
+In control
+Organized
+Focused
+Progress-driven
+
+Not overwhelmed.
+Not gamified.
+Not noisy.
+
+🚀 FINAL OBJECTIVE
+
+When complete, this should feel like:
+
+A polished consumer SaaS product ready to charge $15–25/month.
+
+It must:
+• Look intentional
+• Feel cohesive
+• Maintain all existing logic
+• Improve clarity
+• Increase perceived value
+
+End of directive.

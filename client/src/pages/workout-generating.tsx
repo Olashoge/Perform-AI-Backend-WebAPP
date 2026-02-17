@@ -116,82 +116,91 @@ export default function WorkoutGenerating() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-3 sm:px-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-3">
-          <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-            {status === "failed" ? (
-              <AlertCircle className="h-8 w-8 text-destructive" />
-            ) : (
-              <Dumbbell className="h-8 w-8 text-primary animate-pulse" />
+    <div className="min-h-screen bg-background">
+      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
+          <Dumbbell className="h-5 w-5 text-primary" />
+          <span className="font-semibold">Workout Plan</span>
+        </div>
+      </nav>
+
+      <div className="max-w-md mx-auto px-4 sm:px-6 py-8 sm:py-10">
+        <div className="space-y-6">
+          <div className="text-center space-y-3">
+            <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+              {status === "failed" ? (
+                <AlertCircle className="h-8 w-8 text-destructive" />
+              ) : (
+                <Dumbbell className="h-8 w-8 text-primary animate-pulse" />
+              )}
+            </div>
+            <h1 className="text-xl font-semibold" data-testid="text-generating-title">
+              {status === "failed" ? "Generation Failed" : "Building Your Workout Plan"}
+            </h1>
+            {status !== "failed" && (
+              <p className="text-sm text-muted-foreground">
+                This usually takes 30-60 seconds
+              </p>
             )}
           </div>
-          <h1 className="text-xl font-semibold" data-testid="text-generating-title">
-            {status === "failed" ? "Generation Failed" : "Building Your Workout Plan"}
-          </h1>
-          {status !== "failed" && (
-            <p className="text-sm text-muted-foreground">
-              This usually takes 30-60 seconds
-            </p>
-          )}
-        </div>
 
-        {status === "failed" ? (
-          <Card>
-            <CardContent className="p-4 sm:p-6 space-y-4 text-center">
-              <p className="text-sm text-muted-foreground" data-testid="text-error-message">
-                {errorMessage || "Something went wrong"}
-              </p>
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={() => navigate("/workouts/new")}
-                  data-testid="button-try-again"
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Try Again
-                </Button>
-                <Button variant="outline" onClick={() => navigate("/plans")} data-testid="button-back-plans">
-                  Back to Plans
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-500"
-                style={{ width: `${progress}%` }}
-                data-testid="progress-bar"
-              />
-            </div>
-
+          {status === "failed" ? (
             <Card>
-              <CardContent className="p-4 space-y-3">
-                {TIMELINE_STAGES.map((stage, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    {i < currentStageIndex ? (
-                      <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                    ) : i === currentStageIndex ? (
-                      <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                    )}
-                    <span className={`text-sm ${i <= currentStageIndex ? "text-foreground" : "text-muted-foreground/40"}`}>
-                      {stage.label}
-                    </span>
-                  </div>
-                ))}
+              <CardContent className="p-5 sm:p-6 space-y-4 text-center">
+                <p className="text-sm text-muted-foreground" data-testid="text-error-message">
+                  {errorMessage || "Something went wrong"}
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={() => navigate("/workouts/new")}
+                    data-testid="button-try-again"
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Try Again
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate("/plans")} data-testid="button-back-plans">
+                    Back to Plans
+                  </Button>
+                </div>
               </CardContent>
             </Card>
+          ) : (
+            <>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                  data-testid="progress-bar"
+                />
+              </div>
 
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground italic transition-opacity duration-500" data-testid="text-tip">
-                {TIPS[tipIndex]}
-              </p>
-            </div>
-          </>
-        )}
+              <Card>
+                <CardContent className="p-5 space-y-4">
+                  {TIMELINE_STAGES.map((stage, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      {i < currentStageIndex ? (
+                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                      ) : i === currentStageIndex ? (
+                        <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
+                      ) : (
+                        <Circle className="h-4 w-4 text-muted-foreground/30 shrink-0" />
+                      )}
+                      <span className={`text-sm ${i < currentStageIndex ? "text-foreground" : i === currentStageIndex ? "text-foreground font-medium" : "text-muted-foreground/40"}`}>
+                        {stage.label}
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <div className="bg-muted/40 rounded-md p-4 text-center">
+                <p className="text-xs text-muted-foreground italic transition-opacity duration-500" data-testid="text-tip">
+                  {TIPS[tipIndex]}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
