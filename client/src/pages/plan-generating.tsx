@@ -296,7 +296,7 @@ export default function PlanGenerating() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center gap-4">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
             <UtensilsCrossed className="h-5 w-5 text-primary" />
             <span className="font-semibold">MealPlan AI</span>
@@ -304,7 +304,7 @@ export default function PlanGenerating() {
         </div>
       </nav>
 
-      <div className="max-w-lg mx-auto px-4 py-16">
+      <div className="max-w-lg mx-auto px-3 sm:px-4 py-10 sm:py-16">
         {status === "polling" && (
           <Card>
             <CardContent className="p-8 space-y-6">

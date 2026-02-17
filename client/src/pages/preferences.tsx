@@ -159,22 +159,22 @@ export default function PreferencesPage() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center gap-4">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
           <Link href="/plans">
             <Button variant="ghost" size="icon" data-testid="button-back">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
           <div className="flex items-center gap-2">
-            <UtensilsCrossed className="h-5 w-5 text-primary" />
-            <span className="font-semibold">Your Preferences</span>
+            <UtensilsCrossed className="h-5 w-5 text-primary hidden sm:block" />
+            <span className="font-semibold text-sm sm:text-base">Your Preferences</span>
           </div>
         </div>
       </nav>
 
-      <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold mb-2">Meal Preferences</h1>
+          <h1 className="text-xl sm:text-2xl font-bold mb-2">Meal Preferences</h1>
           <p className="text-muted-foreground text-sm">Manage your liked and disliked meals and ingredient preferences. These are used to personalize your future meal plans.</p>
         </div>
 

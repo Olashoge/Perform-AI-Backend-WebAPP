@@ -129,63 +129,65 @@ function WeekView({
         </Button>
       </div>
 
-      <div className="border rounded-md overflow-hidden">
-        <div className="grid border-b bg-muted/40" style={{ gridTemplateColumns: `48px repeat(${slots.length}, 1fr)` }}>
-          <div className="p-1" />
-          {slots.map(slot => (
-            <div key={slot} className="text-[11px] font-medium text-muted-foreground p-1.5 text-center border-l">
-              {SLOT_FULL[slot] || slot}
-            </div>
-          ))}
-        </div>
-
-        {weekDates.map((date) => {
-          const dateStr = format(date, "yyyy-MM-dd");
-          const calDay = dayMap.get(dateStr);
-          const isToday = isSameDay(date, new Date());
-          const dayOfWeek = date.getDay();
-
-          return (
-            <div
-              key={dateStr}
-              className={`grid border-b last:border-b-0 cursor-pointer hover-elevate ${isToday ? "bg-primary/5" : ""}`}
-              style={{ gridTemplateColumns: `48px repeat(${slots.length}, 1fr)` }}
-              onClick={() => calDay && onDayClick(calDay)}
-              data-testid={`week-row-${dateStr}`}
-            >
-              <div className="p-1 flex flex-col items-center justify-center border-r">
-                <span className={`text-[13px] font-semibold leading-none ${isToday ? "text-primary" : ""}`}>
-                  {format(date, "d")}
-                </span>
-                <span className={`text-[10px] leading-none mt-0.5 ${isToday ? "text-primary" : "text-muted-foreground"}`}>
-                  {DAY_ABBR[dayOfWeek]}
-                </span>
+      <div className="border rounded-md overflow-x-auto -mx-1 px-1">
+        <div className="min-w-[400px]">
+          <div className="grid border-b bg-muted/40" style={{ gridTemplateColumns: `44px repeat(${slots.length}, 1fr)` }}>
+            <div className="p-1" />
+            {slots.map(slot => (
+              <div key={slot} className="text-[11px] font-medium text-muted-foreground p-1.5 text-center border-l">
+                {SLOT_FULL[slot] || slot}
               </div>
+            ))}
+          </div>
 
-              {slots.map(slot => {
-                const meal = calDay?.meals[slot] as Meal | undefined;
-                if (!meal) {
-                  return <div key={slot} className="border-l min-h-[44px]" />;
-                }
-                const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
-                const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
+          {weekDates.map((date) => {
+            const dateStr = format(date, "yyyy-MM-dd");
+            const calDay = dayMap.get(dateStr);
+            const isToday = isSameDay(date, new Date());
+            const dayOfWeek = date.getDay();
 
-                return (
-                  <div key={slot} className={`border-l min-h-[44px] p-1 flex items-start gap-1`}>
-                    <div className={`border-l-2 ${SLOT_BORDER[slot] || ""} pl-1.5 flex-1 min-w-0`}>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[11px] leading-tight line-clamp-2" data-testid={`text-week-meal-${dateStr}-${slot}`}>
-                          {meal.name}
-                        </span>
-                        <FeedbackDot feedback={feedback} />
+            return (
+              <div
+                key={dateStr}
+                className={`grid border-b last:border-b-0 cursor-pointer ${isToday ? "bg-primary/5" : ""}`}
+                style={{ gridTemplateColumns: `44px repeat(${slots.length}, 1fr)` }}
+                onClick={() => calDay && onDayClick(calDay)}
+                data-testid={`week-row-${dateStr}`}
+              >
+                <div className="p-1 flex flex-col items-center justify-center border-r">
+                  <span className={`text-[13px] font-semibold leading-none ${isToday ? "text-primary" : ""}`}>
+                    {format(date, "d")}
+                  </span>
+                  <span className={`text-[10px] leading-none mt-0.5 ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+                    {DAY_ABBR[dayOfWeek]}
+                  </span>
+                </div>
+
+                {slots.map(slot => {
+                  const meal = calDay?.meals[slot] as Meal | undefined;
+                  if (!meal) {
+                    return <div key={slot} className="border-l min-h-[44px]" />;
+                  }
+                  const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
+                  const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
+
+                  return (
+                    <div key={slot} className={`border-l min-h-[44px] p-1 flex items-start gap-1`}>
+                      <div className={`border-l-2 ${SLOT_BORDER[slot] || ""} pl-1.5 flex-1 min-w-0`}>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[11px] leading-tight line-clamp-2" data-testid={`text-week-meal-${dateStr}-${slot}`}>
+                            {meal.name}
+                          </span>
+                          <FeedbackDot feedback={feedback} />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -251,59 +253,61 @@ function MonthView({
         </Button>
       </div>
 
-      <div className="border rounded-md overflow-hidden">
-        <div className="grid grid-cols-7 bg-muted/40">
-          {dayNames.map((dn, i) => (
-            <div key={dn} className={`text-center text-[11px] font-medium py-1 ${i === 0 || i === 6 ? "text-rose-500" : "text-muted-foreground"} ${i > 0 ? "border-l" : ""}`}>
-              {dn}
+      <div className="border rounded-md overflow-x-auto -mx-1 px-1">
+        <div className="min-w-[320px]">
+          <div className="grid grid-cols-7 bg-muted/40">
+            {dayNames.map((dn, i) => (
+              <div key={dn} className={`text-center text-[10px] sm:text-[11px] font-medium py-1 ${i === 0 || i === 6 ? "text-rose-500" : "text-muted-foreground"} ${i > 0 ? "border-l" : ""}`}>
+                {dn}
+              </div>
+            ))}
+          </div>
+          {weeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7 border-t">
+              {week.map((date, di) => {
+                const dateStr = format(date, "yyyy-MM-dd");
+                const calDay = dayMap.get(dateStr);
+                const isCurrentMonth = isSameMonth(date, currentMonth);
+                const isToday = isSameDay(date, new Date());
+                const dayOfWeek = date.getDay();
+                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+                return (
+                  <div
+                    key={dateStr}
+                    className={`min-h-[60px] sm:min-h-[72px] p-0.5 cursor-pointer ${di > 0 ? "border-l" : ""} ${!isCurrentMonth ? "opacity-30" : ""} ${isToday ? "bg-primary/5" : ""}`}
+                    onClick={() => calDay && onDayClick(calDay)}
+                    data-testid={`cell-date-${dateStr}`}
+                  >
+                    <div className={`text-[10px] sm:text-[11px] font-medium leading-none mb-0.5 pl-0.5 ${isToday ? "text-primary font-bold" : isWeekend ? "text-rose-500" : "text-muted-foreground"}`}>
+                      {format(date, "d")}
+                    </div>
+                    {calDay && (
+                      <div className="space-y-px">
+                        {slots.map(slot => {
+                          const meal = calDay.meals[slot] as Meal | undefined;
+                          if (!meal) return null;
+                          const truncName = meal.name.length > 10 ? meal.name.slice(0, 9) + "\u2026" : meal.name;
+                          const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
+                          const fb = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
+                          return (
+                            <div key={slot} className="flex items-center gap-0 px-0.5">
+                              <span className={`text-[8px] sm:text-[9px] leading-tight font-semibold shrink-0 ${SLOT_TEXT_COLOR[slot] || ""}`}>{SLOT_LABEL[slot] || slot[0]?.toUpperCase()}</span>
+                              <span className={`text-[8px] sm:text-[9px] leading-tight truncate ml-0.5 ${SLOT_BORDER[slot] || ""} border-l pl-0.5`}>
+                                {truncName}
+                              </span>
+                              {fb && <FeedbackDot feedback={fb} />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
-        {weeks.map((week, wi) => (
-          <div key={wi} className="grid grid-cols-7 border-t">
-            {week.map((date, di) => {
-              const dateStr = format(date, "yyyy-MM-dd");
-              const calDay = dayMap.get(dateStr);
-              const isCurrentMonth = isSameMonth(date, currentMonth);
-              const isToday = isSameDay(date, new Date());
-              const dayOfWeek = date.getDay();
-              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-              return (
-                <div
-                  key={dateStr}
-                  className={`min-h-[72px] p-0.5 cursor-pointer hover-elevate ${di > 0 ? "border-l" : ""} ${!isCurrentMonth ? "opacity-30" : ""} ${isToday ? "bg-primary/5" : ""}`}
-                  onClick={() => calDay && onDayClick(calDay)}
-                  data-testid={`cell-date-${dateStr}`}
-                >
-                  <div className={`text-[11px] font-medium leading-none mb-0.5 pl-0.5 ${isToday ? "text-primary font-bold" : isWeekend ? "text-rose-500" : "text-muted-foreground"}`}>
-                    {format(date, "d")}
-                  </div>
-                  {calDay && (
-                    <div className="space-y-px">
-                      {slots.map(slot => {
-                        const meal = calDay.meals[slot] as Meal | undefined;
-                        if (!meal) return null;
-                        const truncName = meal.name.length > 12 ? meal.name.slice(0, 11) + "\u2026" : meal.name;
-                        const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
-                        const fb = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
-                        return (
-                          <div key={slot} className="flex items-center gap-0 px-0.5">
-                            <span className={`text-[9px] leading-tight font-semibold shrink-0 ${SLOT_TEXT_COLOR[slot] || ""}`}>{SLOT_LABEL[slot] || slot[0]?.toUpperCase()}</span>
-                            <span className={`text-[9px] leading-tight truncate ml-0.5 ${SLOT_BORDER[slot] || ""} border-l pl-0.5`}>
-                              {truncName}
-                            </span>
-                            {fb && <FeedbackDot feedback={fb} />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -329,7 +333,7 @@ function DayDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             {format(date, "EEEE, MMM d, yyyy")}
@@ -490,14 +494,14 @@ export default function PlanCalendar() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 h-12 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        <div className="max-w-5xl mx-auto px-2 sm:px-4 h-12 flex items-center justify-between gap-1 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <Link href="/plans">
               <Button variant="ghost" size="icon" data-testid="button-back">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <CalendarDays className="h-4 w-4 text-primary" />
+            <CalendarDays className="h-4 w-4 text-primary hidden sm:block" />
             <span className="font-semibold text-sm">Calendar</span>
           </div>
           <div className="flex items-center gap-1">

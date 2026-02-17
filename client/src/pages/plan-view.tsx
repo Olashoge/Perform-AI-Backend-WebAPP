@@ -96,23 +96,23 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card className="overflow-visible">
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover-elevate pb-3">
+          <CardHeader className="cursor-pointer hover-elevate pb-3 px-3 sm:px-6">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${mealTypeColors[mealType] || ""}`}>
                     {mealTypeLabel}
                   </span>
                   <Badge variant="secondary">{meal.cuisineTag}</Badge>
                 </div>
                 <h3 className="font-medium text-sm" data-testid={`text-meal-name-${dayIndex}-${mealType}`}>{meal.name}</h3>
-                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{meal.prepTimeMinutes} min</span>
-                  <span className="flex items-center gap-1"><Users className="h-3 w-3" />{meal.servings} servings</span>
+                <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{meal.prepTimeMinutes}m</span>
+                  <span className="flex items-center gap-1"><Users className="h-3 w-3" />{meal.servings}</span>
                   <span className="flex items-center gap-1"><Flame className="h-3 w-3" />{meal.nutritionEstimateRange.calories} cal</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-0.5 shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -120,11 +120,11 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                     e.stopPropagation();
                     onFeedback(fingerprint, meal.name, meal.cuisineTag, "like", meal.ingredients);
                   }}
-                  className={feedbackState === "like" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}
+                  className={`h-8 w-8 sm:h-9 sm:w-9 ${feedbackState === "like" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
                   title="Like this meal"
                   data-testid={`button-like-${dayIndex}-${mealType}`}
                 >
-                  <ThumbsUp className="h-4 w-4" />
+                  <ThumbsUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -133,11 +133,11 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                     e.stopPropagation();
                     onFeedback(fingerprint, meal.name, meal.cuisineTag, "dislike", meal.ingredients);
                   }}
-                  className={feedbackState === "dislike" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}
+                  className={`h-8 w-8 sm:h-9 sm:w-9 ${feedbackState === "dislike" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
                   title="Dislike this meal"
                   data-testid={`button-dislike-${dayIndex}-${mealType}`}
                 >
-                  <ThumbsDown className="h-4 w-4" />
+                  <ThumbsDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -147,18 +147,19 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                     swapMutation.mutate();
                   }}
                   disabled={swapMutation.isPending || swapCount >= 3}
+                  className="h-8 w-8 sm:h-9 sm:w-9"
                   title={swapCount >= 3 ? "No swaps remaining" : "Swap this meal"}
                   data-testid={`button-swap-${dayIndex}-${mealType}`}
                 >
-                  {swapMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {swapMutation.isPending ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                 </Button>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} />
               </div>
             </div>
           </CardHeader>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className="pt-0 space-y-4">
+          <CardContent className="pt-0 space-y-4 px-3 sm:px-6">
             <p className="text-sm text-muted-foreground italic">{meal.whyItHelpsGoal}</p>
 
             <div>
@@ -185,7 +186,7 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
               </ol>
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
                 { label: "Calories", value: meal.nutritionEstimateRange.calories },
                 { label: "Protein", value: meal.nutritionEstimateRange.protein_g + "g" },
@@ -455,11 +456,11 @@ function GroceryListView({ planId }: { planId: string }) {
                     <Checkbox
                       checked={isOwned}
                       onCheckedChange={() => toggleOwned(itemKey)}
-                      className="mt-0.5"
+                      className="mt-0.5 shrink-0"
                       data-testid={`checkbox-owned-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}
                     />
-                    <div className={`flex-1 text-sm ${isOwned ? "line-through text-muted-foreground" : ""}`}>
-                      <span className="font-medium">{item.item}</span>
+                    <div className={`flex-1 min-w-0 text-sm ${isOwned ? "line-through text-muted-foreground" : ""}`}>
+                      <span className="font-medium break-words">{item.item}</span>
                       <span className="text-muted-foreground"> — {item.quantity}</span>
                       {item.notes && <span className="text-xs text-muted-foreground ml-1">({item.notes})</span>}
                     </div>
@@ -639,21 +640,24 @@ export default function PlanView() {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 print:hidden">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+        <div className="max-w-4xl mx-auto px-2 sm:px-4 h-14 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
             <Link href="/plans">
               <Button variant="ghost" size="icon" data-testid="button-back-plans">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <UtensilsCrossed className="h-5 w-5 text-primary" />
-            <span className="font-semibold truncate">{plan?.title || "Meal Plan"}</span>
+            <UtensilsCrossed className="h-5 w-5 text-primary shrink-0 hidden sm:block" />
+            <span className="font-semibold truncate text-sm sm:text-base">{plan?.title || "Meal Plan"}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <div className="text-xs text-muted-foreground hidden sm:block">
               Swaps: {swapCount}/3 | Regen: {regenDayCount}/1
             </div>
-            <Button variant="outline" size="sm" onClick={handlePrint} data-testid="button-print">
+            <Button variant="outline" size="icon" className="sm:hidden" onClick={handlePrint} data-testid="button-print-mobile">
+              <Printer className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="outline" size="sm" className="hidden sm:inline-flex" onClick={handlePrint} data-testid="button-print">
               <Printer className="h-3.5 w-3.5 mr-1.5" />
               Print
             </Button>
@@ -706,7 +710,7 @@ export default function PlanView() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {isLoading ? (
           <PlanSkeleton />
         ) : error ? (
@@ -738,7 +742,7 @@ export default function PlanView() {
         ) : plan ? (
           <>
             <Dialog open={startDateOpen} onOpenChange={setStartDateOpen}>
-              <DialogContent className="sm:max-w-[350px] p-0">
+              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[350px] p-0">
                 <DialogHeader className="px-4 pt-4 pb-0">
                   <DialogTitle className="text-base">{data?.planStartDate ? "Move start date" : "Choose start date"}</DialogTitle>
                 </DialogHeader>
@@ -808,9 +812,9 @@ export default function PlanView() {
               {plan.nutritionNotes && (
                 <div className="flex items-start gap-2 p-3 rounded-md bg-primary/5 border border-primary/10">
                   <Activity className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                  <div className="text-sm">
+                  <div className="text-sm min-w-0">
                     <span className="font-medium">Daily targets: </span>
-                    <span className="text-muted-foreground">
+                    <span className="text-muted-foreground break-words">
                       {plan.nutritionNotes.dailyMacroTargetsRange.calories} cal,{" "}
                       {plan.nutritionNotes.dailyMacroTargetsRange.protein_g}g protein,{" "}
                       {plan.nutritionNotes.dailyMacroTargetsRange.carbs_g}g carbs,{" "}
