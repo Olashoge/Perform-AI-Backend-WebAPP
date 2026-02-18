@@ -70,7 +70,7 @@ export interface IStorage {
   getGoalPlanByMealPlanId(mealPlanId: string): Promise<GoalPlan | undefined>;
   getGoalPlanByWorkoutPlanId(workoutPlanId: string): Promise<GoalPlan | undefined>;
   createPlanUsageEvent(userId: string, goalPlanId: string, domain: string, actionType: string, scope: string, metadata?: any): Promise<PlanUsageEvent>;
-  getRecentRegenEvents(userId: string, sinceHoursAgo: number): Promise<PlanUsageEvent[]>;
+  getRecentRegenEvents(userId: string, sinceHoursAgo: number, goalPlanId?: string): Promise<PlanUsageEvent[]>;
   getAvailableFlexTokens(userId: string): Promise<FlexToken[]>;
   consumeFlexToken(tokenId: string): Promise<FlexToken | undefined>;
   createFlexToken(userId: string, goalPlanId: string, expiresAt: Date): Promise<FlexToken>;
@@ -750,14 +750,18 @@ export class DatabaseStorage implements IStorage {
     return event;
   }
 
-  async getRecentRegenEvents(userId: string, sinceHoursAgo: number): Promise<PlanUsageEvent[]> {
+  async getRecentRegenEvents(userId: string, sinceHoursAgo: number, goalPlanId?: string): Promise<PlanUsageEvent[]> {
     const since = new Date(Date.now() - sinceHoursAgo * 60 * 60 * 1000);
+    const conditions = [
+      eq(planUsageEvents.userId, userId),
+      eq(planUsageEvents.actionType, "REGEN"),
+      gte(planUsageEvents.occurredAt, since),
+    ];
+    if (goalPlanId) {
+      conditions.push(eq(planUsageEvents.goalPlanId, goalPlanId));
+    }
     return db.select().from(planUsageEvents)
-      .where(and(
-        eq(planUsageEvents.userId, userId),
-        eq(planUsageEvents.actionType, "REGEN"),
-        gte(planUsageEvents.occurredAt, since),
-      ))
+      .where(and(...conditions))
       .orderBy(desc(planUsageEvents.occurredAt));
   }
 

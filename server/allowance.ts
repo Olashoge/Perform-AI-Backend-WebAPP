@@ -64,6 +64,10 @@ function computedWorkoutSwapsPerDay(a: PlanAllowance): number {
   return a.baseWorkoutSwapsPerDay + a.bonusWorkoutSwapsPerDay;
 }
 
+function computedMealRegensPerDay(a: PlanAllowance): number {
+  return a.baseMealDayRegensPerDay;
+}
+
 function computedPlanRegensTotal(a: PlanAllowance): number {
   return Math.max(3, a.basePlanRegensTotal + a.bonusPlanRegensTotal - a.penaltyPlanRegensTotal);
 }
@@ -119,7 +123,8 @@ export async function checkMealRegenAllowed(userId: string, mealPlanId: string):
     };
   }
 
-  if (allowance.mealRegensUsedToday >= allowance.baseMealDayRegensPerDay) {
+  const dailyRegenLimit = computedMealRegensPerDay(allowance);
+  if (allowance.mealRegensUsedToday >= dailyRegenLimit) {
     const tomorrow = new Date();
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
     tomorrow.setUTCHours(0, 0, 0, 0);
@@ -127,7 +132,7 @@ export async function checkMealRegenAllowed(userId: string, mealPlanId: string):
       allowance,
       result: {
         allowed: false,
-        reason: `You've used your daily meal regen. Resets at midnight UTC.`,
+        reason: `You've used your ${dailyRegenLimit} daily meal regen${dailyRegenLimit > 1 ? "s" : ""}. Resets at midnight UTC.`,
         nextResetAt: tomorrow.toISOString(),
       },
     };
@@ -163,7 +168,7 @@ export async function recordMealRegen(allowance: PlanAllowance, userId: string, 
 
   await storage.createPlanUsageEvent(userId, allowance.goalPlanId, "MEAL", "REGEN", "DAY", metadata);
 
-  const recentRegens = await storage.getRecentRegenEvents(userId, 24);
+  const recentRegens = await storage.getRecentRegenEvents(userId, 24, allowance.goalPlanId);
   if (recentRegens.length >= 3) {
     const cooldownUntil = new Date(Date.now() + 6 * 60 * 60 * 1000);
     await storage.updatePlanAllowance(allowance.id, {
@@ -220,7 +225,7 @@ export async function getAllowanceState(userId: string, mealPlanId?: string): Pr
       workoutSwapsUsed: allowance.workoutSwapsUsedToday,
       workoutSwapsLimit: computedWorkoutSwapsPerDay(allowance),
       mealRegensUsed: allowance.mealRegensUsedToday,
-      mealRegensLimit: allowance.baseMealDayRegensPerDay,
+      mealRegensLimit: computedMealRegensPerDay(allowance),
       workoutRegensUsed: allowance.workoutRegensUsedToday,
       workoutRegensLimit: allowance.baseWorkoutDayRegensPerDay,
     },
