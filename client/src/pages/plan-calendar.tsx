@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import type { Meal, WorkoutSession } from "@shared/schema";
@@ -357,6 +357,8 @@ function DayDetailModal({
   avoidedIngredients,
   open,
   onClose,
+  onNavigate,
+  mealPlanStartDates,
 }: {
   day: CalendarDay;
   mealSlots: string[];
@@ -364,6 +366,8 @@ function DayDetailModal({
   avoidedIngredients: string[];
   open: boolean;
   onClose: () => void;
+  onNavigate: (path: string) => void;
+  mealPlanStartDates: Record<string, string>;
 }) {
   const date = new Date(day.date + "T00:00:00");
   const slots = sortSlots(mealSlots);
@@ -378,9 +382,19 @@ function DayDetailModal({
         </DialogHeader>
         <div className="space-y-5 mt-3">
           {day.workout?.isWorkoutDay && day.workout.session && (
-            <div className="rounded-md bg-teal-50 dark:bg-teal-950/30 p-3">
-              <div className="text-[10px] font-semibold text-teal-600 dark:text-teal-400 uppercase tracking-widest mb-1.5">
-                Workout
+            <div
+              className="rounded-md bg-teal-50 dark:bg-teal-950/30 p-3 cursor-pointer hover-elevate"
+              onClick={() => {
+                onClose();
+                onNavigate(`/workout/${day.workout!.workoutPlanId}`);
+              }}
+              data-testid="link-workout-detail"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[10px] font-semibold text-teal-600 dark:text-teal-400 uppercase tracking-widest">
+                  Workout
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-teal-400" />
               </div>
               <div className="flex items-center gap-2">
                 <Dumbbell className="h-4 w-4 text-teal-500 shrink-0" />
@@ -404,13 +418,32 @@ function DayDetailModal({
               dinner: "bg-indigo-500",
             };
 
+            const planId = day.planIds?.[0];
+            const planStart = planId ? mealPlanStartDates[planId] : null;
+            const dayIndex = planStart ? Math.round((date.getTime() - new Date(planStart + "T00:00:00").getTime()) / 86400000) : null;
+
             return (
-              <div key={slot} className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${SLOT_DOT_MODAL[slot] || "bg-muted-foreground"}`} />
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-                    {SLOT_FULL[slot] || slot}
-                  </span>
+              <div
+                key={slot}
+                className="space-y-1.5 cursor-pointer rounded-md hover-elevate p-2 -mx-2"
+                onClick={() => {
+                  onClose();
+                  if (planId && dayIndex !== null) {
+                    onNavigate(`/plan/${planId}?scrollTo=day-${dayIndex}&meal=${slot}`);
+                  } else if (planId) {
+                    onNavigate(`/plan/${planId}`);
+                  }
+                }}
+                data-testid={`link-meal-${slot}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${SLOT_DOT_MODAL[slot] || "bg-muted-foreground"}`} />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+                      {SLOT_FULL[slot] || slot}
+                    </span>
+                  </div>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
                 </div>
                 <div className="flex items-center gap-1.5 pl-4">
                   <p className="font-medium text-sm">{meal.name}</p>
@@ -432,6 +465,7 @@ function DayDetailModal({
 
 export default function PlanCalendar() {
   const { user, isLoading: authLoading } = useAuth();
+  const [, navigate] = useLocation();
 
   const weekStartsOn: 0 | 1 = (() => {
     try {
@@ -512,6 +546,23 @@ export default function PlanCalendar() {
     queryKey: ["/api/preferences"],
     enabled: !!user,
   });
+
+  const { data: plansData } = useQuery<{ id: number; planStartDate: string | null }[]>({
+    queryKey: ["/api/plans"],
+    enabled: !!user,
+  });
+
+  const mealPlanStartDates = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (plansData) {
+      for (const p of plansData) {
+        if (p.planStartDate) {
+          map[String(p.id)] = p.planStartDate;
+        }
+      }
+    }
+    return map;
+  }, [plansData]);
 
   const avoidedIngredients = useMemo(() => {
     return (prefsData?.avoidIngredients || []).map(i => i.ingredientKey);
@@ -642,6 +693,8 @@ export default function PlanCalendar() {
           avoidedIngredients={avoidedIngredients}
           open={!!selectedDay}
           onClose={() => setSelectedDay(null)}
+          onNavigate={navigate}
+          mealPlanStartDates={mealPlanStartDates}
         />
       )}
 
