@@ -132,6 +132,18 @@ export const ingredientAvoidProposals = pgTable("ingredient_avoid_proposals", {
   resolvedAt: timestamp("resolved_at"),
 });
 
+export const exercisePreferences = pgTable("exercise_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  exerciseKey: varchar("exercise_key").notNull(),
+  exerciseName: text("exercise_name").notNull(),
+  status: varchar("status", { length: 10 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("exercise_pref_user_key_idx").on(table.userId, table.exerciseKey),
+]);
+
 export const weeklyCheckIns = pgTable("weekly_check_ins", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
@@ -407,10 +419,19 @@ export type GoalPlan = typeof goalPlans.$inferSelect;
 export type WorkoutFeedbackRecord = typeof workoutFeedback.$inferSelect;
 export type IngredientAvoidProposal = typeof ingredientAvoidProposals.$inferSelect;
 export type WeeklyCheckIn = typeof weeklyCheckIns.$inferSelect;
+export type ExercisePreferenceRecord = typeof exercisePreferences.$inferSelect;
 
 export interface UserPreferenceContext {
   likedMeals: { name: string; cuisineTag: string }[];
   dislikedMeals: { name: string; cuisineTag: string }[];
   avoidIngredients: string[];
   preferIngredients: string[];
+  avoidedExercises: string[];
+  dislikedExercises: string[];
 }
+
+export const exercisePreferenceSchema = z.object({
+  exerciseKey: z.string(),
+  exerciseName: z.string(),
+  status: z.enum(["liked", "disliked", "avoided"]),
+});

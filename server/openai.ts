@@ -450,7 +450,7 @@ RULES:
 - Be encouraging but never make medical claims.`;
 }
 
-function buildWorkoutPlanPrompt(prefs: WorkoutPreferences): string {
+function buildWorkoutPlanPrompt(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }): string {
   const locationLabels: Record<string, string> = {
     home_none: "Home (no equipment — bodyweight only)",
     home_equipment: "Home (dumbbells and/or resistance bands)",
@@ -472,7 +472,11 @@ Workout Days: ${prefs.daysOfWeek.join(", ")} (Day indices: ${workoutDayIndices.j
 Session Length: ${prefs.sessionLength} minutes
 Experience Level: ${prefs.experienceLevel}
 Limitations/Injuries: ${prefs.limitations || "None"}
-
+${exerciseContext && (exerciseContext.avoidedExercises.length > 0 || exerciseContext.dislikedExercises.length > 0) ? `
+EXERCISE PREFERENCES:
+${exerciseContext.avoidedExercises.length > 0 ? `- AVOIDED exercises (NEVER include these): ${exerciseContext.avoidedExercises.join(", ")}` : ""}
+${exerciseContext.dislikedExercises.length > 0 ? `- Disliked exercises (deprioritize, use only if necessary): ${exerciseContext.dislikedExercises.join(", ")}` : ""}
+` : ""}
 TRAINING MODE RULES:
 - If trainingMode = "strength": sessions MUST be strength-focused (optional short mobility). Include sets, reps, rest periods.
 - If trainingMode = "cardio": sessions MUST be cardio-focused. Use time-based exercises, intervals, circuits.
@@ -539,9 +543,9 @@ Return a JSON object with this exact structure:
 }`;
 }
 
-export async function generateWorkoutPlan(prefs: WorkoutPreferences): Promise<WorkoutPlanOutput> {
+export async function generateWorkoutPlan(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }): Promise<WorkoutPlanOutput> {
   const systemPrompt = buildWorkoutSystemPrompt();
-  const userPrompt = buildWorkoutPlanPrompt(prefs);
+  const userPrompt = buildWorkoutPlanPrompt(prefs, exerciseContext);
 
   let raw = await callOpenAI(systemPrompt, userPrompt);
   let cleaned = cleanJsonString(raw);

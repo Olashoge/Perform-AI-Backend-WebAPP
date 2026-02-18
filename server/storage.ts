@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -58,6 +58,11 @@ export interface IStorage {
   createWeeklyCheckIn(userId: string, data: { goalPlanId?: string; weekStartDate: string; weightStart?: number; weightEnd?: number; energyRating?: number; complianceMeals?: number; complianceWorkouts?: number; notes?: string }): Promise<WeeklyCheckIn>;
   getWeeklyCheckIns(userId: string, goalPlanId?: string): Promise<WeeklyCheckIn[]>;
   deleteMealFeedbackByFingerprint(userId: string, fingerprint: string): Promise<boolean>;
+  upsertExercisePreference(userId: string, exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "avoided"): Promise<ExercisePreferenceRecord>;
+  deleteExercisePreference(userId: string, exerciseKey: string): Promise<boolean>;
+  deleteExercisePreferenceById(id: string, userId: string): Promise<boolean>;
+  getExercisePreferences(userId: string): Promise<ExercisePreferenceRecord[]>;
+  getExercisePreferenceMap(userId: string): Promise<Record<string, "liked" | "disliked" | "avoided">>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -318,7 +323,12 @@ export class DatabaseStorage implements IStorage {
     const avoidIngredients = allIngPrefs.filter(p => p.preference === "avoid").map(p => p.ingredientKey);
     const preferIngredients = allIngPrefs.filter(p => p.preference === "prefer").map(p => p.ingredientKey);
 
-    return { likedMeals, dislikedMeals, avoidIngredients, preferIngredients };
+    const allExPrefs = await db.select().from(exercisePreferences)
+      .where(eq(exercisePreferences.userId, userId));
+    const avoidedExercises = allExPrefs.filter(p => p.status === "avoided").map(p => p.exerciseName);
+    const dislikedExercises = allExPrefs.filter(p => p.status === "disliked").map(p => p.exerciseName);
+
+    return { likedMeals, dislikedMeals, avoidIngredients, preferIngredients, avoidedExercises, dislikedExercises };
   }
 
   async getAllMealFeedback(userId: string): Promise<MealFeedbackRecord[]> {
@@ -603,6 +613,61 @@ export class DatabaseStorage implements IStorage {
     if (!record) return false;
     await db.delete(mealFeedback).where(eq(mealFeedback.id, record.id));
     return true;
+  }
+
+  async upsertExercisePreference(userId: string, exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "avoided"): Promise<ExercisePreferenceRecord> {
+    const existing = await db.select().from(exercisePreferences)
+      .where(and(eq(exercisePreferences.userId, userId), eq(exercisePreferences.exerciseKey, exerciseKey)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const [updated] = await db.update(exercisePreferences)
+        .set({ status, exerciseName, updatedAt: new Date() })
+        .where(eq(exercisePreferences.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+
+    const [record] = await db.insert(exercisePreferences).values({
+      userId,
+      exerciseKey,
+      exerciseName,
+      status,
+    }).returning();
+    return record;
+  }
+
+  async deleteExercisePreference(userId: string, exerciseKey: string): Promise<boolean> {
+    const [record] = await db.select().from(exercisePreferences)
+      .where(and(eq(exercisePreferences.userId, userId), eq(exercisePreferences.exerciseKey, exerciseKey)))
+      .limit(1);
+    if (!record) return false;
+    await db.delete(exercisePreferences).where(eq(exercisePreferences.id, record.id));
+    return true;
+  }
+
+  async deleteExercisePreferenceById(id: string, userId: string): Promise<boolean> {
+    const [record] = await db.select().from(exercisePreferences)
+      .where(and(eq(exercisePreferences.id, id), eq(exercisePreferences.userId, userId)))
+      .limit(1);
+    if (!record) return false;
+    await db.delete(exercisePreferences).where(eq(exercisePreferences.id, id));
+    return true;
+  }
+
+  async getExercisePreferences(userId: string): Promise<ExercisePreferenceRecord[]> {
+    return db.select().from(exercisePreferences)
+      .where(eq(exercisePreferences.userId, userId))
+      .orderBy(desc(exercisePreferences.updatedAt));
+  }
+
+  async getExercisePreferenceMap(userId: string): Promise<Record<string, "liked" | "disliked" | "avoided">> {
+    const prefs = await this.getExercisePreferences(userId);
+    const map: Record<string, "liked" | "disliked" | "avoided"> = {};
+    for (const p of prefs) {
+      map[p.exerciseKey] = p.status as "liked" | "disliked" | "avoided";
+    }
+    return map;
   }
 }
 

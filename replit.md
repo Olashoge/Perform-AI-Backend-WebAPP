@@ -36,6 +36,7 @@ client/src/
     goal-ready.tsx - Post-generation goal reveal screen with creative title, summary and CTAs
     check-ins.tsx  - Weekly check-in logging (weight, energy, compliance, notes) with history
     preferences.tsx - Manage liked/disliked meals and ingredient preferences
+    exercise-preferences.tsx - Manage liked/disliked/avoided exercise preferences
     settings.tsx   - Settings page (profile, active goal, check-in link, food/exercise preferences)
 
 server/
@@ -81,6 +82,13 @@ shared/
   - IngredientAvoidProposal table: pending proposals from dislikes, reviewed in Preferences page
   - Preferences wired into all OpenAI prompts (plan gen, swap, regen day)
 - Workout session feedback: like/dislike/neutral per workout session (WorkoutFeedback table)
+- Exercise preferences: per-exercise like/dislike/avoid tracking (ExercisePreferences table)
+  - Like/dislike buttons on each exercise in workout view
+  - Dislike triggers avoid confirmation modal (user chooses to just dislike or avoid completely)
+  - Avoided exercises are NEVER included in future AI-generated workout plans
+  - Disliked exercises are deprioritized in future plans
+  - Dedicated /preferences/exercise page for managing exercise preferences (tabs: Liked/Disliked/Avoided)
+  - Settings page links to Exercise Preferences page
 - GoalPlan entity: parent orchestration entity with planType (meal/workout/both), sequential generation pipeline
   - Fields: goalType, planType, startDate, endDate, pace, title, globalInputs, nutritionInputs, trainingInputs, status, progress JSON
   - Status enum: draft/generating/ready/failed
@@ -156,6 +164,10 @@ shared/
 - `GET /api/calendar/workout-occupied-dates?excludePlanId=X` - List of dates with existing workouts
 - `POST /api/feedback/workout` - Like/dislike/neutral a workout session
 - `GET /api/feedback/workout/:planId` - Get feedback map for workout sessions
+- `GET /api/preferences/exercise` - Get exercise preferences (liked/disliked/avoided)
+- `POST /api/preferences/exercise` - Upsert exercise preference
+- `DELETE /api/preferences/exercise/:id` - Delete exercise preference by ID
+- `DELETE /api/preferences/exercise/key/:key` - Delete exercise preference by key
 - `POST /api/goal-plans` - Create a goal plan
 - `POST /api/goal-plans/generate` - Unified goal + plan creation with async AI generation
 - `GET /api/goal-plans/:id/generation-status` - Poll status of both meal + workout plan generation

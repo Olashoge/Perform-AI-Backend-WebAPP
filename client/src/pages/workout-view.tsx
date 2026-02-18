@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar } from "@/components/ui/calendar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -23,7 +23,7 @@ import {
   Flame, Target, MoreVertical, Trash2,
   CalendarPlus, CalendarMinus, CalendarClock,
   Zap, Activity, Timer, ChevronRight,
-  ThumbsUp, ThumbsDown, ArrowLeft,
+  ThumbsUp, ThumbsDown, ArrowLeft, Ban,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -40,12 +40,62 @@ const MODE_ICONS: Record<string, typeof Dumbbell> = {
   mixed: Zap,
 };
 
-function ExerciseRow({ exercise, index }: { exercise: WorkoutExercise; index: number }) {
+function exerciseToKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+
+function ExerciseRow({ exercise, index, exercisePrefStatus, onExercisePref }: {
+  exercise: WorkoutExercise;
+  index: number;
+  exercisePrefStatus?: "liked" | "disliked" | "avoided" | null;
+  onExercisePref: (exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "neutral") => void;
+}) {
+  const exKey = exerciseToKey(exercise.name);
+  const isLiked = exercisePrefStatus === "liked";
+  const isDisliked = exercisePrefStatus === "disliked";
+  const isAvoided = exercisePrefStatus === "avoided";
+
   return (
     <div className="flex items-start gap-3 py-3" data-testid={`exercise-${index}`}>
       <span className="text-xs font-mono text-muted-foreground/60 mt-0.5 w-5 shrink-0 text-right">{index + 1}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium leading-snug">{exercise.name}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-medium leading-snug" data-testid={`text-exercise-name-${index}`}>{exercise.name}</p>
+          <div className="flex items-center gap-0.5 shrink-0">
+            {isAvoided && (
+              <Badge variant="secondary" className="text-[10px] mr-1">
+                <Ban className="h-3 w-3 mr-0.5" />
+                Avoided
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`toggle-elevate ${isLiked ? "toggle-elevated text-green-600 dark:text-green-400" : "text-muted-foreground/40"}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onExercisePref(exKey, exercise.name, isLiked ? "neutral" : "liked");
+              }}
+              title={isLiked ? "Remove like" : "Like this exercise"}
+              data-testid={`button-like-exercise-${index}`}
+            >
+              <ThumbsUp className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`toggle-elevate ${isDisliked ? "toggle-elevated text-red-600 dark:text-red-400" : "text-muted-foreground/40"}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onExercisePref(exKey, exercise.name, isDisliked ? "neutral" : "disliked");
+              }}
+              title={isDisliked ? "Remove dislike" : "Dislike this exercise"}
+              data-testid={`button-dislike-exercise-${index}`}
+            >
+              <ThumbsDown className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2 mt-1.5">
           {exercise.type && (
             <Badge variant="outline" className="text-[10px]">{exercise.type}</Badge>
@@ -77,12 +127,14 @@ function ExerciseRow({ exercise, index }: { exercise: WorkoutExercise; index: nu
   );
 }
 
-function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: {
+function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, exercisePrefMap, onExercisePref }: {
   session: WorkoutSession;
   dayName: string;
   dayIndex: number;
   feedbackState?: "like" | "dislike" | null;
   onFeedback: (sessionKey: string, feedback: "like" | "dislike" | "neutral") => void;
+  exercisePrefMap: Record<string, "liked" | "disliked" | "avoided">;
+  onExercisePref: (exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "neutral") => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const ModeIcon = MODE_ICONS[session.mode] || Dumbbell;
@@ -168,7 +220,13 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback }: 
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Main Workout</h4>
               <div className="divide-y divide-border/60">
                 {session.main.map((ex, i) => (
-                  <ExerciseRow key={i} exercise={ex} index={i} />
+                  <ExerciseRow
+                    key={i}
+                    exercise={ex}
+                    index={i}
+                    exercisePrefStatus={exercisePrefMap[exerciseToKey(ex.name)] || null}
+                    onExercisePref={onExercisePref}
+                  />
                 ))}
               </div>
             </div>
@@ -296,6 +354,55 @@ export default function WorkoutView() {
     }
     workoutFeedbackMutation.mutate({ workoutPlanId: id!, sessionKey, feedback });
   };
+
+  const { data: exercisePrefData } = useQuery<{ liked: any[]; disliked: any[]; avoided: any[] }>({
+    queryKey: ["/api/preferences/exercise"],
+    enabled: !!user,
+  });
+
+  const exercisePrefMap = useMemo(() => {
+    if (!exercisePrefData) return {};
+    const map: Record<string, "liked" | "disliked" | "avoided"> = {};
+    for (const item of exercisePrefData.liked) map[item.exerciseKey] = "liked";
+    for (const item of exercisePrefData.disliked) map[item.exerciseKey] = "disliked";
+    for (const item of exercisePrefData.avoided) map[item.exerciseKey] = "avoided";
+    return map;
+  }, [exercisePrefData]);
+
+  const [avoidModalExercise, setAvoidModalExercise] = useState<{ key: string; name: string } | null>(null);
+
+  const exercisePrefMutation = useMutation({
+    mutationFn: async (body: { exerciseKey: string; exerciseName: string; status: "liked" | "disliked" | "avoided" }) => {
+      await apiRequest("POST", "/api/preferences/exercise", body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences/exercise"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to save exercise preference", variant: "destructive" });
+    },
+  });
+
+  const exerciseDeletePrefMutation = useMutation({
+    mutationFn: async (key: string) => {
+      await apiRequest("DELETE", `/api/preferences/exercise/key/${encodeURIComponent(key)}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences/exercise"] });
+    },
+  });
+
+  const handleExercisePref = useCallback((exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "neutral") => {
+    if (status === "neutral") {
+      exerciseDeletePrefMutation.mutate(exerciseKey);
+      return;
+    }
+    if (status === "disliked") {
+      setAvoidModalExercise({ key: exerciseKey, name: exerciseName });
+      return;
+    }
+    exercisePrefMutation.mutate({ exerciseKey, exerciseName, status: "liked" });
+  }, [exercisePrefMutation, exerciseDeletePrefMutation]);
 
   if (authLoading || isLoading) {
     return (
@@ -439,6 +546,8 @@ export default function WorkoutView() {
                 dayIndex={day.dayIndex}
                 feedbackState={mergedWFeedback[sKey] || null}
                 onFeedback={handleWorkoutFeedback}
+                exercisePrefMap={exercisePrefMap}
+                onExercisePref={handleExercisePref}
               />
             );
           })}
@@ -463,6 +572,53 @@ export default function WorkoutView() {
           </Card>
         )}
       </div>
+
+      <Dialog open={!!avoidModalExercise} onOpenChange={(open) => !open && setAvoidModalExercise(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Avoid this exercise?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            You disliked <span className="font-medium text-foreground">{avoidModalExercise?.name}</span>. Would you like to completely avoid it in future workout plans?
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (avoidModalExercise) {
+                  exercisePrefMutation.mutate({
+                    exerciseKey: avoidModalExercise.key,
+                    exerciseName: avoidModalExercise.name,
+                    status: "disliked",
+                  });
+                }
+                setAvoidModalExercise(null);
+              }}
+              data-testid="button-keep-disliked"
+            >
+              Just Dislike
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                if (avoidModalExercise) {
+                  exercisePrefMutation.mutate({
+                    exerciseKey: avoidModalExercise.key,
+                    exerciseName: avoidModalExercise.name,
+                    status: "avoided",
+                  });
+                  toast({ title: `${avoidModalExercise.name} will be avoided in future plans` });
+                }
+                setAvoidModalExercise(null);
+              }}
+              data-testid="button-avoid-exercise"
+            >
+              <Ban className="h-4 w-4 mr-1.5" />
+              Avoid Completely
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showDatePicker} onOpenChange={setShowDatePicker}>
         <DialogContent className="sm:max-w-[360px]">

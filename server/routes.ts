@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
 import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
@@ -793,7 +793,9 @@ export async function registerRoutes(
       (async () => {
         try {
           log(`Generating workout plan ${plan.id}`, "openai");
-          const result = await generateWorkoutPlan(prefs);
+          const prefContext = await storage.getUserPreferenceContext(userId);
+          const exerciseContext = { avoidedExercises: prefContext.avoidedExercises, dislikedExercises: prefContext.dislikedExercises };
+          const result = await generateWorkoutPlan(prefs, exerciseContext);
           await storage.updateWorkoutPlanStatus(plan.id, "ready", result);
           log(`Workout plan ${plan.id} generated successfully`, "openai");
         } catch (err) {
@@ -900,6 +902,64 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/preferences/exercise", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const prefs = await storage.getExercisePreferences(userId);
+      const liked = prefs.filter(p => p.status === "liked");
+      const disliked = prefs.filter(p => p.status === "disliked");
+      const avoided = prefs.filter(p => p.status === "avoided");
+      return res.json({ liked, disliked, avoided });
+    } catch (err) {
+      log(`Exercise preferences fetch error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to load exercise preferences" });
+    }
+  });
+
+  app.post("/api/preferences/exercise", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const parsed = exercisePreferenceSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid data" });
+      }
+      const userId = req.session.userId!;
+      const { exerciseKey, exerciseName, status } = parsed.data;
+      const record = await storage.upsertExercisePreference(userId, exerciseKey, exerciseName, status);
+      return res.json(record);
+    } catch (err) {
+      log(`Exercise preference upsert error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to save exercise preference" });
+    }
+  });
+
+  app.delete("/api/preferences/exercise/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const deleted = await storage.deleteExercisePreferenceById(req.params.id as string, userId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Exercise preference not found" });
+      }
+      return res.json({ ok: true });
+    } catch (err) {
+      log(`Exercise preference delete error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to delete exercise preference" });
+    }
+  });
+
+  app.delete("/api/preferences/exercise/key/:key", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const deleted = await storage.deleteExercisePreference(userId, req.params.key as string);
+      if (!deleted) {
+        return res.status(404).json({ message: "Exercise preference not found" });
+      }
+      return res.json({ ok: true });
+    } catch (err) {
+      log(`Exercise preference delete error: ${err}`, "feedback");
+      return res.status(500).json({ message: "Failed to delete exercise preference" });
+    }
+  });
+
   app.post("/api/goal-plans", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = goalPlanCreateSchema.safeParse(req.body);
@@ -999,7 +1059,9 @@ export async function registerRoutes(
             await storage.updateGoalPlan(goalPlan.id, { workoutPlanId });
 
             log(`Goal gen: generating workout plan ${pendingWorkout.id}`, "openai");
-            const result = await generateWorkoutPlan(parsedWorkout.data);
+            const goalPrefContext = await storage.getUserPreferenceContext(userId);
+            const goalExerciseCtx = { avoidedExercises: goalPrefContext.avoidedExercises, dislikedExercises: goalPrefContext.dislikedExercises };
+            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx);
             await storage.updateWorkoutPlanStatus(pendingWorkout.id, "ready", result);
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingWorkout.id, type: "workout" });
             log(`Goal gen: workout plan ${pendingWorkout.id} ready`, "openai");

@@ -27,6 +27,7 @@ import GoalReady from "@/pages/goal-ready";
 import CheckIns from "@/pages/check-ins";
 import Dashboard from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
+import ExercisePreferencesPage from "@/pages/exercise-preferences";
 import NotFound from "@/pages/not-found";
 
 function AuthenticatedRouter() {
@@ -40,6 +41,7 @@ function AuthenticatedRouter() {
       <Route path="/nutrition" component={PlansList} />
       <Route path="/training" component={PlansList} />
       <Route path="/preferences" component={PreferencesPage} />
+      <Route path="/preferences/exercise" component={ExercisePreferencesPage} />
       <Route path="/calendar" component={PlanCalendar} />
       <Route path="/workouts/new" component={NewWorkout} />
       <Route path="/workout/:id/generating" component={WorkoutGenerating} />

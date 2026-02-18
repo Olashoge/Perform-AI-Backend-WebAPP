@@ -1,0 +1,138 @@
+You are working in an existing consumer fitness SaaS (Goals → Meal Plans + Workout Plans). Implement Exercise Preferences end-to-end, mirroring Meal Preferences behavior, and fix the incorrect routing. This must be production-ready: DB persistence, API routes, UI pages, and wiring from workout “like/dislike” actions into preferences so it survives refresh and informs future plan generation.
+
+PRIMARY ISSUES TO FIX
+1) Clicking “Exercise Preferences” currently navigates to the Meal Preferences page. This is wrong.
+2) Workout “like/dislike” currently does not persist. On refresh, the reaction disappears.
+3) When a user DISLIKES a workout exercise, prompt them to optionally mark it as “Avoid next time”.
+4) Create a dedicated Exercise Preferences page that shows Liked / Disliked / Avoided exercises (similar layout and UX to Meal Preferences).
+5) Ensure future workout generation uses avoided exercises as hard constraints (do not include), and disliked exercises as soft constraints (minimize / deprioritize).
+
+NON-NEGOTIABLES
+- Keep existing infrastructure, routing conventions, auth, and DB patterns.
+- Use the same design system/components as the Meal Preferences page for a consistent premium UI.
+- Persist everything to the database with Prisma migrations.
+- Add optimistic UI but always reconcile with server state.
+- Ensure all pages load only the current user’s data (auth guard).
+- Don’t break existing Meal Preferences.
+
+DATA MODEL (PRISMA)
+Implement a robust model for workout exercise feedback.
+
+A) If the app already has a “Preference” or “UserFeedback” table, extend it carefully. Otherwise add:
+
+model ExercisePreference {
+  id            String   @id @default(cuid())
+  userId        String
+  exerciseKey   String   // stable key/slug e.g. "barbell_back_squat" or normalized name hash
+  exerciseName  String   // display name, e.g. "Back Squat"
+  status        ExercisePreferenceStatus // LIKED | DISLIKED | AVOIDED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, exerciseKey])
+  @@index([userId, status])
+}
+
+enum ExercisePreferenceStatus {
+  LIKED
+  DISLIKED
+  AVOIDED
+}
+
+B) If exercises already have IDs in your DB, prefer referencing exerciseId instead of exerciseKey.
+But if exercises are generated dynamically, use exerciseKey derived from name normalization:
+- lowercase
+- trim
+- replace spaces/punctuation with underscores
+- collapse repeated underscores
+
+API ROUTES
+Create or extend routes similar to Meal Preferences:
+
+1) GET /api/preferences/exercise
+Returns:
+{
+  liked:    ExercisePreference[],
+  disliked: ExercisePreference[],
+  avoided:  ExercisePreference[]
+}
+
+2) POST /api/preferences/exercise
+Body:
+{
+  exerciseKey: string,
+  exerciseName: string,
+  status: "LIKED" | "DISLIKED" | "AVOIDED"
+}
+Upsert by (userId, exerciseKey).
+
+3) DELETE /api/preferences/exercise?exerciseKey=...
+Deletes the preference record (or set to neutral if you support “NONE”).
+(Choose one consistent approach; Meal Preferences likely uses delete, mirror it.)
+
+WORKOUT LIKE/DISLIKE INTEGRATION
+Wherever the workout day/exercise UI shows the thumbs up/down:
+- On LIKE: upsert status=LIKED
+- On DISLIKE: open a small premium modal:
+  Title: “Not your favorite?”
+  Copy: “Want us to avoid this exercise in future plans?”
+  Buttons:
+   - “Dislike only” (status=DISLIKED)
+   - “Avoid next time” (status=AVOIDED)
+  Also include a subtle “Cancel” to do nothing.
+
+After saving:
+- Keep the icon state active even after refresh (fetch from server).
+- If they change their mind (liked → disliked), upsert should overwrite status.
+- If they click the same active icon again, toggle it off (delete preference).
+
+UI PAGES + ROUTING
+1) Create a dedicated page route: /preferences/exercise (or whatever your routing convention is; match Meal Preferences naming)
+2) Update Settings → “Exercise Preferences” card to navigate to the correct route.
+3) Make Exercise Preferences page visually parallel to Meal Preferences:
+   - Header: “Exercise Preferences”
+   - Subtext: “Manage what you like, dislike, and want to avoid in future workouts.”
+   - Tabs: Liked (count) / Disliked (count) / Avoided (count)
+   - Empty states for each tab (premium, minimal)
+   - Each item row: exerciseName + status badge + remove button
+   - Optional: quick action buttons to move between states (Liked ↔ Disliked ↔ Avoided) without leaving page
+
+STATE + FETCHING
+- On workout plan detail pages, fetch the user’s exercise preferences once (or use an existing preferences hook) and map them to the rendered exercises so icons reflect server state.
+- Avoid N+1 calls: one call to get preferences, then local map by exerciseKey.
+
+GENERATION CONSTRAINTS
+Where the workout plan generation prompt/logic is built:
+- Always include “Avoided exercises: [list]” as a hard constraint: do not include.
+- Include “Disliked exercises: [list]” as a soft constraint: minimize and avoid repeating unless necessary.
+- If user explicitly selects focus areas that conflict with avoided exercises, choose alternatives (e.g., avoid barbell squat → use goblet squat, split squat, leg press, etc.)
+- Ensure this logic applies both to:
+  a) “Generate Plan” from Training page
+  b) goal creation flow when generating workout plan
+
+MIGRATIONS + SEED
+- Add Prisma migration.
+- If needed, backfill nothing; start empty.
+
+TESTING / QA CHECKLIST (DO THIS)
+1) Click Settings → Exercise Preferences. Confirm it opens the new page, not Meal Preferences.
+2) Open a workout plan. Click LIKE on an exercise → refresh → like persists.
+3) Click DISLIKE on an exercise → modal appears → choose “Avoid next time” → refresh → persists.
+4) Exercise Preferences page shows items in correct tabs and counts.
+5) Toggle off a preference by clicking active icon again → refresh → cleared.
+6) Generate a new workout plan after adding avoided exercises → verify avoided exercises do not appear.
+
+IMPLEMENTATION NOTES
+- Reuse existing Meal Preferences components/patterns for tabs, empty states, list rows, and API client approach.
+- Keep styling consistent with current premium theme (same spacing, typographic scale, subtle borders, soft shadows).
+- Make the modal feel premium: rounded corners, short copy, clear primary/secondary actions, no clutter.
+- Handle errors: toast on failure and rollback optimistic UI.
+
+DELIVERABLES
+- Prisma schema updated + migration
+- API endpoints implemented
+- New Exercise Preferences page
+- Settings routing fixed
+- Workout like/dislike persistence + dislike modal with avoid option
+- Generation prompt/logic updated to respect avoided/disliked exercises
+- Brief summary of changed files and where each feature is implemented

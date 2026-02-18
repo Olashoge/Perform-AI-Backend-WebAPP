@@ -121,14 +121,14 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/preferences")}>
+        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/preferences/exercise")} data-testid="card-exercise-preferences">
           <CardContent className="p-5 sm:p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Dumbbell className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <h2 className="font-semibold text-base">Exercise Preferences</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Workout feedback, exercise settings</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Liked, disliked, and avoided exercises</p>
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
