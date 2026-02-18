@@ -84,7 +84,7 @@ function ExerciseRow({ exercise, index, exercisePrefStatus, onExercisePref }: {
             <Button
               variant="ghost"
               size="icon"
-              className={`toggle-elevate ${isDisliked ? "toggle-elevated text-red-600 dark:text-red-400" : "text-muted-foreground/40"}`}
+              className={`toggle-elevate ${isDisliked || isAvoided ? "toggle-elevated text-red-600 dark:text-red-400" : "text-muted-foreground/40"}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onExercisePref(exKey, exercise.name, isDisliked ? "neutral" : "disliked");
