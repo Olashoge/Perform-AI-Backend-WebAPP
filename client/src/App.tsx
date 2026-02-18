@@ -70,10 +70,10 @@ function AuthenticatedLayout() {
             <div className="md:hidden">
               <SidebarTrigger data-testid="button-mobile-menu" />
             </div>
-            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center md:hidden">
+            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-xs">P</span>
             </div>
-            <span className="text-sm font-semibold md:hidden">Perform AI</span>
+            <span className="text-sm font-semibold">Perform AI</span>
             <div className="flex-1" />
             <ThemeToggle />
           </header>
