@@ -19,9 +19,9 @@ import {
 const NAV_ITEMS = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { title: "Calendar", icon: CalendarDays, href: "/calendar" },
+  { title: "Wellness", icon: Target, href: "/goals" },
   { title: "Nutrition", icon: UtensilsCrossed, href: "/nutrition" },
   { title: "Training", icon: Dumbbell, href: "/training" },
-  { title: "Wellness", icon: Target, href: "/goals" },
   { title: "Settings", icon: Settings, href: "/settings" },
 ];
 
