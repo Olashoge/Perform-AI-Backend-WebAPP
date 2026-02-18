@@ -313,16 +313,17 @@ export default function Dashboard() {
           </h2>
 
           {dayMeals && Object.keys(dayMeals.meals).length > 0 && (
-            <Card className="mb-4" data-testid="card-day-nutrition">
+            <Card className="mb-4 hover-elevate cursor-pointer" onClick={() => dayMeals.planIds?.[0] && navigate(`/plan/${dayMeals.planIds[0]}`)} data-testid="card-day-nutrition">
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
                     <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="font-semibold">Nutrition</div>
                     <div className="text-xs text-muted-foreground">Day plan</div>
                   </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </div>
 
                 <div className="space-y-4">
@@ -355,18 +356,19 @@ export default function Dashboard() {
           )}
 
           {dayWorkout && dayWorkout.session && (
-            <Card className="mb-4" data-testid="card-day-workout">
+            <Card className="mb-4 hover-elevate cursor-pointer" onClick={() => navigate(`/workout/${dayWorkout.workoutPlanId}`)} data-testid="card-day-workout">
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
                     <Dumbbell className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="font-semibold">{dayWorkout.session.title || "Workout"}</div>
                     <div className="text-xs text-muted-foreground">
                       {dayWorkout.session.focus || "Strength"} · {dayWorkout.session.duration || "60 min"}
                     </div>
                   </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </div>
 
                 <div className="space-y-3">
