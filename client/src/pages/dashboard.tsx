@@ -38,7 +38,8 @@ function isActivePlan(startDate: string | null | undefined, referenceDate: Date)
   return isWithinInterval(referenceDate, { start: planStart, end: planEnd });
 }
 
-const DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_ABBR_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_ABBR_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 interface AllCalendarData {
   mealSlots: string[];
@@ -287,7 +288,7 @@ export default function Dashboard() {
                       data-testid={`day-${format(day, "yyyy-MM-dd")}`}
                     >
                       <span className={`text-xs mb-1 ${isSelected ? "text-background/70" : "text-muted-foreground"}`}>
-                        {DAY_ABBR[i]}
+                        {(weekStartsOn === 1 ? DAY_ABBR_MON : DAY_ABBR_SUN)[i]}
                       </span>
                       <span className={`text-lg font-semibold ${isSelected ? "" : ""}`}>
                         {format(day, "d")}
