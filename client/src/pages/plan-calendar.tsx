@@ -298,32 +298,35 @@ function MonthView({
                 return (
                   <div
                     key={dateStr}
-                    className={`min-h-[60px] sm:min-h-[72px] p-1 cursor-pointer rounded-md border border-transparent transition-all hover-elevate ${!isCurrentMonth ? "opacity-25" : ""} ${isToday ? "ring-1 ring-primary/30 bg-primary/5" : ""}`}
+                    className={`min-h-[56px] sm:min-h-[80px] lg:min-h-[96px] p-1 sm:p-1.5 cursor-pointer rounded-md border border-transparent transition-all hover-elevate ${!isCurrentMonth ? "opacity-25" : ""} ${isToday ? "ring-1 ring-primary/30 bg-primary/5" : ""}`}
                     onClick={() => calDay && onDayClick(calDay)}
                     data-testid={`cell-date-${dateStr}`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-0.5 sm:mb-1">
                       <span className={`text-[11px] sm:text-xs font-medium leading-none ${isToday ? "text-primary font-bold" : isWeekend ? "text-rose-500/70" : "text-muted-foreground"}`}>
                         {format(date, "d")}
                       </span>
-                      <div className="flex items-center gap-0.5">
-                        {hasMealData && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
-                        {hasWorkoutData && <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />}
-                      </div>
                     </div>
+                    {hasWorkoutData && (
+                      <div className="flex items-center gap-1 px-0.5 mb-0.5 sm:mb-1">
+                        <Dumbbell className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-teal-500 shrink-0" />
+                        <span className="hidden lg:inline text-[9px] lg:text-[10px] leading-tight truncate font-medium text-teal-600 dark:text-teal-400">
+                          {calDay?.workout?.session?.focus || "Workout"}
+                        </span>
+                      </div>
+                    )}
                     {calDay && (
-                      <div className="space-y-px mt-1">
+                      <div className="space-y-px">
                         {slots.map(slot => {
                           const meal = calDay.meals[slot] as Meal | undefined;
                           if (!meal) return null;
-                          const truncName = meal.name.length > 10 ? meal.name.slice(0, 9) + "\u2026" : meal.name;
                           const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
                           const fb = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
                           return (
                             <div key={slot} className="flex items-center gap-1 px-0.5">
-                              <span className={`text-[8px] sm:text-[9px] leading-tight font-semibold shrink-0 ${SLOT_TEXT_COLOR[slot] || ""}`}>{SLOT_LABEL[slot] || slot[0]?.toUpperCase()}</span>
-                              <span className="text-[8px] sm:text-[9px] leading-tight truncate text-muted-foreground">
-                                {truncName}
+                              <span className={`text-[8px] sm:text-[9px] lg:text-[10px] leading-tight font-semibold shrink-0 ${SLOT_TEXT_COLOR[slot] || ""}`}>{SLOT_LABEL[slot] || slot[0]?.toUpperCase()}</span>
+                              <span className="text-[8px] sm:text-[9px] lg:text-[10px] leading-tight truncate text-muted-foreground">
+                                {meal.name}
                               </span>
                               {fb && <FeedbackDot feedback={fb} />}
                             </div>
@@ -340,8 +343,8 @@ function MonthView({
       </div>
 
       <div className="flex items-center justify-center gap-4 mt-4 text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Meals</span>
-        <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-teal-500" /> Workouts</span>
+        <span className="flex items-center gap-1.5"><UtensilsCrossed className="h-3 w-3 text-amber-500" /> Meals</span>
+        <span className="flex items-center gap-1.5"><Dumbbell className="h-3 w-3 text-teal-500" /> Workouts</span>
       </div>
     </div>
   );
