@@ -99,7 +99,7 @@ export default function NewPlan() {
       }
 
       if (alsoCreateWorkout) {
-        const workoutParams = `?goal=${data.goal}${planStartDate ? `&startDate=${planStartDate}` : ""}${goalPlanId ? `&goalPlanId=${goalPlanId}` : ""}`;
+        const workoutParams = `?goal=${data.goal}${planStartDate ? `&startDate=${planStartDate}` : ""}${goalPlanId ? `&goalPlanId=${goalPlanId}` : ""}&fromMealPlan=true`;
         toast({ title: "Meal plan created! Now set up your workout plan." });
         navigate(`/workouts/new${workoutParams}`);
       } else if (plan.status === "ready") {
