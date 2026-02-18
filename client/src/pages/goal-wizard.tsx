@@ -64,8 +64,16 @@ const TRAINING_MODE_OPTIONS = [
   { value: "both", label: "Both" },
 ];
 
-const FOCUS_AREAS = [
-  "Full Body", "Upper Body", "Lower Body", "Core", "Back", "Chest", "Arms", "Shoulders", "Glutes", "Legs", "Flexibility", "Endurance",
+const STRENGTH_FOCUS_AREAS = [
+  "Full Body", "Upper Body", "Lower Body", "Core", "Back", "Chest", "Arms", "Shoulders", "Glutes", "Legs",
+];
+
+const CARDIO_FOCUS_AREAS = [
+  "Full Body", "Core", "Endurance", "Conditioning", "Mobility", "Lower Body",
+];
+
+const ALL_FOCUS_AREAS = [
+  "Full Body", "Upper Body", "Lower Body", "Core", "Back", "Chest", "Arms", "Shoulders", "Glutes", "Legs", "Flexibility", "Endurance", "Conditioning", "Mobility",
 ];
 
 const DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -933,7 +941,7 @@ export default function GoalWizard() {
             <section>
               <div className="flex items-center gap-2 mb-4">
                 <Target className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Location & Mode</h2>
+                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Training Preferences</h2>
               </div>
               <Card>
                 <CardContent className="p-5 sm:p-6 space-y-6">
@@ -976,7 +984,15 @@ export default function GoalWizard() {
                                   key={opt.value}
                                   className={`cursor-pointer toggle-elevate ${field.value === opt.value ? "toggle-elevated" : ""}`}
                                   variant={field.value === opt.value ? "default" : "outline"}
-                                  onClick={() => field.onChange(opt.value)}
+                                  onClick={() => {
+                                    field.onChange(opt.value);
+                                    const currentFocus = workoutForm.getValues("focusAreas") || [];
+                                    const nextAreas = opt.value === "strength" ? STRENGTH_FOCUS_AREAS
+                                      : opt.value === "cardio" ? CARDIO_FOCUS_AREAS
+                                      : ALL_FOCUS_AREAS;
+                                    const filtered = currentFocus.filter((a: string) => nextAreas.includes(a));
+                                    workoutForm.setValue("focusAreas", filtered.length > 0 ? filtered : ["Full Body"]);
+                                  }}
                                   data-testid={`badge-mode-${opt.value}`}
                                 >
                                   {opt.label}
@@ -1012,6 +1028,49 @@ export default function GoalWizard() {
                         )}
                       />
                     </div>
+                  </div>
+
+                  <div className="border-t pt-6">
+                    <FormField
+                      control={workoutForm.control}
+                      name="focusAreas"
+                      render={({ field }) => {
+                        const mode = workoutForm.watch("trainingMode");
+                        const availableAreas = mode === "strength" ? STRENGTH_FOCUS_AREAS
+                          : mode === "cardio" ? CARDIO_FOCUS_AREAS
+                          : ALL_FOCUS_AREAS;
+                        return (
+                          <FormItem>
+                            <FormLabel>Focus Areas</FormLabel>
+                            <FormDescription>Select one or more areas</FormDescription>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {availableAreas.map((area) => {
+                                const selected = (field.value || []).includes(area);
+                                return (
+                                  <Badge
+                                    key={area}
+                                    className={`cursor-pointer toggle-elevate ${selected ? "toggle-elevated" : ""}`}
+                                    variant={selected ? "default" : "outline"}
+                                    onClick={() => {
+                                      const current = field.value || [];
+                                      if (selected) {
+                                        field.onChange(current.filter((a: string) => a !== area));
+                                      } else {
+                                        field.onChange([...current, area]);
+                                      }
+                                    }}
+                                    data-testid={`badge-focus-${area.replace(/\s/g, "-")}`}
+                                  >
+                                    {area}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -1087,82 +1146,29 @@ export default function GoalWizard() {
                       )}
                     />
                   </div>
-                </CardContent>
-              </Card>
-            </section>
 
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <Crosshair className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Focus Areas</h2>
-              </div>
-              <Card>
-                <CardContent className="p-5 sm:p-6">
-                  <FormField
-                    control={workoutForm.control}
-                    name="focusAreas"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>What do you want to focus on?</FormLabel>
-                        <FormDescription>Select one or more areas</FormDescription>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {FOCUS_AREAS.map((area) => {
-                            const selected = (field.value || []).includes(area);
-                            return (
-                              <Badge
-                                key={area}
-                                className={`cursor-pointer toggle-elevate ${selected ? "toggle-elevated" : ""}`}
-                                variant={selected ? "default" : "outline"}
-                                onClick={() => {
-                                  const current = field.value || [];
-                                  if (selected) {
-                                    field.onChange(current.filter((a: string) => a !== area));
-                                  } else {
-                                    field.onChange([...current, area]);
-                                  }
-                                }}
-                                data-testid={`badge-focus-${area.replace(/\s/g, "-")}`}
-                              >
-                                {area}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
-            </section>
-
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Limitations</h2>
-              </div>
-              <Card>
-                <CardContent className="p-5 sm:p-6">
-                  <FormField
-                    control={workoutForm.control}
-                    name="limitations"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Injuries or Limitations (optional)</FormLabel>
-                        <FormDescription>Any conditions the AI should account for</FormDescription>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            placeholder="e.g. bad knees, lower back pain, recovering from shoulder surgery..."
-                            className="resize-none text-sm"
-                            rows={3}
-                            data-testid="input-limitations"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="border-t pt-6">
+                    <FormField
+                      control={workoutForm.control}
+                      name="limitations"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Injuries or Limitations (optional)</FormLabel>
+                          <FormDescription>Any conditions the AI should account for</FormDescription>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              placeholder="e.g. bad knees, lower back pain, recovering from shoulder surgery..."
+                              className="resize-none text-sm"
+                              rows={3}
+                              data-testid="input-limitations"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </section>

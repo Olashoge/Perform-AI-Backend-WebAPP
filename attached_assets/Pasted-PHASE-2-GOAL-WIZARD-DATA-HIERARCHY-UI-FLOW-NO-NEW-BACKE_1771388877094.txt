@@ -1,0 +1,129 @@
+PHASE 2 — GOAL WIZARD DATA HIERARCHY + UI FLOW (NO NEW BACKEND LOGIC)
+
+You are my senior full-stack engineer + product designer. Phase 1 is complete (availability + validation + goal orchestration exists). Now implement Phase 2 exactly:
+
+SCOPE RULES
+- Do NOT change database schema or orchestration pipeline logic in this phase.
+- Only touch: Goal wizard UI, client-side state management, API wiring to existing endpoints, and step layout/UX.
+- Keep existing routes working. If you must add a route, it must be additive and not break old links.
+
+TARGET OUTCOME
+The Goal wizard is a 4-step flow:
+1) Goal Overview (global inputs)
+2) Nutrition Setup (meal inputs only)
+3) Training Setup (workout inputs only)
+4) Review (summary + “Build My Plan”)
+
+STEP 1 — GOAL OVERVIEW (GLOBAL INPUTS ONLY)
+Move ALL “global” fields here. This step must contain:
+- Primary goal options (expand list):
+  Weight Loss, Muscle Gain, Performance, General Fitness, Mobility, Endurance, Strength, Energy & Focus
+  If backend goalType enum is limited, store:
+   - goalType (mapped to supported enum)
+   - goalTypeDisplay (the exact label user selected)
+- Plan Type selector:
+  Meal + Workout | Meal Only | Workout Only
+- Start Date picker:
+  MUST block dates already occupied.
+  Use Phase 1 endpoint: GET /api/availability?type=meal|workout|goal
+  Behavior:
+   - If planType = Meal Only -> use type=meal
+   - Workout Only -> type=workout
+   - Meal + Workout -> type=goal (or combine meal+workout blocks if your API returns separately)
+  UI requirement:
+   - Disabled dates are visibly disabled and not selectable
+   - If user tries a blocked date (via typing), show inline error and prevent Next
+- Global inputs:
+  - Age (optional)
+  - Current weight (optional)
+  - Target weight (optional)  ✅ must be optional
+  - Units toggle lb/kg
+  - Pace (optional): Gentle | Steady | Aggressive
+- DO NOT ask workout days here.
+- Remove any weight/age fields currently present in Step 2.
+
+STEP 2 — NUTRITION SETUP (MEAL INPUTS ONLY)
+- This step must include everything meal creation “normally asks” in this app (use existing fields/components):
+  - Diet/cuisine styles + custom style
+  - Foods to avoid
+  - Allergies text
+  - Meals per day
+  - Household size
+  - Prep style
+  - Budget
+  - Cooking time
+  - Spice level
+  - Recipe style
+  - Any other existing nutrition config fields in codebase
+- HARD RULES:
+  - Remove Age and Weight from this step completely
+  - Remove Workout Days from this step completely
+- If planType excludes meal (Workout Only):
+  - Step 2 must be skipped automatically (wizard jumps from step 1 to step 3)
+  - Step indicators must still feel consistent (show “Step 2 skipped” subtly or renumber dynamically—choose the cleanest approach, but avoid confusion)
+
+STEP 3 — TRAINING SETUP (WORKOUT INPUTS ONLY)
+- Workout Days MUST be only here (not step 2)
+- Combine these into ONE smart section labeled “Training Preferences”:
+  - Training Mode (Strength/Cardio/Both)
+  - Experience Level (Beginner/Intermediate/Advanced)
+  - Focus Areas (multi-select)
+  Smart behavior requirements:
+  - If Training Mode = Cardio: hide/disable strength-only focus areas; show cardio-friendly focus areas (Endurance, Conditioning, Mobility, Core, etc)
+  - If Strength: emphasize muscle groups; hide cardio-only focus areas if needed
+  - If Both: allow all, but keep UI tidy
+- Location (Indoor/Outdoor/Gym/Home if you have it) stays here
+- Session length stays here
+- Injuries/limitations stays here
+- If planType excludes workout (Meal Only):
+  - Step 3 is skipped automatically
+
+STEP 4 — REVIEW
+- Show 3 clean summary cards:
+  1) Goal Overview summary (goalTypeDisplay, plan type, start/end date, pace, weight info)
+  2) Nutrition Highlights (only if meal included)
+  3) Training Highlights (only if workout included)
+- The “Build My Plan” button must:
+  1) Call POST /api/goals/validate with the final payload (use existing endpoint)
+  2) If OK → create/update goal draft (depending on how Phase 1 expects it)
+  3) Then call POST /api/goals/:id/generate
+  4) Redirect to /goals/:id/generating
+
+STATE MANAGEMENT REQUIREMENTS
+- Use a single wizard state object that contains:
+  - globalInputs
+  - nutritionInputs
+  - trainingInputs
+  - planType
+  - goalType + goalTypeDisplay
+  - startDate
+  - pace
+- Ensure the payload sent to validate/create matches what Phase 1 expects.
+- Step navigation:
+  - Next disabled until required fields for that step are valid (but keep most fields optional as specified)
+  - Back preserves user inputs
+  - If steps are skipped (meal-only/workout-only), Back/Next still feels natural
+
+UI/UX REQUIREMENTS
+- Keep the “ultra-premium minimal” style you already have:
+  - Centered cards, generous whitespace, clean section headers
+  - Consistent button sizing and alignment
+  - No random new colors; use existing accent
+- The step progress indicator must correctly reflect current step and skipped steps.
+
+DELIVERABLES
+- Step 1 contains weight + optional target weight; Step 2 contains NO weight/age/workout days.
+- Workout days appear only on Step 3.
+- Training mode + experience + focus areas are in ONE combined “Training Preferences” section with smart show/hide logic.
+- Start Date picker blocks occupied dates based on plan type via availability endpoint.
+- Review step validates then triggers generation and routes to generating page.
+
+IMPLEMENTATION ORDER
+1) Refactor wizard state + step routing (including skip logic)
+2) Fix Step 1 fields (move age/weight/target/pacing here)
+3) Clean Step 2 (remove age/weight/workout days)
+4) Clean Step 3 (combine smart Training Preferences + ensure workout days only here)
+5) Review step wiring to validate + generate + redirect
+6) Quick smoke test for planType: Both, Meal Only, Workout Only
+
+Proceed now: inspect current wizard components and implement the above. Keep changes incremental and do not break other pages.
