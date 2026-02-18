@@ -1,14 +1,16 @@
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { MealPlan, PlanOutput, Preferences, WorkoutPlan, WorkoutPlanOutput } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Sparkles, Loader2, UtensilsCrossed,
-  Dumbbell,
+  Dumbbell, Trash2,
   CheckCircle2, Clock, CalendarCheck, Activity, ChevronRight,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
@@ -115,6 +117,21 @@ export default function PlansList() {
 }
 
 function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boolean }) {
+  const { toast } = useToast();
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/plans/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      toast({ title: "Plan deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete plan", variant: "destructive" });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -201,6 +218,24 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
                       )}
                     </div>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="flex-shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      deleteMutation.mutate(mp.id);
+                    }}
+                    disabled={deleteMutation.isPending}
+                    data-testid={`button-delete-plan-${mp.id}`}
+                  >
+                    {deleteMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
                   <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 </div>
               </CardContent>
@@ -213,6 +248,21 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
 }
 
 function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoading: boolean }) {
+  const { toast } = useToast();
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/workouts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      toast({ title: "Workout deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete workout", variant: "destructive" });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -299,6 +349,24 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
                       )}
                     </div>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="flex-shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      deleteMutation.mutate(wp.id);
+                    }}
+                    disabled={deleteMutation.isPending}
+                    data-testid={`button-delete-workout-${wp.id}`}
+                  >
+                    {deleteMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
                   <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 </div>
               </CardContent>
