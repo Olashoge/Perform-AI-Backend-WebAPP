@@ -110,7 +110,11 @@ export default function GoalReady() {
 
           <div className="space-y-4">
             {mealPlan && (
-              <div className="rounded-md border p-4" data-testid="card-meal-summary">
+              <div
+                className="rounded-md border p-4 cursor-pointer hover-elevate transition-colors"
+                onClick={() => navigate(`/plan/${mealPlan.id}?from=goal&goalId=${id}`)}
+                data-testid="card-meal-summary"
+              >
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
                     <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -119,7 +123,7 @@ export default function GoalReady() {
                     <h3 className="font-medium text-sm">{mealPlanJson?.title || "Meal Plan"}</h3>
                     <p className="text-xs text-muted-foreground">{mealPrefs?.mealsPerDay || 3} meals per day</p>
                   </div>
-                  <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {mealPrefs?.dietStyles?.filter((s: string) => s !== "No Preference").map((style: string) => (
@@ -136,7 +140,11 @@ export default function GoalReady() {
             )}
 
             {workoutPlan && (
-              <div className="rounded-md border p-4" data-testid="card-workout-summary">
+              <div
+                className="rounded-md border p-4 cursor-pointer hover-elevate transition-colors"
+                onClick={() => navigate(`/workout/${workoutPlan.id}?from=goal&goalId=${id}`)}
+                data-testid="card-workout-summary"
+              >
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
                     <Dumbbell className="h-4 w-4 text-teal-600 dark:text-teal-400" />
@@ -148,7 +156,7 @@ export default function GoalReady() {
                       {workoutPrefs?.sessionLength ? ` · ${workoutPrefs.sessionLength} min` : ""}
                     </p>
                   </div>
-                  <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {workoutPrefs?.trainingMode && (

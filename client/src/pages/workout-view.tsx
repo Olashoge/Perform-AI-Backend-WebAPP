@@ -23,7 +23,7 @@ import {
   Flame, Target, MoreVertical, Trash2,
   CalendarPlus, CalendarMinus, CalendarClock,
   Zap, Activity, Timer, ChevronRight,
-  ThumbsUp, ThumbsDown,
+  ThumbsUp, ThumbsDown, ArrowLeft,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -223,6 +223,9 @@ export default function WorkoutView() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const searchParams = new URLSearchParams(window.location.search);
+  const fromGoal = searchParams.get("from") === "goal";
+  const goalId = searchParams.get("goalId");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -327,6 +330,18 @@ export default function WorkoutView() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      {fromGoal && goalId && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2"
+          onClick={() => navigate(`/goals/${goalId}/ready`)}
+          data-testid="button-back-to-goal"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
+          Back to Goal Summary
+        </Button>
+      )}
       <div className="flex items-center justify-between gap-2 mb-6 flex-wrap">
         <h1 className="text-lg sm:text-xl font-semibold truncate" data-testid="text-plan-title">
           {planJson.title}

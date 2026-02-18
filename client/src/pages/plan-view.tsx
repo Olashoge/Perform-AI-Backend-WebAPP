@@ -25,7 +25,7 @@ import {
   RefreshCw, Loader2, Printer, ShoppingCart, ChefHat, Flame,
   AlertCircle, Zap, Dumbbell, Heart, Trophy, Activity,
   ThumbsUp, ThumbsDown, CalendarIcon, MoreVertical, Trash2,
-  CalendarPlus, CalendarMinus, CalendarClock,
+  CalendarPlus, CalendarMinus, CalendarClock, ArrowLeft,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -504,6 +504,9 @@ export default function PlanView() {
   const { user, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const searchParams = new URLSearchParams(window.location.search);
+  const fromGoal = searchParams.get("from") === "goal";
+  const goalId = searchParams.get("goalId");
 
   const { data, isLoading, error } = useQuery<MealPlan>({
     queryKey: ["/api/plan", params.id],
@@ -673,6 +676,18 @@ export default function PlanView() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      {fromGoal && goalId && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2 print:hidden"
+          onClick={() => navigate(`/goals/${goalId}/ready`)}
+          data-testid="button-back-to-goal"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
+          Back to Goal Summary
+        </Button>
+      )}
       <div className="flex items-center justify-between gap-2 mb-6 print:hidden flex-wrap">
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-xs text-muted-foreground hidden sm:block">
