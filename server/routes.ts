@@ -8,6 +8,7 @@ import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryLis
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import { buildWellnessContext } from "./wellness-context";
+import { checkMealSwapAllowed, checkMealRegenAllowed, recordMealSwap, recordMealRegen, getAllowanceState, redeemFlexToken, createAllowanceForGoalPlan, computeBehaviorSummary } from "./allowance";
 import connectPgSimple from "connect-pg-simple";
 
 const PgStore = connectPgSimple(session);
@@ -248,11 +249,18 @@ export async function registerRoutes(
       if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
-      if (plan.swapCount >= 3) {
+
+      const userId = req.session.userId!;
+
+      const { allowance, result: swapCheck } = await checkMealSwapAllowed(userId, plan.id);
+      if (!swapCheck.allowed) {
+        return res.status(403).json({ message: swapCheck.reason, nextResetAt: swapCheck.nextResetAt });
+      }
+
+      if (!allowance && plan.swapCount >= 3) {
         return res.status(403).json({ message: "Maximum swaps (3) reached for this plan" });
       }
 
-      const userId = req.session.userId!;
       const aiCalls = await storage.getAiCallCountToday(userId);
       if (aiCalls >= 10) {
         return res.status(429).json({ message: "Daily AI call limit reached" });
@@ -284,6 +292,10 @@ export async function registerRoutes(
       await storage.incrementSwapCount(plan.id);
       await storage.logAction(userId, "ai_call_swap_meal", { planId: plan.id, dayIndex, mealType });
 
+      if (allowance) {
+        await recordMealSwap(allowance, userId, { planId: plan.id, dayIndex, mealType });
+      }
+
       await storage.updateGroceryPricing(plan.id, null);
       runGroceryPricing(plan.id, planJson, prefs).catch(() => {});
 
@@ -300,11 +312,22 @@ export async function registerRoutes(
       if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
-      if (plan.regenDayCount >= 1) {
+
+      const userId = req.session.userId!;
+
+      const { allowance, result: regenCheck } = await checkMealRegenAllowed(userId, plan.id);
+      if (!regenCheck.allowed) {
+        return res.status(403).json({
+          message: regenCheck.reason,
+          cooldownMinutesRemaining: regenCheck.cooldownMinutesRemaining,
+          nextResetAt: regenCheck.nextResetAt,
+        });
+      }
+
+      if (!allowance && plan.regenDayCount >= 1) {
         return res.status(403).json({ message: "Maximum day regenerations (1) reached for this plan" });
       }
 
-      const userId = req.session.userId!;
       const aiCalls = await storage.getAiCallCountToday(userId);
       if (aiCalls >= 10) {
         return res.status(429).json({ message: "Daily AI call limit reached" });
@@ -330,6 +353,10 @@ export async function registerRoutes(
       const updated = await storage.updateMealPlanJson(plan.id, planJson);
       await storage.incrementRegenDayCount(plan.id);
       await storage.logAction(userId, "ai_call_regen_day", { planId: plan.id, dayIndex });
+
+      if (allowance) {
+        await recordMealRegen(allowance, userId, { planId: plan.id, dayIndex });
+      }
 
       await storage.updateGroceryPricing(plan.id, null);
       runGroceryPricing(plan.id, planJson, prefs).catch(() => {});
@@ -1175,6 +1202,13 @@ export async function registerRoutes(
             },
           });
 
+          try {
+            await createAllowanceForGoalPlan(userId, goalPlan.id, validStartDate || undefined);
+            log(`Goal gen: allowance created for goal plan ${goalPlan.id}`, "openai");
+          } catch (allowanceErr) {
+            log(`Goal gen: allowance creation failed for ${goalPlan.id}: ${allowanceErr}`, "openai");
+          }
+
           log(`Goal gen: goal plan ${goalPlan.id} completed`, "openai");
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -1285,6 +1319,33 @@ export async function registerRoutes(
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ message: "Failed to delete goal plan" });
+    }
+  });
+
+  app.get("/api/allowance/current", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const mealPlanId = req.query.mealPlanId as string | undefined;
+      const state = await getAllowanceState(userId, mealPlanId);
+      if (!state) {
+        return res.json(null);
+      }
+      return res.json(state);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to get allowance state" });
+    }
+  });
+
+  app.post("/api/allowance/redeem-flex-token", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const result = await redeemFlexToken(userId);
+      if (!result.success) {
+        return res.status(400).json({ message: result.message });
+      }
+      return res.json(result);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to redeem flex token" });
     }
   });
 

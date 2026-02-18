@@ -1,0 +1,246 @@
+YOU ARE A SENIOR FULL-STACK ENGINEER + PRODUCT DESIGNER. Implement a FULL INTELLIGENT ADAPTIVE SWAP/REGEN ECONOMY for our Wellness Plan system (meals + workouts). This must be production-ready: DB persistence, server-side enforcement, clear UI, and adaptive bonuses/penalties based on adherence + behavior.
+
+NON-NEGOTIABLES
+- Do NOT break existing meal/workout generation, scheduling, calendar, preferences, or auth.
+- Limits must be enforced SERVER-SIDE (UI is not enough).
+- Swaps and Regens must be logged as events for auditability.
+- Economy must be per-user, per-plan (Wellness Plan), with daily and plan-based limits.
+- Keep UI premium and clear; avoid confusing counters like “2/1”.
+
+DEFINITIONS (MUST IMPLEMENT EXACTLY)
+1) SWAP (micro-change)
+- Replaces ONE item:
+  - Meal swap: replace one meal (Breakfast/Lunch/Dinner) in a specific day
+  - Workout swap: replace one exercise in a workout day (or one workout block if that’s your unit)
+- Should keep slot type (breakfast → breakfast, etc.)
+- Should stay within macro/training-load tolerances.
+
+2) REGEN (macro-change)
+- Regenerate a DAY (meals day OR workout day OR both if Wellness Plan day regeneration exists)
+- Or regenerate an entire PLAN (optional, limited)
+
+SCOPE OF LIMITS
+A) DAILY LIMITS (reset at user local midnight)
+- meal_swaps_per_day_base = 2
+- workout_swaps_per_day_base = 2
+- meal_day_regens_per_day_base = 1
+- workout_day_regens_per_day_base = 1
+Optional:
+- full_plan_regens_per_plan_base = 1 (only if we already have “regen whole plan” feature)
+
+B) PLAN LIMITS (per 7-day plan window)
+- plan_regens_total_base = 5  (total regens allowed for the plan; counts meal day regen + workout day regen; not swaps)
+
+ADAPTIVE INTELLIGENCE RULES
+Compute at end of plan (or rolling weekly if you prefer). Apply to NEXT plan’s allowances:
+
+REWARD CONSISTENCY
+- Compute combinedAdherence = avg(mealAdherence, workoutAdherence) from last plan (0–100).
+- If combinedAdherence >= 80:
+  -> bonus_plan_regens += 1 (cap bonus_plan_regens to +2)
+- If combinedAdherence >= 90:
+  -> bonus_meal_swaps_per_day += 1 AND bonus_workout_swaps_per_day += 1 (cap each bonus +2)
+
+PREVENT “REGEN ADDICTION”
+- Compute regenRate = regens_used / regens_available in last plan window.
+- If regenRate > 0.80 AND combinedAdherence < 60:
+  -> penalty_plan_regens -= 1 (min plan_regens_total must never go below 3)
+- Cooldown rule:
+  If user performs >= 3 REGEN actions in any rolling 24 hours:
+    -> apply regen_cooldown_until = now + 6 hours (server-enforced)
+
+RESPOND TO MISMATCH (HIGH DISLIKE/AVOID)
+- disliked_rate_meals = disliked_meals_actions / total_meal_interactions (7d or plan window)
+- disliked_rate_workouts = disliked_exercise_actions / total_workout_interactions
+- If disliked_rate_meals > 25% OR avoided_ingredients_count is growing fast:
+  -> bonus_meal_swaps_per_day += 1 (cap +2)
+- If disliked_rate_workouts > 25% OR avoided_exercises_count grows:
+  -> bonus_workout_swaps_per_day += 1 (cap +2)
+
+STREAK PERK
+- If streak_days >= 7 (check-in streak or “days completed” streak, use existing metric):
+  -> grant 1 FLEX TOKEN that can be redeemed for +1 day regen (meal or workout) once within next 7 days.
+  - Token expires 7 days after issuance.
+  - Token is consumed on use.
+
+ECONOMY DATA MODEL (PRISMA)
+Add tables (or extend existing settings tables) with migrations:
+
+1) PlanAllowance (per user per plan)
+- id
+- userId
+- planId (Wellness Plan id OR goal/plan id that represents the unified plan window)
+- startDate
+- endDate
+- base_meal_swaps_per_day
+- base_workout_swaps_per_day
+- base_meal_day_regens_per_day
+- base_workout_day_regens_per_day
+- base_plan_regens_total
+- bonus_meal_swaps_per_day
+- bonus_workout_swaps_per_day
+- bonus_plan_regens_total
+- penalty_plan_regens_total
+- computed_meal_swaps_per_day (base+bonus)
+- computed_workout_swaps_per_day
+- computed_meal_day_regens_per_day
+- computed_workout_day_regens_per_day
+- computed_plan_regens_total (base+bonus+penalty, min 3)
+- regens_used_total
+- last_daily_reset_at (timestamp)
+- regen_cooldown_until (timestamp nullable)
+- createdAt, updatedAt
+Indexes: (userId, planId), (userId)
+
+2) PlanUsageEvent (append-only)
+- id
+- userId
+- planId
+- domain: MEAL | WORKOUT
+- actionType: SWAP | REGEN
+- scope: ITEM | DAY | PLAN
+- occurredAt
+- metadata JSON (slot, dayIndex, oldItemName, newItemName, reason, etc.)
+Indexes: (userId, occurredAt), (planId)
+
+3) FlexToken (optional but recommended)
+- id
+- userId
+- planId
+- tokenType: EXTRA_REGEN
+- quantity (default 1)
+- expiresAt
+- consumedAt nullable
+Indexes: (userId, expiresAt)
+
+4) PlanBehaviorSummary (computed per plan)
+- id
+- userId
+- planId
+- mealAdherenceAvg
+- workoutAdherenceAvg
+- combinedAdherence
+- regenRate
+- dislikedRateMeals
+- dislikedRateWorkouts
+- avoidedIngredientsCount
+- avoidedExercisesCount
+- streakDays
+- computedAt
+- resultingBonus JSON
+- resultingPenalty JSON
+
+SERVER-SIDE ENFORCEMENT (CRITICAL)
+Wherever swaps/regens are performed (meal swap endpoint, workout swap endpoint, regen endpoint):
+1) Identify current active planId (Wellness Plan) for the action (or pass planId explicitly).
+2) Load PlanAllowance for (userId, planId).
+3) Run reset logic:
+   - If local date passed midnight since last_daily_reset_at: reset daily counters (see below).
+4) Check cooldown:
+   - If regen_cooldown_until > now AND actionType=REGEN: reject with 429 + message + remaining time.
+5) Check limits:
+   - SWAP: enforce computed_*_swaps_per_day per domain
+   - REGEN (DAY): enforce computed_*_day_regens_per_day per domain AND computed_plan_regens_total overall
+   - If limit reached, reject with 403 + friendly message + next reset time
+6) If allowed:
+   - perform the swap/regen
+   - increment counters (in PlanAllowance) appropriately
+   - insert PlanUsageEvent row
+   - if flex token is used (user chooses), consume FlexToken and allow +1 regen even if daily regen limit reached (but still respects cooldown).
+
+DAILY RESET LOGIC (LOCAL TIME)
+We need a reliable “user midnight” reset. Use user timezone if available (profile setting); otherwise default America/Indiana/Indianapolis.
+- If now is a new calendar day in user tz compared to last_daily_reset_at:
+  - reset daily swap counts + daily regen counts (store these counts either as fields in PlanAllowance or compute from events; pick the easier approach but must be efficient).
+  - Keep plan-level regens_used_total.
+
+If you prefer event-based counting:
+- still store last_daily_reset_at
+- compute today counts by querying PlanUsageEvent within day boundaries (but avoid expensive queries—use cached counters fields if possible).
+
+COOLDOWN DETECTION
+On each REGEN event insertion, check if >= 3 REGEN events in the last 24 hours for that user.
+If yes: set regen_cooldown_until = now + 6 hours.
+
+COMPUTE ADAPTIVE BONUSES/PENALTIES
+At plan completion (endDate passed OR when user starts a new plan):
+- Compute PlanBehaviorSummary using:
+  - meal adherence % from check-ins (or stored daily completion)
+  - workout adherence % from check-ins
+  - disliked rates from preference events (meal dislikes + exercise dislikes)
+  - avoided counts from preferences
+  - regenRate from events
+  - streakDays from check-ins (or existing streak logic)
+- Compute resultingBonus / resultingPenalty using the rules above.
+- When a NEW plan is created:
+  - create PlanAllowance with base limits
+  - apply bonuses/penalties from the latest completed plan into bonus/penalty fields
+
+UI CHANGES (PREMIUM + CLEAR)
+Replace “Swaps: 0/3 | Regen: 2/1” with a clear panel in plan pages (Meals + Workouts + Wellness Plan):
+Show “Today” and “This Plan” sections.
+
+Example:
+TODAY
+- Meal swaps: 1 / 2
+- Workout swaps: 0 / 2
+- Meal regens: 0 / 1
+- Workout regens: 1 / 1
+THIS WELLNESS PLAN
+- Total regens: 2 / 5
+- Bonus earned: +1 regen next plan (if applicable)
+If cooldown active:
+- “Regen cooldown: available in 5h 22m” and disable regen button.
+
+Add a subtle “Coach Insight” one-liner under the counters when available:
+- “You earned +1 regen next week from 83% adherence.”
+- “High regen use last week reduced plan regens by 1.”
+
+Also add a small “Why?” tooltip that explains what swaps vs regen mean in plain language.
+
+API ROUTES FOR UI (if needed)
+- GET /api/allowance/current -> returns current plan allowance + computed limits + today usage + plan usage + cooldown
+- POST /api/allowance/redeem-flex-token -> consumes token and returns updated allowance
+- GET /api/behavior/last-summary -> returns PlanBehaviorSummary + bonus/penalty
+
+INTEGRATION POINTS (MUST UPDATE)
+- Meal swap action endpoint: enforce meal swap limit + log event
+- Workout swap action endpoint: enforce workout swap limit + log event
+- Meal day regen endpoint: enforce daily meal regen + plan regen total + cooldown
+- Workout day regen endpoint: enforce daily workout regen + plan regen total + cooldown
+- Goal/Wellness Plan creation: ensure PlanAllowance is created at plan start.
+- Plan completion / next plan creation: compute summary + apply bonuses.
+
+ACCEPTANCE TESTS (REQUIRED)
+1) Swaps persist and enforce:
+   - Use 2 meal swaps today, third swap fails with friendly message and next reset time.
+2) Regens persist and enforce:
+   - Use 1 meal regen today; second meal regen fails unless flex token is redeemed.
+3) Cooldown:
+   - Perform 3 regens within 24h; fourth regen is blocked with cooldown message.
+4) Adaptive bonuses:
+   - Simulate combinedAdherence >= 80% for last plan; verify next plan allowance includes +1 plan regen.
+5) Penalty:
+   - Simulate regenRate > 0.8 and adherence < 60; verify next plan regens_total reduced by 1 (min 3).
+6) Flex token:
+   - With streak >= 7, token exists; redeem allows one extra regen.
+7) UI:
+   - Counters show correctly for Today and This Plan and update instantly after actions.
+
+IMPLEMENTATION ORDER (DO NOT SKIP)
+1) Add Prisma models + migrate
+2) Add PlanAllowance creation on plan creation
+3) Add enforcement wrapper utility used by swap/regen endpoints
+4) Add PlanUsageEvent logging everywhere swaps/regens happen
+5) Add cooldown logic
+6) Add behavior summary computation at plan completion / new plan creation
+7) Add flex token issuance + redemption
+8) Replace UI counters with the new premium panel
+
+DELIVERABLES
+- List files changed
+- Confirm server-side enforcement works
+- Confirm UI displays correct counters + cooldown + coach insight
+- Ensure no regressions in plan generation/scheduling
+
+Now implement this fully.

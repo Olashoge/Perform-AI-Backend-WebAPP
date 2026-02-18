@@ -1,6 +1,6 @@
-import { eq, desc, and, gte, isNull } from "drizzle-orm";
+import { eq, desc, and, gte, isNull, lt } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -63,6 +63,19 @@ export interface IStorage {
   deleteExercisePreferenceById(id: string, userId: string): Promise<boolean>;
   getExercisePreferences(userId: string): Promise<ExercisePreferenceRecord[]>;
   getExercisePreferenceMap(userId: string): Promise<Record<string, "liked" | "disliked" | "avoided">>;
+  createPlanAllowance(userId: string, goalPlanId: string, startDate?: string, endDate?: string, bonuses?: { bonusMealSwapsPerDay?: number; bonusWorkoutSwapsPerDay?: number; bonusPlanRegensTotal?: number; penaltyPlanRegensTotal?: number }): Promise<PlanAllowance>;
+  getPlanAllowanceByGoalPlan(goalPlanId: string): Promise<PlanAllowance | undefined>;
+  getPlanAllowanceByUser(userId: string): Promise<PlanAllowance | undefined>;
+  updatePlanAllowance(id: string, updates: Partial<PlanAllowance>): Promise<PlanAllowance | undefined>;
+  getGoalPlanByMealPlanId(mealPlanId: string): Promise<GoalPlan | undefined>;
+  getGoalPlanByWorkoutPlanId(workoutPlanId: string): Promise<GoalPlan | undefined>;
+  createPlanUsageEvent(userId: string, goalPlanId: string, domain: string, actionType: string, scope: string, metadata?: any): Promise<PlanUsageEvent>;
+  getRecentRegenEvents(userId: string, sinceHoursAgo: number): Promise<PlanUsageEvent[]>;
+  getAvailableFlexTokens(userId: string): Promise<FlexToken[]>;
+  consumeFlexToken(tokenId: string): Promise<FlexToken | undefined>;
+  createFlexToken(userId: string, goalPlanId: string, expiresAt: Date): Promise<FlexToken>;
+  createPlanBehaviorSummary(userId: string, goalPlanId: string, data: Partial<PlanBehaviorSummary>): Promise<PlanBehaviorSummary>;
+  getLastBehaviorSummary(userId: string): Promise<PlanBehaviorSummary | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -668,6 +681,139 @@ export class DatabaseStorage implements IStorage {
       map[p.exerciseKey] = p.status as "liked" | "disliked" | "avoided";
     }
     return map;
+  }
+
+  async createPlanAllowance(userId: string, goalPlanId: string, startDate?: string, endDate?: string, bonuses?: { bonusMealSwapsPerDay?: number; bonusWorkoutSwapsPerDay?: number; bonusPlanRegensTotal?: number; penaltyPlanRegensTotal?: number }): Promise<PlanAllowance> {
+    const [allowance] = await db.insert(planAllowances).values({
+      userId,
+      goalPlanId,
+      startDate: startDate || null,
+      endDate: endDate || null,
+      bonusMealSwapsPerDay: bonuses?.bonusMealSwapsPerDay || 0,
+      bonusWorkoutSwapsPerDay: bonuses?.bonusWorkoutSwapsPerDay || 0,
+      bonusPlanRegensTotal: bonuses?.bonusPlanRegensTotal || 0,
+      penaltyPlanRegensTotal: bonuses?.penaltyPlanRegensTotal || 0,
+    }).returning();
+    return allowance;
+  }
+
+  async getPlanAllowanceByGoalPlan(goalPlanId: string): Promise<PlanAllowance | undefined> {
+    const [allowance] = await db.select().from(planAllowances)
+      .where(eq(planAllowances.goalPlanId, goalPlanId))
+      .limit(1);
+    return allowance;
+  }
+
+  async getPlanAllowanceByUser(userId: string): Promise<PlanAllowance | undefined> {
+    const [allowance] = await db.select().from(planAllowances)
+      .where(eq(planAllowances.userId, userId))
+      .orderBy(desc(planAllowances.createdAt))
+      .limit(1);
+    return allowance;
+  }
+
+  async updatePlanAllowance(id: string, updates: Partial<PlanAllowance>): Promise<PlanAllowance | undefined> {
+    const safeUpdates: any = { ...updates, updatedAt: new Date() };
+    delete safeUpdates.id;
+    const [allowance] = await db.update(planAllowances)
+      .set(safeUpdates)
+      .where(eq(planAllowances.id, id))
+      .returning();
+    return allowance;
+  }
+
+  async getGoalPlanByMealPlanId(mealPlanId: string): Promise<GoalPlan | undefined> {
+    const [plan] = await db.select().from(goalPlans)
+      .where(and(eq(goalPlans.mealPlanId, mealPlanId), isNull(goalPlans.deletedAt)))
+      .orderBy(desc(goalPlans.createdAt))
+      .limit(1);
+    return plan;
+  }
+
+  async getGoalPlanByWorkoutPlanId(workoutPlanId: string): Promise<GoalPlan | undefined> {
+    const [plan] = await db.select().from(goalPlans)
+      .where(and(eq(goalPlans.workoutPlanId, workoutPlanId), isNull(goalPlans.deletedAt)))
+      .orderBy(desc(goalPlans.createdAt))
+      .limit(1);
+    return plan;
+  }
+
+  async createPlanUsageEvent(userId: string, goalPlanId: string, domain: string, actionType: string, scope: string, metadata?: any): Promise<PlanUsageEvent> {
+    const [event] = await db.insert(planUsageEvents).values({
+      userId,
+      goalPlanId,
+      domain,
+      actionType,
+      scope,
+      metadataJson: metadata || null,
+    }).returning();
+    return event;
+  }
+
+  async getRecentRegenEvents(userId: string, sinceHoursAgo: number): Promise<PlanUsageEvent[]> {
+    const since = new Date(Date.now() - sinceHoursAgo * 60 * 60 * 1000);
+    return db.select().from(planUsageEvents)
+      .where(and(
+        eq(planUsageEvents.userId, userId),
+        eq(planUsageEvents.actionType, "REGEN"),
+        gte(planUsageEvents.occurredAt, since),
+      ))
+      .orderBy(desc(planUsageEvents.occurredAt));
+  }
+
+  async getAvailableFlexTokens(userId: string): Promise<FlexToken[]> {
+    const now = new Date();
+    return db.select().from(flexTokens)
+      .where(and(
+        eq(flexTokens.userId, userId),
+        isNull(flexTokens.consumedAt),
+        gte(flexTokens.expiresAt, now),
+      ))
+      .orderBy(desc(flexTokens.createdAt));
+  }
+
+  async consumeFlexToken(tokenId: string): Promise<FlexToken | undefined> {
+    const [token] = await db.update(flexTokens)
+      .set({ consumedAt: new Date() })
+      .where(eq(flexTokens.id, tokenId))
+      .returning();
+    return token;
+  }
+
+  async createFlexToken(userId: string, goalPlanId: string, expiresAt: Date): Promise<FlexToken> {
+    const [token] = await db.insert(flexTokens).values({
+      userId,
+      goalPlanId,
+      expiresAt,
+    }).returning();
+    return token;
+  }
+
+  async createPlanBehaviorSummary(userId: string, goalPlanId: string, data: Partial<PlanBehaviorSummary>): Promise<PlanBehaviorSummary> {
+    const [summary] = await db.insert(planBehaviorSummaries).values({
+      userId,
+      goalPlanId,
+      mealAdherenceAvg: data.mealAdherenceAvg ?? null,
+      workoutAdherenceAvg: data.workoutAdherenceAvg ?? null,
+      combinedAdherence: data.combinedAdherence ?? null,
+      regenRate: data.regenRate ?? null,
+      dislikedRateMeals: data.dislikedRateMeals ?? null,
+      dislikedRateWorkouts: data.dislikedRateWorkouts ?? null,
+      avoidedIngredientsCount: data.avoidedIngredientsCount ?? null,
+      avoidedExercisesCount: data.avoidedExercisesCount ?? null,
+      streakDays: data.streakDays ?? null,
+      resultingBonusJson: data.resultingBonusJson ?? null,
+      resultingPenaltyJson: data.resultingPenaltyJson ?? null,
+    }).returning();
+    return summary;
+  }
+
+  async getLastBehaviorSummary(userId: string): Promise<PlanBehaviorSummary | undefined> {
+    const [summary] = await db.select().from(planBehaviorSummaries)
+      .where(eq(planBehaviorSummaries.userId, userId))
+      .orderBy(desc(planBehaviorSummaries.computedAt))
+      .limit(1);
+    return summary;
   }
 }
 
