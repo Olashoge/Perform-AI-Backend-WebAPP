@@ -74,6 +74,9 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       toast({ title: "Meal swapped successfully" });
     },
     onError: (err: Error) => {
@@ -225,6 +228,9 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       toast({ title: `${day.dayName} regenerated successfully` });
     },
     onError: (err: Error) => {
@@ -336,6 +342,8 @@ function GroceryListView({ planId }: { planId: string }) {
       setPollCount(0);
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId, "grocery"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       toast({ title: "Grocery list updated" });
     },
     onError: () => {
