@@ -830,6 +830,119 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/goal-plans/generate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const { goalType, startDate, mealPreferences, workoutPreferences } = req.body;
+
+      if (!goalType) {
+        return res.status(400).json({ message: "goalType is required" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) {
+        return res.status(429).json({ message: "Daily AI call limit reached (10/day). Try again tomorrow." });
+      }
+
+      const validStartDate = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
+
+      const goalPlan = await storage.createGoalPlan(userId, goalType, validStartDate);
+
+      let mealPlanId: string | null = null;
+      let workoutPlanId: string | null = null;
+
+      if (mealPreferences) {
+        if (mealPreferences.goal === "fat_loss") mealPreferences.goal = "weight_loss";
+        const parsedMeal = preferencesSchema.safeParse(mealPreferences);
+        if (!parsedMeal.success) {
+          return res.status(400).json({ message: "Invalid meal preferences", errors: parsedMeal.error.flatten() });
+        }
+        const mealIdempotencyKey = crypto.randomUUID();
+        const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, validStartDate);
+        mealPlanId = pendingMeal.id;
+
+        (async () => {
+          try {
+            const prefCtx = await storage.getUserPreferenceContext(userId);
+            const workoutDays = parsedMeal.data.workoutDays || undefined;
+            log(`Goal gen: generating meal plan ${pendingMeal.id}`, "openai");
+            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays);
+            await storage.updatePlanStatus(pendingMeal.id, "ready", planJson);
+            await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingMeal.id });
+            log(`Goal gen: meal plan ${pendingMeal.id} ready`, "openai");
+            await runGroceryPricing(pendingMeal.id, planJson, parsedMeal.data);
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            log(`Goal gen: meal plan ${pendingMeal.id} failed: ${errMsg}`, "openai");
+            await storage.updatePlanStatus(pendingMeal.id, "failed", undefined, errMsg);
+          }
+        })();
+      }
+
+      if (workoutPreferences) {
+        const parsedWorkout = workoutPreferencesSchema.safeParse(workoutPreferences);
+        if (!parsedWorkout.success) {
+          return res.status(400).json({ message: "Invalid workout preferences", errors: parsedWorkout.error.flatten() });
+        }
+        const wIdempotencyKey = crypto.randomUUID();
+        const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, validStartDate);
+        workoutPlanId = pendingWorkout.id;
+
+        (async () => {
+          try {
+            log(`Goal gen: generating workout plan ${pendingWorkout.id}`, "openai");
+            const result = await generateWorkoutPlan(parsedWorkout.data);
+            await storage.updateWorkoutPlanStatus(pendingWorkout.id, "ready", result);
+            log(`Goal gen: workout plan ${pendingWorkout.id} ready`, "openai");
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log(`Goal gen: workout plan ${pendingWorkout.id} failed: ${msg}`, "openai");
+            await storage.updateWorkoutPlanStatus(pendingWorkout.id, "failed", undefined, msg);
+          }
+        })();
+      }
+
+      await storage.updateGoalPlan(goalPlan.id, {
+        mealPlanId,
+        workoutPlanId,
+      });
+
+      return res.json({
+        goalPlanId: goalPlan.id,
+        mealPlanId,
+        workoutPlanId,
+      });
+    } catch (err) {
+      log(`Goal generation error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to start goal generation" });
+    }
+  });
+
+  app.get("/api/goal-plans/:id/generation-status", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const goalPlan = await storage.getGoalPlan(req.params.id as string);
+      if (!goalPlan || goalPlan.userId !== req.session.userId || goalPlan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+
+      const result: any = { goalPlanId: goalPlan.id };
+
+      if (goalPlan.mealPlanId) {
+        const mp = await storage.getMealPlan(goalPlan.mealPlanId);
+        result.mealPlan = mp ? { id: mp.id, status: mp.status, errorMessage: mp.errorMessage } : null;
+      }
+
+      if (goalPlan.workoutPlanId) {
+        const wp = await storage.getWorkoutPlan(goalPlan.workoutPlanId);
+        result.workoutPlan = wp ? { id: wp.id, status: wp.status, errorMessage: wp.errorMessage } : null;
+      }
+
+      return res.json(result);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to get generation status" });
+    }
+  });
+
   app.get("/api/goal-plans", requireAuth, async (req: Request, res: Response) => {
     try {
       const plans = await storage.getGoalPlansByUser(req.session.userId!);

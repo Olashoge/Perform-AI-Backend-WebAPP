@@ -270,11 +270,11 @@ export const workoutPreferencesSchema = z.object({
 export const workoutExerciseSchema = z.object({
   name: z.string(),
   type: z.enum(["strength", "cardio", "mobility"]),
-  sets: z.coerce.number().nullable(),
-  reps: z.string().nullable(),
-  time: z.string().nullable(),
-  restSeconds: z.coerce.number().nullable(),
-  notes: z.string().nullable(),
+  sets: z.coerce.number().nullable().optional(),
+  reps: z.string().nullable().optional(),
+  time: z.string().nullable().optional(),
+  restSeconds: z.coerce.number().nullable().optional(),
+  notes: z.string().nullable().optional(),
 });
 
 export const workoutSessionSchema = z.object({

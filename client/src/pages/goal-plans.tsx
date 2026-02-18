@@ -74,34 +74,55 @@ export default function GoalPlans() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/goal-plans", {
+      const includeMeal = selectedPlanType === "both" || selectedPlanType === "meal";
+      const includeWorkout = selectedPlanType === "both" || selectedPlanType === "workout";
+
+      const mealGoal = selectedGoal === "energy" || selectedGoal === "general_fitness" ? "maintenance" : selectedGoal;
+      const mealPreferences = includeMeal ? {
+        goal: mealGoal as "weight_loss" | "muscle_gain" | "energy" | "maintenance" | "performance",
+        dietStyles: ["No Preference"],
+        foodsToAvoid: [],
+        householdSize: 1,
+        prepStyle: "cook_daily" as const,
+        budgetMode: "normal" as const,
+        cookingTime: "normal" as const,
+        mealsPerDay: 3 as const,
+        spiceLevel: "medium" as const,
+        authenticityMode: "mixed" as const,
+      } : undefined;
+
+      const workoutGoal = selectedGoal === "energy" || selectedGoal === "general_fitness" ? "maintenance" : selectedGoal;
+      const workoutPreferences = includeWorkout ? {
+        goal: workoutGoal as "weight_loss" | "muscle_gain" | "performance" | "maintenance",
+        location: "gym" as const,
+        trainingMode: "both" as const,
+        focusAreas: ["Full Body"],
+        daysOfWeek: ["Mon" as const, "Wed" as const, "Fri" as const],
+        sessionLength: 45 as const,
+        experienceLevel: "intermediate" as const,
+        limitations: "",
+      } : undefined;
+
+      const res = await apiRequest("POST", "/api/goal-plans/generate", {
         goalType: selectedGoal,
-        planTypes: selectedPlanType,
         startDate: startDate || undefined,
+        mealPreferences,
+        workoutPreferences,
       });
       return res.json();
     },
-    onSuccess: (data: GoalPlan) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans"] });
+    onSuccess: (data: { goalPlanId: string; mealPlanId: string | null; workoutPlanId: string | null }) => {
       setCreateOpen(false);
-      const navGoal = selectedGoal;
-      const navDate = startDate;
-      const navType = selectedPlanType;
-      const goalParam = `?goal=${navGoal}${navDate ? `&startDate=${navDate}` : ""}&goalPlanId=${data.id}`;
+      const includeMeal = selectedPlanType === "both" || selectedPlanType === "meal";
+      const includeWorkout = selectedPlanType === "both" || selectedPlanType === "workout";
       setSelectedGoal("weight_loss");
       setSelectedPlanType("both");
       setStartDate("");
-      toast({ title: "Goal plan created! Now create your plans." });
-      if (navType === "both") {
-        navigate(`/new-plan${goalParam}&alsoWorkout=true`);
-      } else if (navType === "meal") {
-        navigate(`/new-plan${goalParam}`);
-      } else {
-        navigate(`/workouts/new${goalParam}`);
-      }
+      navigate(`/goals/${data.goalPlanId}/generating?meal=${includeMeal}&workout=${includeWorkout}`);
     },
-    onError: () => {
-      toast({ title: "Failed to create goal plan", variant: "destructive" });
+    onError: (err: any) => {
+      const msg = err?.message?.includes("429") ? "Daily AI call limit reached. Try again tomorrow." : "Failed to create goal plan";
+      toast({ title: msg, variant: "destructive" });
     },
   });
 

@@ -30,7 +30,8 @@ client/src/
     new-workout.tsx  - Workout preference form
     workout-generating.tsx - Workout generation progress page
     workout-view.tsx - View generated workout plan
-    goal-plans.tsx - GoalPlan management (create goals, link meal+workout plans)
+    goal-plans.tsx - GoalPlan management (create goals with unified generation flow)
+    goal-generating.tsx - Goal plan generation progress (polls both meal + workout plan status)
     check-ins.tsx  - Weekly check-in logging (weight, energy, compliance, notes) with history
     preferences.tsx - Manage liked/disliked meals and ingredient preferences
     settings.tsx   - Settings page (profile, active goal, check-in link, food/exercise preferences)
@@ -148,6 +149,8 @@ shared/
 - `POST /api/feedback/workout` - Like/dislike/neutral a workout session
 - `GET /api/feedback/workout/:planId` - Get feedback map for workout sessions
 - `POST /api/goal-plans` - Create a goal plan
+- `POST /api/goal-plans/generate` - Unified goal + plan creation with async AI generation
+- `GET /api/goal-plans/:id/generation-status` - Poll status of both meal + workout plan generation
 - `GET /api/goal-plans` - List user's goal plans
 - `GET /api/goal-plans/:id` - Get a goal plan
 - `PATCH /api/goal-plans/:id` - Update a goal plan

@@ -1,0 +1,69 @@
+We have a bug/UX gap in the Goals flow.
+
+CURRENT ISSUE
+- When creating a Goal Plan (which should generate BOTH a meal plan and a workout plan), the UI shows the workout loading flow only.
+- Result: it creates the meal plan but fails to create the workout plan (or fails silently) and does not show a proper goal-generation loading screen.
+- We need a dedicated GOAL GENERATION loading page that orchestrates both creations and clearly handles success/failure.
+
+REQUIREMENTS
+1) Goal generation must create:
+   - Meal Plan (saved)
+   - Workout Plan (saved)
+   - Both scheduled to the selected start date window (7-day range unless configured differently)
+   - Goal entity links to both plans
+
+2) Dedicated Goal loading screen:
+   - Title: “Building your goal plan”
+   - Steps UI (with progress):
+     1) Designing your nutrition plan…
+     2) Designing your training plan…
+     3) Scheduling your week…
+     4) Finalizing…
+   - This screen should appear immediately after user submits the Goal form.
+   - It should not reuse Meal-only or Workout-only loading screens.
+
+3) Error handling:
+   - If either meal or workout generation fails:
+     - show a clean error state with: “Try again” and “Back to Goals”
+     - log the underlying error in console/server logs
+   - Avoid partial success:
+     - If meal succeeds but workout fails, either:
+       A) rollback/delete the newly created meal plan, OR
+       B) mark it as “Generation Failed” and not scheduled, and show a recovery CTA
+     - Choose the approach that fits our current backend easiest, but DO NOT leave the user thinking everything is done when it isn’t.
+
+4) Date conflict intelligence
+- We already block conflicts separately:
+  - New Meal Plan start date picker blocks dates where meal slots exist in the 7-day window.
+  - New Workout Plan start date picker blocks dates where workout sessions exist in the 7-day window.
+- Now for GOALS:
+  - start date selection must be “both-aware”: block any date where EITHER meals OR workouts already occupy any day in the would-be 7-day range.
+  - The picker should visually highlight blocked dates and prevent selection.
+
+5) Keep existing “only way to schedule” rule:
+- Plans appear on calendar ONLY if startDate != null (scheduled).
+- Removing from calendar sets startDate = null.
+- Deleting marks deleted and removes from calendar queries.
+
+IMPLEMENTATION STEPS (DO THIS)
+A) Identify current goal creation endpoint / action.
+B) Change it so the Goal submission triggers one orchestrator function:
+   - createMealPlan(...)
+   - createWorkoutPlan(...)
+   - link both to Goal
+   - set startDate on both (or on goal + derived schedule if that’s how it works)
+C) Ensure UI uses a dedicated GoalLoading route/component and navigates:
+   - /goals/new -> submit -> /goals/generating?id=...
+   - On success -> /goals/:id (or Goals list with toast)
+D) Ensure schedule blocking:
+   - Implement a unified “range collision check” that can check meals and workouts together.
+   - Use it in Goal start-date picker.
+
+ACCEPTANCE TESTS
+- Creating a goal with free dates creates BOTH plans and shows them in:
+  - Goals list
+  - Meal plans list (with start→end)
+  - Workout plans list (with start→end)
+  - Calendar (respecting Meals/Workouts/Combined filters)
+- Creating a goal on conflicting dates is blocked in picker.
+- If workout generation fails, user sees a clear error state and no “phantom success.”

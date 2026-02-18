@@ -19,6 +19,7 @@ import NewWorkout from "@/pages/new-workout";
 import WorkoutView from "@/pages/workout-view";
 import WorkoutGenerating from "@/pages/workout-generating";
 import GoalPlans from "@/pages/goal-plans";
+import GoalGenerating from "@/pages/goal-generating";
 import CheckIns from "@/pages/check-ins";
 import Dashboard from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
@@ -40,6 +41,7 @@ function AuthenticatedRouter() {
       <Route path="/workout/:id/generating" component={WorkoutGenerating} />
       <Route path="/workout/:id" component={WorkoutView} />
       <Route path="/goals" component={GoalPlans} />
+      <Route path="/goals/:id/generating" component={GoalGenerating} />
       <Route path="/check-ins" component={CheckIns} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
