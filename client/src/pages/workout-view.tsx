@@ -127,7 +127,7 @@ function ExerciseRow({ exercise, index, exercisePrefStatus, onExercisePref }: {
   );
 }
 
-function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, exercisePrefMap, onExercisePref }: {
+function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, exercisePrefMap, onExercisePref, planStartDate }: {
   session: WorkoutSession;
   dayName: string;
   dayIndex: number;
@@ -135,10 +135,20 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, ex
   onFeedback: (sessionKey: string, feedback: "like" | "dislike" | "neutral") => void;
   exercisePrefMap: Record<string, "liked" | "disliked" | "avoided">;
   onExercisePref: (exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "neutral") => void;
+  planStartDate?: string | null;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const ModeIcon = MODE_ICONS[session.mode] || Dumbbell;
   const sessionKey = `day${dayIndex}_${session.focus.toLowerCase().replace(/\s+/g, "_")}`;
+
+  const actualDate = planStartDate
+    ? (() => {
+        const start = new Date(planStartDate + "T00:00:00");
+        const d = new Date(start);
+        d.setDate(d.getDate() + (dayIndex - 1));
+        return d;
+      })()
+    : null;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -147,7 +157,12 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, ex
           <CardHeader className="cursor-pointer hover-elevate p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">{dayName}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">{dayName}</span>
+                  {actualDate && (
+                    <span className="text-[11px] text-muted-foreground/50">{format(actualDate, "EEEE, MMM d, yyyy")}</span>
+                  )}
+                </div>
                 <h3 className="text-base font-medium mt-1 leading-snug line-clamp-2" data-testid={`text-session-focus-${dayIndex}`}>
                   {session.focus}
                 </h3>
@@ -545,6 +560,15 @@ export default function WorkoutView() {
 
         <div className="space-y-3">
           {planJson.days.map((day) => {
+            const restActualDate = plan.planStartDate
+              ? (() => {
+                  const start = new Date(plan.planStartDate + "T00:00:00");
+                  const d = new Date(start);
+                  d.setDate(d.getDate() + (day.dayIndex - 1));
+                  return d;
+                })()
+              : null;
+
             if (!day.isWorkoutDay || !day.session) {
               return (
                 <Card key={day.dayIndex} className="overflow-visible" data-testid={`card-rest-day-${day.dayIndex}`}>
@@ -553,7 +577,12 @@ export default function WorkoutView() {
                       <span className="text-xs font-medium text-muted-foreground">R</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">{day.dayName}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-muted-foreground">{day.dayName}</p>
+                        {restActualDate && (
+                          <span className="text-xs text-muted-foreground/50">{format(restActualDate, "EEEE, MMM d, yyyy")}</span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground/70">Rest Day</p>
                     </div>
                   </CardContent>
@@ -572,6 +601,7 @@ export default function WorkoutView() {
                 onFeedback={handleWorkoutFeedback}
                 exercisePrefMap={exercisePrefMap}
                 onExercisePref={handleExercisePref}
+                planStartDate={plan.planStartDate}
               />
             );
           })}

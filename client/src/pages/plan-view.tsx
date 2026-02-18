@@ -211,13 +211,14 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
   );
 }
 
-function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedback }: {
+function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedback, planStartDate }: {
   day: Day;
   planId: string;
   swapCount: number;
   regenDayCount: number;
   feedbackMap: Record<string, "like" | "dislike" | null>;
   onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
+  planStartDate?: string | null;
 }) {
   const { toast } = useToast();
 
@@ -242,10 +243,26 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
     },
   });
 
+  const actualDate = planStartDate
+    ? (() => {
+        const start = new Date(planStartDate + "T00:00:00");
+        const d = new Date(start);
+        d.setDate(d.getDate() + (day.dayIndex - 1));
+        return d;
+      })()
+    : null;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h2 className="font-semibold text-lg" data-testid={`text-day-${day.dayIndex}`}>{day.dayName}</h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="font-semibold text-lg" data-testid={`text-day-${day.dayIndex}`}>{day.dayName}</h2>
+          {actualDate && (
+            <span className="text-sm text-muted-foreground" data-testid={`text-day-date-${day.dayIndex}`}>
+              {format(actualDate, "EEEE, MMM d, yyyy")}
+            </span>
+          )}
+        </div>
         <Button
           variant="outline"
           size="sm"
@@ -1006,6 +1023,7 @@ export default function PlanView() {
                     regenDayCount={regenDayCount}
                     feedbackMap={mergedFeedback}
                     onFeedback={handleFeedback}
+                    planStartDate={data?.planStartDate}
                   />
                 ))}
               </TabsContent>
