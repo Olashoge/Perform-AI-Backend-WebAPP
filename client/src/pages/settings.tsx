@@ -2,13 +2,14 @@ import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
 import type { GoalPlan } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   User, Target, Heart, ClipboardCheck, UtensilsCrossed, Dumbbell,
-  Flame, Zap, Trophy, Settings, LogOut, ChevronRight,
+  Flame, Zap, Trophy, Settings, LogOut, ChevronRight, Sun, Moon, Monitor,
 } from "lucide-react";
 
 const GOAL_LABELS: Record<string, string> = {
@@ -20,8 +21,15 @@ const GOAL_LABELS: Record<string, string> = {
   general_fitness: "General Fitness",
 };
 
+const THEME_OPTIONS = [
+  { value: "light" as const, label: "Light", icon: Sun },
+  { value: "dark" as const, label: "Dark", icon: Moon },
+  { value: "system" as const, label: "System", icon: Monitor },
+];
+
 export default function SettingsPage() {
   const { user, logout, isLoading } = useAuth();
+  const { preference, setPreference } = useTheme();
   const [, navigate] = useLocation();
 
   const { data: goalPlans } = useQuery<GoalPlan[]>({
@@ -125,6 +133,38 @@ export default function SettingsPage() {
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <Sun className="h-5 w-5 text-muted-foreground" />
+              <h2 className="font-semibold text-base">Appearance</h2>
+            </div>
+            <div className="flex gap-2">
+              {THEME_OPTIONS.map((opt) => {
+                const isSelected = preference === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPreference(opt.value)}
+                    className={`flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-md border transition-colors duration-150 ${
+                      isSelected
+                        ? "border-primary bg-primary/5 text-foreground"
+                        : "border-border bg-background text-muted-foreground hover-elevate"
+                    }`}
+                    data-testid={`button-theme-${opt.value}`}
+                  >
+                    <opt.icon className="h-5 w-5" />
+                    <span className="text-xs font-medium">{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {preference === "system" && (
+              <p className="text-xs text-muted-foreground mt-3">Matches your device settings.</p>
+            )}
           </CardContent>
         </Card>
 

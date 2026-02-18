@@ -1,0 +1,129 @@
+ADD PREMIUM DARK MODE + THEME TOGGLE (ICON) + SETTINGS SELECTOR
+
+GOAL
+Implement first-class light/dark mode with:
+1) A top-bar icon toggle (sun/moon)
+2) A Settings page selector: Light / Dark / System
+3) Persisted preference per user (and fallback to localStorage if user profile storage isn’t available)
+4) Premium dark palette (not generic gray), aligned with our emerald + warm-neutral brand
+
+NON-NEGOTIABLES
+- Do NOT change core business logic.
+- Theme switching must not affect scheduling, plans, or APIs.
+- Use a single source of truth for theme state.
+- Respect System preference when user selects “System”.
+
+THEME OPTIONS
+- "light"
+- "dark"
+- "system" (default)
+
+PERSISTENCE
+Preferred approach (in order):
+A) If we have a User/Profile table or settings JSON: store themePreference there.
+B) If not, use localStorage key: "themePreference".
+Either way, apply immediately on load to avoid “flash” (FOUC).
+
+IMPLEMENTATION STRATEGY
+1) Token-based theming via CSS variables:
+- Light tokens and Dark tokens must be defined in globals (e.g., globals.css)
+- Use data attribute on <html> or <body>:
+  - <html data-theme="light">
+  - <html data-theme="dark">
+- When "system", set data-theme based on prefers-color-scheme media query, and update on changes.
+
+2) Add theme toggle icon button
+- Place in top-right of the main app shell header (visible on all main pages)
+- Use lucide icons:
+  - Sun for light
+  - Moon for dark
+- Toggle behavior:
+  - If current resolved theme is light -> switch to dark
+  - If current resolved theme is dark -> switch to light
+- When user toggles via icon, set preference explicitly (light/dark), not “system”.
+- Add subtle tooltip: “Switch to Dark Mode” / “Switch to Light Mode”
+- Add tiny, premium microinteraction (150–200ms fade/rotate, very subtle).
+
+3) Settings selector
+- In Settings page, add section: “Appearance”
+- Add segmented control or radio buttons:
+  - Light
+  - Dark
+  - System
+- Show current selection.
+- If “System” selected, show helper text:
+  “Matches your device settings.”
+
+4) Prevent flash on initial load
+- Apply theme before render:
+  - Inline small script in root layout OR
+  - Use Next.js approach to set class/data attribute as early as possible.
+- Ensure the page doesn’t flash light then dark.
+
+COLOR TOKENS
+Use the SAME token names as we already established, with these values:
+
+LIGHT MODE
+- --bg:            #FAFAF8
+- --surface:       #FFFFFF
+- --surface-2:     #F3F4F1
+- --border:        #E6E7E2
+- --text:          #0B0F0E
+- --text-muted:    #4B5563
+- --text-subtle:   #6B7280
+- --primary:       #0E3B2E
+- --primary-600:   #145A3F
+- --primary-100:   #D6EFE5
+- --primary-50:    #EEF8F4
+- --accent:        #A16207
+- --accent-100:    #FDECC8
+- --accent-50:     #FFFBEB
+- --success:       #166534
+- --warning:       #A16207
+- --danger:        #B91C1C
+- --danger-50:     #FEF2F2
+
+DARK MODE (PREMIUM, NOT FLAT GRAY)
+- --bg:            #0B0F0E   (near-black green-tinted)
+- --surface:       #111615   (card surface)
+- --surface-2:     #161D1B   (secondary surface)
+- --border:        #26302D   (soft border)
+- --text:          #F5F7F6   (near-white)
+- --text-muted:    #C7D0CC
+- --text-subtle:   #98A6A1
+- --primary:       #34D399   (emerald accent for buttons/active)
+- --primary-600:   #10B981
+- --primary-100:   #0E3B2E   (deep emerald tint for subtle backgrounds)
+- --primary-50:    #0F2A21   (very subtle tint)
+- --accent:        #F59E0B   (amber accent)
+- --accent-100:    #3A2A12   (amber-tinted dark surface)
+- --accent-50:     #241A0B
+- --success:       #22C55E
+- --warning:       #F59E0B
+- --danger:        #EF4444
+- --danger-50:     #2A1212
+
+USAGE RULES
+- In dark mode, avoid pure black backgrounds on cards; use surface tokens.
+- Keep emerald accent restrained (only for primary CTA + active states).
+- Ensure focus rings are visible: emerald ring with 35–45% opacity.
+- Calendar meal/workout indicators must remain distinguishable:
+  - Meals use amber tint
+  - Workouts use emerald tint
+
+FILES / COMPONENTS
+- Create ThemeProvider (React context) or equivalent:
+  - getThemePreference()
+  - setThemePreference()
+  - resolvedTheme (light/dark)
+- Update AppShell/Header to include the icon toggle.
+- Update Settings page with Appearance selector.
+- Ensure all components reference CSS variables / theme tokens (not hardcoded colors).
+
+ACCEPTANCE TESTS
+- Toggling icon switches theme instantly and persists on refresh.
+- Settings selection persists and overrides system if selected.
+- “System” follows OS theme and updates live.
+- No flash of incorrect theme during load.
+- Calendar, plans, and wizard all look premium in both modes.
+- No business logic changes; app functionality unchanged.

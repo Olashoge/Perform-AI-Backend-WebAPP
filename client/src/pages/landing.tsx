@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Sparkles, CalendarDays, ShoppingCart, Dumbbell, TrendingUp, Zap, Zap as ZapIcon } from "lucide-react";
 
 export default function Landing() {
@@ -70,6 +71,7 @@ export default function Landing() {
             </div>
           </Link>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {user ? (
               <>
                 <Link href="/new-plan">

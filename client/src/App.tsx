@@ -4,6 +4,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { ThemeProvider } from "@/lib/theme";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar, ActiveGoalBar } from "@/components/app-sidebar";
 import Landing from "@/pages/landing";
@@ -64,12 +66,16 @@ function AuthenticatedLayout() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="h-12 border-b bg-background flex items-center gap-3 px-3 md:hidden shrink-0" data-testid="mobile-header">
-            <SidebarTrigger data-testid="button-mobile-menu" />
-            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
+          <header className="h-12 border-b bg-background flex items-center gap-3 px-3 shrink-0" data-testid="mobile-header">
+            <div className="md:hidden">
+              <SidebarTrigger data-testid="button-mobile-menu" />
+            </div>
+            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center md:hidden">
               <span className="text-primary-foreground font-bold text-xs">P</span>
             </div>
-            <span className="text-sm font-semibold">Perform AI</span>
+            <span className="text-sm font-semibold md:hidden">Perform AI</span>
+            <div className="flex-1" />
+            <ThemeToggle />
           </header>
           <ActiveGoalBar />
           <main className="flex-1 overflow-auto">
@@ -111,14 +117,16 @@ function AppRouter() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <Toaster />
-          <AppRouter />
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AuthProvider>
+            <Toaster />
+            <AppRouter />
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

@@ -1,7 +1,7 @@
 # Perform AI
 
 ## Overview
-AI-powered personal performance system combining 7-day meal planning AND workout planning. Users enter dietary/fitness preferences and personalization data (age, weight, workout frequency) and the app generates personalized 7-day meal plans with step-by-step recipes, nutrition info, organized grocery lists, AND customized workout programs using OpenAI gpt-4.1-mini. Premium visual redesign with Inter font, deep green primary accent, amber meal accent, teal workout accent, and refined spacing/typography system.
+AI-powered personal performance system combining 7-day meal planning AND workout planning. Users enter dietary/fitness preferences and personalization data (age, weight, workout frequency) and the app generates personalized 7-day meal plans with step-by-step recipes, nutrition info, organized grocery lists, AND customized workout programs using OpenAI gpt-4.1-mini. Premium visual redesign with Inter font, deep emerald primary (#0E3B2E), amber meal accent (#A16207), emerald workout accent, warm neutral backgrounds (#FAFAF8). Full dark mode support with theme toggle (light/dark/system) persisted via localStorage.
 
 ## Tech Stack
 - **Frontend**: React + Vite (TypeScript), Tailwind CSS, shadcn/ui components
