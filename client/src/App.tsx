@@ -70,7 +70,7 @@ function AuthenticatedLayout() {
         <div className="flex flex-col flex-1 min-w-0">
           <header className="h-12 border-b bg-background flex items-center gap-3 px-3 shrink-0" data-testid="mobile-header">
             <div className="md:hidden">
-              <SidebarTrigger data-testid="button-mobile-menu" />
+              <SidebarTrigger data-testid="button-mobile-menu" className="h-10 w-10 [&_svg]:size-5" />
             </div>
             <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-xs">P</span>
