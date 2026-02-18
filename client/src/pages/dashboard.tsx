@@ -396,7 +396,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="w-full lg:w-72 shrink-0 space-y-4">
+        <div className="w-full lg:w-[36rem] shrink-0 space-y-4">
           <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Active Plans</h3>
 
           {stats.activeMeals.map(mp => {
