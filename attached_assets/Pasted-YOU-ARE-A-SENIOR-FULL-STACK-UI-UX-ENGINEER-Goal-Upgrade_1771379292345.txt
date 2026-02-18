@@ -1,0 +1,253 @@
+YOU ARE A SENIOR FULL-STACK + UI/UX ENGINEER. 
+Goal: Upgrade our consumer SaaS “Goal-based Meal + Workout Planner” to a premium guided transformation system, WITHOUT breaking existing infrastructure, DB, auth, or existing plan generation. Make changes incrementally, keep current routes working, and prefer additive DB migrations with safe defaults.
+
+NON-NEGOTIABLES
+- Do not remove existing meal plan or workout plan generation flows. Reuse them inside the new Goal wizard.
+- Keep existing DB tables and APIs. Add new columns/tables only when needed. Provide Prisma migrations.
+- Calendar scheduling remains startDate-based (plan expands into 7 days).
+- Preserve mobile UX. Use clean spacing, consistent typography, subtle icons, and 3-dot menus for actions.
+
+SCOPE OVERVIEW (IMPLEMENT ALL)
+A) Replace the current “Create Goal” modal (3 questions) with a full multi-step wizard that collects ALL meal inputs + ALL workout inputs.
+B) Add a dedicated Goal Generation Loading page with 4 stages (timed progress + checkmarks).
+C) Upgrade scheduling rules: conflict-aware date pickers + smart suggested start date.
+D) Fix Like/Dislike logic to allow neutral state and avoid auto-adding ingredients to Avoided.
+E) Calendar view mode toggle: Meals only / Workouts only / Combined.
+F) Plan list cards for Meal + Workout show BOTH start and end dates.
+G) Rename button “New Plan” → “New Meal Plan”.
+H) Improve plan naming for GOALS: human-friendly, motivational titles (NOT technical).
+I) Add “Goal Reveal” completion screen after generation.
+J) Ensure goal creation truly creates BOTH plans (meal + workout) based on all inputs, then schedules, then finalizes.
+
+------------------------------------------
+1) GOAL CREATION WIZARD (REPLACES CURRENT MODAL)
+------------------------------------------
+Create a dedicated Goal Wizard flow (page or modal-drawer) with 4 steps:
+
+STEP 1: GOAL OVERVIEW
+- goalType: Weight Loss / Muscle Gain / Performance / General Fitness
+- targetDate (optional)
+- pace: gentle / steady / aggressive (optional)
+- startDate (required unless user explicitly selects “decide later”; default required)
+- “What would you like to create?” options:
+  - Meal Plan + Workout Plan (default)
+  - Meal Plan only
+  - Workout Plan only
+NOTE: startDate must be conflict-aware depending on what’s being created (see Scheduling).
+
+STEP 2: NUTRITION SETUP (FULL MEAL INPUT FORM)
+This MUST include everything our current “New Meal Plan” asks.
+- Reuse existing components and validation.
+- If we already have MealPreferences/avoids/allergies/cuisines/meals-per-day/metrics, reuse the same schema fields.
+- Do NOT reduce questions. This step should match current meal form.
+
+STEP 3: TRAINING SETUP (FULL WORKOUT INPUT FORM)
+This MUST include everything our current “New Workout Plan” asks.
+- Reuse existing components and validation.
+
+STEP 4: REVIEW SCREEN
+Show a clean summary card of what will be generated:
+- goalType, startDate–endDate (endDate computed startDate+6 days)
+- meal config highlights (meals/day, cuisines, avoids)
+- workout config highlights (location, days, mode, duration, focus)
+Button: “Build My Plan”
+
+Implementation detail:
+- Wizard state persisted in-memory; also consider localStorage draft so refresh doesn’t lose it (optional).
+- On submit, call a new endpoint: POST /api/goals/generate (or similar).
+- This endpoint should orchestrate: generate meal plan, generate workout plan, schedule them, then create goal entity linking them.
+
+------------------------------------------
+2) GOAL GENERATION LOADING PAGE (PREMIUM MULTI-STAGE)
+------------------------------------------
+Create a dedicated route: /goals/:goalId/generating OR /goals/generating?requestId=
+When goal generation starts:
+- Navigate to this page immediately.
+- Show 4 stages with spinner → checkmark:
+  1. Designing your training plan (show for ~20–30 sec perceived; can be shorter if done)
+  2. Designing your nutrition plan (~20–30 sec perceived)
+  3. Scheduling your week (~20–30 sec perceived)
+  4. Finalizing your strategy (~20–30 sec perceived)
+- Each stage has subtle subtext (premium feel).
+- Do not hard-sleep. Instead:
+  - Animate progression with minimum display times per stage (e.g., 800ms–1500ms) AND allow extending until real backend stage completes.
+  - If backend finishes early, still show smooth transitions (avoid jarring 0.2s completion).
+- If generation fails, show a premium error state (not raw JSON). Provide “Try again” and “Back to Goals”.
+
+Backend should return structured errors; front-end shows friendly message + optional “details” accordion.
+
+------------------------------------------
+3) SCHEDULING ENGINE + CONFLICT-AWARE DATE PICKERS
+------------------------------------------
+Rules:
+- Meal plans must not overlap other meal plans (any day with at least 1 scheduled meal instance counts as occupied).
+- Workout plans must not overlap other workout plans.
+- Goal plans must not overlap existing goal date ranges IF the goal includes the same plan types being created.
+
+Implementation:
+- For each plan type, occupied days are derived from NON-deleted plans with startDate != null expanded across 7 days.
+- Date picker should:
+  - disable start dates that would cause overlap in the 7-day range
+  - visually highlight blocked dates and show tooltip (“Unavailable — another meal plan is active”)
+- Smart suggestion:
+  - if user picks blocked date, auto-suggest next available valid start date and allow one-click “Use suggested date”.
+
+Important:
+- Conflicts are evaluated separately for meals and workouts.
+- For Goal Wizard creating both, startDate must be valid for BOTH simultaneously (intersection of availability windows).
+
+Also:
+- Add startDate picker to “New Meal Plan” and “New Workout Plan” pages as well (not just goal wizard).
+- Those pickers must block dates only for their respective plan types.
+
+------------------------------------------
+4) LIKE/DISLIKE = TRI-STATE + AVOID CONFIRMATION
+------------------------------------------
+Current issue: Like can only be undone by Dislike, and Dislike automatically adds ingredient to Avoided.
+Fix:
+- Make meal preference state tri-state: liked / disliked / neutral.
+- Clicking Like toggles: neutral ↔ liked
+- Clicking Dislike toggles: neutral ↔ disliked
+- If liked then click like again => neutral; if disliked then click dislike again => neutral.
+- Calendar should show 👍 or 👎 next to meal/workout items when liked/disliked.
+
+Avoided behavior change:
+- When user DISLIKES a MEAL:
+  - Do NOT automatically add ingredients to Avoided.
+  - Instead open a modal:
+    “You disliked this meal. What would you like to do?”
+    Options:
+      A) “Just mark as disliked” (default)
+      B) “Avoid main ingredient in future” (shows ingredient name; requires confirm)
+      C) “Avoid multiple ingredients” (optional list)
+      D) “Keep ingredients, change meal style” (optional note; can be stored as preference text)
+- Store result accordingly:
+  - Dislike stays as a meal preference.
+  - Avoided only changes when user explicitly chooses it.
+
+Extend same tri-state system to WORKOUTS:
+- Like/dislike workouts (session or workout-day item).
+- Preferences page should include:
+  - Meal preferences (liked/disliked/avoided)
+  - Workout preferences (liked/disliked/avoided if applicable)
+Keep UI consistent.
+
+------------------------------------------
+5) CALENDAR VIEW MODE TOGGLE
+------------------------------------------
+Add a toggle at top of Calendar:
+- Combined (default)
+- Meals only
+- Workouts only
+Filter events accordingly.
+Calendar should render all scheduled plans (no plan dropdown selector).
+Month cells show +N more when crowded.
+
+Ensure ordering:
+- Meals within a day: Breakfast → Lunch → Dinner
+- Workouts shown in a consistent spot (e.g., below meals) OR separate section in day panel.
+
+------------------------------------------
+6) PLAN LIST CARDS SHOW DATE RANGE (MEALS + WORKOUTS)
+------------------------------------------
+In Meal Plans list and Workout Plans list:
+- Show startDate and endDate (computed startDate + 6 days) when scheduled.
+- If not scheduled, show “Not scheduled”.
+- Use consistent “Scheduled” badge.
+
+Also ensure Goals list shows its date range too.
+
+------------------------------------------
+7) RENAME BUTTON: “New Plan” → “New Meal Plan”
+------------------------------------------
+Find the Meal Plans page CTA currently labeled “New Plan” and rename to “New Meal Plan”.
+
+------------------------------------------
+8) GOAL PLAN TITLES (HUMAN-FRIENDLY, MOTIVATIONAL)
+------------------------------------------
+When generating a Goal’s meal/workout plan titles (or goal name):
+- Do NOT use technical titles.
+- Generate short, human, resonant names based on goalType and training mode.
+Examples:
+Weight Loss: “Fresh Start Week”, “Lean & Light Plan”, “Momentum Week”
+Muscle Gain: “Build & Fuel Plan”, “Grow Strong Week”, “Power Up Plan”
+Performance: “Peak Energy Plan”, “Level Up Week”, “Performance Boost”
+General Fitness: “Balanced Reset”, “Total Body Tune-Up”, “Wellness Week”
+Implementation:
+- Choose from a curated list + optionally vary with a second phrase (e.g., “Fresh Start Week: Mediterranean Focus” only if still layman-friendly).
+- Keep length short (<= 35 chars ideal).
+
+------------------------------------------
+9) GOAL REVEAL SCREEN
+------------------------------------------
+After generation completes successfully:
+Route to /goals/:goalId/ready (or similar):
+- Show “Your plan is ready” with:
+  - goal name
+  - date range
+  - quick summary chips (meals/day, workout days, mode)
+Buttons:
+- “View Calendar”
+- “View Plans”
+- “Start Today” (go to day view)
+
+------------------------------------------
+10) RELIABILITY: GOAL CREATION MUST CREATE BOTH PLANS
+------------------------------------------
+Fix the bug where goal flow creates meal plan but not workout plan.
+Backend orchestration must:
+- validate all inputs for both
+- call the existing meal generator with nutrition inputs
+- call the existing workout generator with training inputs
+- persist both plans
+- assign startDate to both (same startDate for goal flow)
+- mark scheduled
+- create goal record linking both plan IDs
+- return goalId
+
+Also:
+- Ensure generation errors are stored and displayed nicely (not raw schema output).
+- If one generator fails, goal should be created in “failed” state OR rolled back consistently (choose one approach; prefer transactional behavior if possible).
+
+------------------------------------------
+DELIVERABLES REQUIRED
+------------------------------------------
+1) Prisma migration(s) needed:
+   - Add startDate fields where missing (meal/workout already?) and optional endDate computed (do not store unless needed).
+   - Add Goal entity links if not already present.
+   - Add preference tables for workout preferences if not present.
+2) New/updated API routes + services:
+   - /api/goals/generate orchestrator
+   - conflict-check endpoint: /api/schedule/conflicts?type=meal|workout|both&startDate=...
+3) UI updates across:
+   - Goal wizard
+   - Goal generating page
+   - Goal ready page
+   - Calendar toggle
+   - Meal/workout lists date range
+   - Like/dislike tri-state for meals + workouts
+   - Preferences page expands to workouts
+4) Remove any leftover plan selector dropdown on Calendar.
+5) Ensure meal ordering is Breakfast → Lunch → Dinner everywhere.
+
+------------------------------------------
+IMPLEMENTATION APPROACH
+------------------------------------------
+Work in small commits:
+- Step 1: Scheduling utilities + conflict engine + API
+- Step 2: Update New Meal Plan and New Workout Plan pages to include startDate picker w/ blocking
+- Step 3: Goal Wizard screens 1–4
+- Step 4: Goal generation orchestration endpoint + loading page
+- Step 5: Goal ready screen
+- Step 6: Tri-state likes/dislikes + avoided confirmation modal + preferences update
+- Step 7: Calendar toggle and final polish
+After each step: run app, ensure no TypeScript errors, ensure DB migration works, ensure UI still works on mobile.
+
+QUALITY BAR
+- Keep UI minimalist, spacious, consistent.
+- Avoid clutter: use 3-dot menus for actions where appropriate.
+- No raw error dumps to users.
+- Add toasts for success/failure.
+- Confirm destructive actions (delete plan, remove from calendar).
+
+Now implement the above in code.

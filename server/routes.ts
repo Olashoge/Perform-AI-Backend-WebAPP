@@ -627,6 +627,40 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/goal-plans/conflicts", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const occupiedDates = new Set<string>();
+
+      const mealPlans = await storage.getScheduledPlans(userId);
+      for (const plan of mealPlans) {
+        const planJson = plan.planJson as PlanOutput;
+        const startDate = plan.planStartDate!;
+        for (let i = 0; i < planJson.days.length; i++) {
+          const date = new Date(startDate + "T00:00:00");
+          date.setDate(date.getDate() + i);
+          occupiedDates.add(date.toISOString().slice(0, 10));
+        }
+      }
+
+      const workoutPlans = await storage.getScheduledWorkoutPlans(userId);
+      for (const plan of workoutPlans) {
+        if (!plan.planStartDate || !plan.planJson) continue;
+        const planJson = plan.planJson as WorkoutPlanOutput;
+        for (let i = 0; i < planJson.days.length; i++) {
+          const date = new Date(plan.planStartDate + "T00:00:00");
+          date.setDate(date.getDate() + i);
+          occupiedDates.add(date.toISOString().slice(0, 10));
+        }
+      }
+
+      return res.json({ occupiedDates: Array.from(occupiedDates) });
+    } catch (err) {
+      log(`Goal conflicts error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to load conflicts" });
+    }
+  });
+
   app.get("/api/plan/:id/calendar", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);

@@ -11,6 +11,7 @@ import {
 
 const POLL_INTERVAL = 2000;
 const TIMEOUT_MS = 3 * 60 * 1000;
+const MIN_STAGE_MS = 1800;
 
 const TIPS = [
   "Combining nutrition and training amplifies your results.",
@@ -46,16 +47,60 @@ export default function GoalGenerating() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const mealStatus = status?.mealPlan?.status || (hasMeal ? "generating" : "none");
-  const workoutStatus = status?.workoutPlan?.status || (hasWorkout ? "generating" : "none");
+  const rawMealStatus = status?.mealPlan?.status || (hasMeal ? "generating" : "none");
+  const rawWorkoutStatus = status?.workoutPlan?.status || (hasWorkout ? "generating" : "none");
+
+  const [displayMealStatus, setDisplayMealStatus] = useState(rawMealStatus);
+  const [displayWorkoutStatus, setDisplayWorkoutStatus] = useState(rawWorkoutStatus);
+  const [displayAllDone, setDisplayAllDone] = useState(false);
+  const mealActiveAtRef = useRef<number | null>(null);
+  const workoutActiveAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (rawMealStatus === "generating" && !mealActiveAtRef.current) {
+      mealActiveAtRef.current = Date.now();
+    }
+    if (rawMealStatus === "ready" || rawMealStatus === "failed") {
+      const waited = mealActiveAtRef.current ? Date.now() - mealActiveAtRef.current : MIN_STAGE_MS;
+      const remaining = Math.max(0, MIN_STAGE_MS - waited);
+      const timer = setTimeout(() => setDisplayMealStatus(rawMealStatus), remaining);
+      return () => clearTimeout(timer);
+    }
+    setDisplayMealStatus(rawMealStatus);
+  }, [rawMealStatus]);
+
+  useEffect(() => {
+    if (rawWorkoutStatus === "generating" && !workoutActiveAtRef.current) {
+      workoutActiveAtRef.current = Date.now();
+    }
+    if (rawWorkoutStatus === "ready" || rawWorkoutStatus === "failed") {
+      const waited = workoutActiveAtRef.current ? Date.now() - workoutActiveAtRef.current : MIN_STAGE_MS;
+      const remaining = Math.max(0, MIN_STAGE_MS - waited);
+      const timer = setTimeout(() => setDisplayWorkoutStatus(rawWorkoutStatus), remaining);
+      return () => clearTimeout(timer);
+    }
+    setDisplayWorkoutStatus(rawWorkoutStatus);
+  }, [rawWorkoutStatus]);
+
+  const mealStatus = displayMealStatus;
+  const workoutStatus = displayWorkoutStatus;
 
   const mealDone = !hasMeal || mealStatus === "ready" || mealStatus === "failed";
   const workoutDone = !hasWorkout || workoutStatus === "ready" || workoutStatus === "failed";
-  const allDone = mealDone && workoutDone;
+  const rawAllDone = mealDone && workoutDone;
 
   const mealFailed = hasMeal && mealStatus === "failed";
   const workoutFailed = hasWorkout && workoutStatus === "failed";
   const anyFailed = mealFailed || workoutFailed;
+
+  useEffect(() => {
+    if (rawAllDone && !displayAllDone) {
+      const timer = setTimeout(() => setDisplayAllDone(true), MIN_STAGE_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [rawAllDone, displayAllDone]);
+
+  const allDone = displayAllDone;
   const allSuccess = allDone && !anyFailed;
 
   const pollStatus = useCallback(async () => {
@@ -244,12 +289,16 @@ export default function GoalGenerating() {
         </div>
         <h1 className="text-xl font-bold mb-2" data-testid="text-generation-complete">Your Goal Plan is Ready!</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Both your nutrition and training plans have been created and linked to your goal.
+          {hasMeal && hasWorkout
+            ? "Both your nutrition and training plans have been created and linked to your goal."
+            : hasMeal
+            ? "Your nutrition plan has been created and linked to your goal."
+            : "Your training plan has been created and linked to your goal."}
         </p>
         <div className="flex flex-col gap-3">
-          <Button onClick={() => navigate("/goals")} data-testid="button-view-goal">
-            <Target className="h-4 w-4 mr-2" />
-            View Goal Plan
+          <Button onClick={() => navigate(`/goals/${id}/ready`)} data-testid="button-view-goal">
+            <Sparkles className="h-4 w-4 mr-2" />
+            See Your Plan
           </Button>
         </div>
       </div>

@@ -8,16 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Target, Plus, Trash2, Loader2, UtensilsCrossed, Dumbbell,
   Flame, Zap, Heart, Trophy, CalendarDays, Link2, Unlink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 
 const GOAL_OPTIONS = [
   { value: "weight_loss", label: "Weight Loss", icon: Flame },
@@ -46,14 +43,29 @@ const GOAL_ICONS: Record<string, typeof Flame> = {
   general_fitness: Target,
 };
 
+const GOAL_TITLE_PREFIXES: Record<string, string[]> = {
+  weight_loss: ["Lean Start", "Cut Phase", "Slim Down"],
+  muscle_gain: ["Strength Sprint", "Build Phase", "Gain Mode"],
+  performance: ["Peak Performance", "Level Up", "Go Mode"],
+  maintenance: ["Steady State", "Stay Strong", "Balance"],
+  energy: ["Energy Boost", "Power Up", "Recharge"],
+  general_fitness: ["Fresh Start", "New Chapter", "Kickoff"],
+};
+
+function generateGoalTitle(goalType: string, startDate: string | null, index: number): string {
+  const prefixes = GOAL_TITLE_PREFIXES[goalType] || GOAL_TITLE_PREFIXES["general_fitness"];
+  const prefix = prefixes[index % prefixes.length];
+  if (startDate) {
+    const datePart = format(new Date(startDate + "T00:00:00"), "MMM d");
+    return `${prefix} · ${datePart}`;
+  }
+  return prefix;
+}
+
 export default function GoalPlans() {
   const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [selectedGoal, setSelectedGoal] = useState("weight_loss");
-  const [selectedPlanType, setSelectedPlanType] = useState<"both" | "meal" | "workout">("both");
-  const [startDate, setStartDate] = useState("");
   const [linkingPlanId, setLinkingPlanId] = useState<string | null>(null);
   const [linkType, setLinkType] = useState<"meal" | "workout">("meal");
 
@@ -70,60 +82,6 @@ export default function GoalPlans() {
   const { data: workoutPlans } = useQuery<WorkoutPlan[]>({
     queryKey: ["/api/workouts"],
     enabled: !!user,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const includeMeal = selectedPlanType === "both" || selectedPlanType === "meal";
-      const includeWorkout = selectedPlanType === "both" || selectedPlanType === "workout";
-
-      const mealGoal = selectedGoal === "energy" || selectedGoal === "general_fitness" ? "maintenance" : selectedGoal;
-      const mealPreferences = includeMeal ? {
-        goal: mealGoal as "weight_loss" | "muscle_gain" | "energy" | "maintenance" | "performance",
-        dietStyles: ["No Preference"],
-        foodsToAvoid: [],
-        householdSize: 1,
-        prepStyle: "cook_daily" as const,
-        budgetMode: "normal" as const,
-        cookingTime: "normal" as const,
-        mealsPerDay: 3 as const,
-        spiceLevel: "medium" as const,
-        authenticityMode: "mixed" as const,
-      } : undefined;
-
-      const workoutGoal = selectedGoal === "energy" || selectedGoal === "general_fitness" ? "maintenance" : selectedGoal;
-      const workoutPreferences = includeWorkout ? {
-        goal: workoutGoal as "weight_loss" | "muscle_gain" | "performance" | "maintenance",
-        location: "gym" as const,
-        trainingMode: "both" as const,
-        focusAreas: ["Full Body"],
-        daysOfWeek: ["Mon" as const, "Wed" as const, "Fri" as const],
-        sessionLength: 45 as const,
-        experienceLevel: "intermediate" as const,
-        limitations: "",
-      } : undefined;
-
-      const res = await apiRequest("POST", "/api/goal-plans/generate", {
-        goalType: selectedGoal,
-        startDate: startDate || undefined,
-        mealPreferences,
-        workoutPreferences,
-      });
-      return res.json();
-    },
-    onSuccess: (data: { goalPlanId: string; mealPlanId: string | null; workoutPlanId: string | null }) => {
-      setCreateOpen(false);
-      const includeMeal = selectedPlanType === "both" || selectedPlanType === "meal";
-      const includeWorkout = selectedPlanType === "both" || selectedPlanType === "workout";
-      setSelectedGoal("weight_loss");
-      setSelectedPlanType("both");
-      setStartDate("");
-      navigate(`/goals/${data.goalPlanId}/generating?meal=${includeMeal}&workout=${includeWorkout}`);
-    },
-    onError: (err: any) => {
-      const msg = err?.message?.includes("429") ? "Daily AI call limit reached. Try again tomorrow." : "Failed to create goal plan";
-      toast({ title: msg, variant: "destructive" });
-    },
   });
 
   const deleteMutation = useMutation({
@@ -192,11 +150,13 @@ export default function GoalPlans() {
     <div className="px-4 sm:px-6 py-8">
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Goal Plans</h1>
-        <Button onClick={() => setCreateOpen(true)} data-testid="button-create-goal">
-          <Plus className="h-4 w-4 mr-1.5" />
-          <span className="hidden sm:inline">New Goal</span>
-          <span className="sm:hidden">New</span>
-        </Button>
+        <Link href="/goals/new">
+          <Button data-testid="button-create-goal">
+            <Plus className="h-4 w-4 mr-1.5" />
+            <span className="hidden sm:inline">New Goal</span>
+            <span className="sm:hidden">New</span>
+          </Button>
+        </Link>
       </div>
       <div>
         {goalLoading ? (
@@ -229,16 +189,19 @@ export default function GoalPlans() {
               <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
                 Create a goal plan to link your meal and workout plans together for unified tracking.
               </p>
-              <Button onClick={() => setCreateOpen(true)} data-testid="button-create-first-goal">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Your First Goal
-              </Button>
+              <Link href="/goals/new">
+                <Button data-testid="button-create-first-goal">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Your First Goal
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-5">
-            {goalPlans.map((gp) => {
+            {goalPlans.map((gp, idx) => {
               const GoalIcon = GOAL_ICONS[gp.goalType] || Target;
+              const goalTitle = generateGoalTitle(gp.goalType, gp.startDate, idx);
               return (
                 <Card key={gp.id} data-testid={`card-goal-${gp.id}`}>
                   <CardContent className="p-5 sm:p-6">
@@ -250,15 +213,18 @@ export default function GoalPlans() {
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-semibold text-base" data-testid={`text-goal-type-${gp.id}`}>
-                              {GOAL_LABELS[gp.goalType] || gp.goalType}
+                              {goalTitle}
                             </h3>
                             <Badge variant="secondary">{GOAL_LABELS[gp.goalType] || gp.goalType}</Badge>
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
                             <CalendarDays className="h-3 w-3" />
-                            <span>Created {format(new Date(gp.createdAt), "MMM d, yyyy")}</span>
-                            {gp.startDate && (
-                              <span className="text-muted-foreground/60">&middot; Starts {format(new Date(gp.startDate + "T00:00:00"), "MMM d")}</span>
+                            {gp.startDate ? (
+                              <span>
+                                {format(new Date(gp.startDate + "T00:00:00"), "MMM d")} – {format(addDays(new Date(gp.startDate + "T00:00:00"), 6), "MMM d, yyyy")}
+                              </span>
+                            ) : (
+                              <span>Created {format(new Date(gp.createdAt), "MMM d, yyyy")}</span>
                             )}
                           </div>
                         </div>
@@ -364,70 +330,6 @@ export default function GoalPlans() {
           </div>
         )}
       </div>
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Goal Plan</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-5 pt-2">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Goal Type</Label>
-              <Select value={selectedGoal} onValueChange={setSelectedGoal}>
-                <SelectTrigger data-testid="select-goal-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {GOAL_OPTIONS.map(g => (
-                    <SelectItem key={g.value} value={g.value}>
-                      <div className="flex items-center gap-2">
-                        <g.icon className="h-4 w-4 text-muted-foreground" />
-                        <span>{g.label}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">What would you like to create?</Label>
-              <Select value={selectedPlanType} onValueChange={(v) => setSelectedPlanType(v as "both" | "meal" | "workout")}>
-                <SelectTrigger data-testid="select-plan-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="both">Meal Plan + Workout Plan</SelectItem>
-                  <SelectItem value="meal">Meal Plan Only</SelectItem>
-                  <SelectItem value="workout">Workout Plan Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Start Date (optional)</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
-                data-testid="input-goal-start-date"
-              />
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="outline" onClick={() => setCreateOpen(false)} data-testid="button-cancel-goal">
-                Cancel
-              </Button>
-              <Button
-                onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending}
-                data-testid="button-submit-goal"
-              >
-                {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Create Goal
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!linkingPlanId} onOpenChange={(open) => { if (!open) setLinkingPlanId(null); }}>
         <DialogContent>

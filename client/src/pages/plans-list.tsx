@@ -88,14 +88,14 @@ export default function PlansList() {
           <Link href="/workouts/new">
             <Button data-testid="button-create-workout">
               <Sparkles className="h-4 w-4 mr-2" />
-              Generate Plan
+              New Workout Plan
             </Button>
           </Link>
         ) : (
           <Link href="/new-plan">
             <Button data-testid="button-create-plan">
               <Sparkles className="h-4 w-4 mr-2" />
-              Generate Plan
+              New Meal Plan
             </Button>
           </Link>
         )}
