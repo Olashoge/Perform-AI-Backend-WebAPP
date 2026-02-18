@@ -1,0 +1,105 @@
+UPDATE THE APP THEME TO A PREMIUM COLOR SYSTEM (DEEP EMERALD + WARM NEUTRALS)
+
+GOAL
+Upgrade the current green theme into an ultra-premium consumer SaaS palette:
+- Calm, confident, engineered
+- Minimal, high-contrast where needed
+- Warm neutral surfaces (not cold gray)
+- Deep emerald as the primary accent
+- One subtle secondary accent for “AI / highlights” (amber) used sparingly
+
+NON-NEGOTIABLES
+- Do NOT change any business logic, routes, or API behavior.
+- This is a UI theme/token update only.
+- Apply changes globally via CSS variables / Tailwind theme tokens (whichever the repo uses).
+- Keep existing components, just restyle them through tokens.
+
+COLOR TOKENS (LIGHT MODE)
+Use these exact hex values:
+
+NEUTRALS
+- --bg:            #FAFAF8  (warm off-white page background)
+- --surface:       #FFFFFF  (card surface)
+- --surface-2:     #F3F4F1  (subtle panels / secondary surfaces)
+- --border:        #E6E7E2  (hairline borders)
+- --text:          #0B0F0E  (near-black text)
+- --text-muted:    #4B5563  (muted text)
+- --text-subtle:   #6B7280  (subtle labels)
+- --shadow:        rgba(15, 23, 42, 0.08)  (soft shadow)
+
+PRIMARY (EMERALD)
+- --primary:       #0E3B2E  (deep emerald)
+- --primary-600:   #145A3F  (hover/active)
+- --primary-100:   #D6EFE5  (tint backgrounds)
+- --primary-50:    #EEF8F4  (very light tint)
+
+SECONDARY ACCENT (AMBER) — USE SPARINGLY
+- --accent:        #A16207  (premium amber)
+- --accent-100:    #FDECC8  (tint)
+- --accent-50:     #FFFBEB  (very light)
+
+SEMANTIC
+- --success:       #166534
+- --warning:       #A16207
+- --danger:        #B91C1C
+- --danger-50:     #FEF2F2
+
+CALENDAR LAYERS (DONT CHANGE LOGIC, JUST VISUAL)
+- Meals accent:    use amber tints (accent-50/100)
+- Workouts accent: use emerald tints (primary-50/100)
+
+DARK MODE (OPTIONAL BUT RECOMMENDED)
+If dark mode exists or is easy:
+- --bg:            #0B0F0E
+- --surface:       #111615
+- --surface-2:     #161D1B
+- --border:        #26302D
+- --text:          #F5F7F6
+- --text-muted:    #C7D0CC
+- --text-subtle:   #98A6A1
+- --primary:       #34D399 (emerald accent, restrained)
+- --primary-100:   #0E3B2E (use as subtle tint)
+- --accent:        #F59E0B (amber)
+
+USAGE RULES (IMPORTANT)
+1) Use emerald ONLY for primary CTAs, active nav states, key highlights.
+2) Use amber ONLY for small highlights, “AI” badge, meal indicators; never for primary buttons.
+3) Backgrounds must stay warm neutral. Avoid cold gray backgrounds.
+4) Borders: subtle. Prefer 1px with --border.
+5) Shadows: soft and consistent. Avoid heavy drop shadows.
+6) Focus rings: use emerald with 30–40% opacity and 2px thickness.
+
+COMPONENT MAPPING
+Update all components to use tokens:
+- Buttons:
+  - Primary: bg primary, text white, hover primary-600
+  - Secondary: border border, text text, hover surface-2
+  - Ghost: transparent, hover surface-2
+- Badges/Chips:
+  - Default: surface-2 + text-muted
+  - Active: primary-50 bg + primary text
+  - Meal chip: accent-50 bg + accent text
+- Inputs:
+  - background surface
+  - border border
+  - focus ring primary (soft)
+- Sidebar:
+  - bg surface
+  - active item: primary-50 bg + primary text + subtle left indicator bar in primary
+- Calendar:
+  - day cell bg surface
+  - selected day: primary-50 bg + subtle border primary-100
+  - meals indicators: accent tints
+  - workouts indicators: primary tints
+
+IMPLEMENTATION
+- Identify current theme system (Tailwind config, CSS variables, shadcn theme, etc).
+- Replace current green values with the palette above.
+- Ensure contrast and readability (AA level).
+- Apply across: sidebar, buttons, pills, cards, calendar indicators, loading states, modals.
+
+DELIVERABLES
+- Updated global theme tokens
+- UI visually consistent across pages
+- No regressions to spacing/layout
+- Provide a short summary of which files were updated (e.g., tailwind.config, globals.css, theme.ts).
