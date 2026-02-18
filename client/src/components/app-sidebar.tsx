@@ -21,7 +21,7 @@ const NAV_ITEMS = [
   { title: "Calendar", icon: CalendarDays, href: "/calendar" },
   { title: "Nutrition", icon: UtensilsCrossed, href: "/nutrition" },
   { title: "Training", icon: Dumbbell, href: "/training" },
-  { title: "Goals", icon: Target, href: "/goals" },
+  { title: "Wellness", icon: Target, href: "/goals" },
   { title: "Settings", icon: Settings, href: "/settings" },
 ];
 
@@ -105,7 +105,7 @@ export function ActiveGoalBar() {
         <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0">
           <Target className="h-3.5 w-3.5 text-muted-foreground" />
         </div>
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">Active Goal</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">Active Plan</span>
         <span className="text-sm font-semibold truncate">{GOAL_LABELS[activeGoal.goalType] || activeGoal.goalType}</span>
         {activeGoal.startDate && (
           <span className="text-xs text-muted-foreground hidden sm:inline shrink-0">

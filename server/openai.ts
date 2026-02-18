@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { planOutputSchema, mealSchema, daySchema, groceryPricingSchema, workoutPlanOutputSchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext, type GroceryPricing, type GrocerySection, type WorkoutPreferences, type WorkoutPlanOutput } from "@shared/schema";
+import { type WellnessContext, buildMealWellnessBlock, buildWorkoutWellnessBlock } from "./wellness-context";
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn("WARNING: OPENAI_API_KEY is not set. AI features will not work.");
@@ -309,12 +310,13 @@ function cleanJsonString(raw: string): string {
   return cleaned.trim();
 }
 
-export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext, workoutDays?: string[]): Promise<PlanOutput> {
+export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext, workoutDays?: string[], wellnessCtx?: WellnessContext): Promise<PlanOutput> {
   const systemPrompt = buildSystemPrompt(prefs);
   let userPrompt = buildPlanPrompt(prefs, prefCtx);
 
-  if (workoutDays && workoutDays.length > 0) {
-    const dayMapping = workoutDays.map((day, i) => `Day ${i + 1} = ${day}`).join(", ");
+  if (wellnessCtx && wellnessCtx.trainingDays.length > 0) {
+    userPrompt += buildMealWellnessBlock(wellnessCtx);
+  } else if (workoutDays && workoutDays.length > 0) {
     userPrompt += `\n\nWORKOUT-DAY AWARENESS:
 The user works out on: ${workoutDays.join(", ")}.
 On workout days, provide slightly higher protein and carb portions for recovery.
@@ -543,9 +545,13 @@ Return a JSON object with this exact structure:
 }`;
 }
 
-export async function generateWorkoutPlan(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }): Promise<WorkoutPlanOutput> {
+export async function generateWorkoutPlan(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }, wellnessCtx?: WellnessContext): Promise<WorkoutPlanOutput> {
   const systemPrompt = buildWorkoutSystemPrompt();
-  const userPrompt = buildWorkoutPlanPrompt(prefs, exerciseContext);
+  let userPrompt = buildWorkoutPlanPrompt(prefs, exerciseContext);
+
+  if (wellnessCtx) {
+    userPrompt += buildWorkoutWellnessBlock(wellnessCtx);
+  }
 
   let raw = await callOpenAI(systemPrompt, userPrompt);
   let cleaned = cleanJsonString(raw);

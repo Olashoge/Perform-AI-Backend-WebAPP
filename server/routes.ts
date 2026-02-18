@@ -7,6 +7,7 @@ import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, worko
 import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
+import { buildWellnessContext } from "./wellness-context";
 import connectPgSimple from "connect-pg-simple";
 
 const PgStore = connectPgSimple(session);
@@ -180,8 +181,13 @@ export async function registerRoutes(
         try {
           const prefCtx = await storage.getUserPreferenceContext(userId);
           const workoutDays = parsed.data.workoutDays || undefined;
+          const standaloneCtx = buildWellnessContext({
+            goalType: parsed.data.goal,
+            startDate: validStartDate,
+            mealPrefs: parsed.data,
+          });
           log(`Generating full plan for user ${userId} (plan ${pendingPlan.id})`, "openai");
-          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays);
+          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays, standaloneCtx);
           await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
@@ -795,7 +801,12 @@ export async function registerRoutes(
           log(`Generating workout plan ${plan.id}`, "openai");
           const prefContext = await storage.getUserPreferenceContext(userId);
           const exerciseContext = { avoidedExercises: prefContext.avoidedExercises, dislikedExercises: prefContext.dislikedExercises };
-          const result = await generateWorkoutPlan(prefs, exerciseContext);
+          const standaloneWCtx = buildWellnessContext({
+            goalType: prefs.goal,
+            startDate: validStartDate,
+            workoutPrefs: prefs,
+          });
+          const result = await generateWorkoutPlan(prefs, exerciseContext, standaloneWCtx);
           await storage.updateWorkoutPlanStatus(plan.id, "ready", result);
           log(`Workout plan ${plan.id} generated successfully`, "openai");
         } catch (err) {
@@ -1044,6 +1055,18 @@ export async function registerRoutes(
           let workoutPlanId: string | null = null;
           let mealPlanId: string | null = null;
 
+          const parsedWorkoutForCtx = needsWorkout && workoutPreferences ? workoutPreferencesSchema.safeParse(workoutPreferences) : null;
+          const parsedMealForCtx = needsMeal && mealPreferences ? (() => { const mp = { ...mealPreferences }; if (mp.goal === "fat_loss") mp.goal = "weight_loss"; return preferencesSchema.safeParse(mp); })() : null;
+
+          const wellnessCtx = buildWellnessContext({
+            goalType: goalType,
+            startDate: validStartDate,
+            endDate: validStartDate ? (() => { const d = new Date(validStartDate + "T00:00:00"); d.setDate(d.getDate() + 6); return d.toISOString().split("T")[0]; })() : undefined,
+            mealPrefs: parsedMealForCtx?.success ? parsedMealForCtx.data : undefined,
+            workoutPrefs: parsedWorkoutForCtx?.success ? parsedWorkoutForCtx.data : undefined,
+            globalInputs: globalInputs || undefined,
+          });
+
           if (needsWorkout && workoutPreferences) {
             await storage.updateGoalPlan(goalPlan.id, {
               progress: { ...initialProgress, stage: "TRAINING", stageStatuses: { ...initialProgress.stageStatuses, TRAINING: "RUNNING" } },
@@ -1061,7 +1084,7 @@ export async function registerRoutes(
             log(`Goal gen: generating workout plan ${pendingWorkout.id}`, "openai");
             const goalPrefContext = await storage.getUserPreferenceContext(userId);
             const goalExerciseCtx = { avoidedExercises: goalPrefContext.avoidedExercises, dislikedExercises: goalPrefContext.dislikedExercises };
-            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx);
+            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx);
             await storage.updateWorkoutPlanStatus(pendingWorkout.id, "ready", result);
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingWorkout.id, type: "workout" });
             log(`Goal gen: workout plan ${pendingWorkout.id} ready`, "openai");
@@ -1098,7 +1121,7 @@ export async function registerRoutes(
             const prefCtx = await storage.getUserPreferenceContext(userId);
             const workoutDays = parsedMeal.data.workoutDays || undefined;
             log(`Goal gen: generating meal plan ${pendingMeal.id}`, "openai");
-            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays);
+            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx);
             await storage.updatePlanStatus(pendingMeal.id, "ready", planJson);
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingMeal.id, type: "meal" });
             log(`Goal gen: meal plan ${pendingMeal.id} ready`, "openai");

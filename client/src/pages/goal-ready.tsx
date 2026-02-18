@@ -175,7 +175,7 @@ export default function GoalReady() {
       <div className="flex flex-col gap-3">
         <Button variant="ghost" onClick={() => navigate("/goals")} className="w-full" data-testid="button-go-to-goals">
           <Target className="h-4 w-4 mr-2" />
-          Back to Goals
+          Back to Wellness Plans
         </Button>
       </div>
     </div>

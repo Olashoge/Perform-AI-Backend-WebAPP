@@ -99,7 +99,7 @@ export default function GoalPlans() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/goal-plans"] });
-      toast({ title: "Goal plan removed" });
+      toast({ title: "Wellness plan removed" });
     },
   });
 
@@ -158,11 +158,11 @@ export default function GoalPlans() {
   return (
     <div className="px-4 sm:px-6 py-8">
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Goal Plans</h1>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Wellness Plans</h1>
         <Link href="/goals/new">
           <Button data-testid="button-create-goal">
             <Plus className="h-4 w-4 mr-1.5" />
-            <span className="hidden sm:inline">New Goal</span>
+            <span className="hidden sm:inline">New Wellness Plan</span>
             <span className="sm:hidden">New</span>
           </Button>
         </Link>
@@ -194,14 +194,14 @@ export default function GoalPlans() {
               <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-5">
                 <Target className="h-8 w-8 text-primary" />
               </div>
-              <h2 className="font-semibold text-lg mb-2">No goal plans yet</h2>
+              <h2 className="font-semibold text-lg mb-2">No wellness plans yet</h2>
               <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
-                Create a goal plan to link your meal and workout plans together for unified tracking.
+                Create a wellness plan to link your meal and workout plans together for unified tracking.
               </p>
               <Link href="/goals/new">
                 <Button data-testid="button-create-first-goal">
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Your First Goal
+                  Create Your First Wellness Plan
                 </Button>
               </Link>
             </CardContent>

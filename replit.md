@@ -1,194 +1,28 @@
 # Perform AI
 
 ## Overview
-AI-powered personal performance system combining 7-day meal planning AND workout planning. Users enter dietary/fitness preferences and personalization data (age, weight, workout frequency) and the app generates personalized 7-day meal plans with step-by-step recipes, nutrition info, organized grocery lists, AND customized workout programs using OpenAI gpt-4.1-mini. Premium visual redesign with Inter font, deep emerald primary (#0E3B2E), amber meal accent (#A16207), emerald workout accent, warm neutral backgrounds (#FAFAF8). Full dark mode support with theme toggle (light/dark/system) persisted via localStorage.
+Perform AI is an AI-powered personal performance system that generates personalized 7-day meal and workout plans. Users input their dietary and fitness preferences, along with personalization data such as age, weight, and workout frequency. The system then leverages AI to create customized 7-day meal plans, complete with step-by-step recipes, nutrition information, and organized grocery lists. Additionally, it generates tailored workout programs. The project aims to provide a comprehensive solution for individuals seeking to optimize their personal health and fitness routines through intelligent, adaptive planning.
 
-## Tech Stack
-- **Frontend**: React + Vite (TypeScript), Tailwind CSS, shadcn/ui components
-- **Backend**: Express (TypeScript) with session-based auth (PostgreSQL-backed, 30-day sessions via connect-pg-simple)
-- **Database**: PostgreSQL (Drizzle ORM)
-- **AI**: OpenAI gpt-4.1-mini for meal plan + workout plan generation
+## User Preferences
+I prefer iterative development with clear communication at each stage. Please ask before making any major architectural changes or significant modifications to existing features. I value concise explanations but appreciate detailed justifications for complex decisions. For styling, I prefer the Inter font, a deep emerald primary color (#0E3B2E), an amber accent for meal-related UI (#A16207), an emerald accent for workout-related UI, and warm neutral backgrounds (#FAFAF8). Full dark mode support is essential, with a theme toggle (light/dark/system) persisted via local storage.
 
-## Project Structure
-```
-client/src/
-  App.tsx          - Main router with AuthenticatedLayout (sidebar + goal bar wrapper)
-  components/
-    app-sidebar.tsx  - AppSidebar (icon-only nav) + ActiveGoalBar components
-  lib/auth.tsx     - Auth context (login/signup/logout)
-  lib/queryClient.ts - TanStack Query setup
-  pages/
-    landing.tsx    - Landing page (no sidebar)
-    login.tsx      - Login form (no sidebar)
-    signup.tsx     - Signup form (no sidebar)
-    dashboard.tsx  - Weekly overview with goal progress, quick actions, week strip, daily detail, active plans sidebar
-    plans-list.tsx - Unified Nutrition/Training plans list (route-based tab: /nutrition or /training), grid card layout
-    plan-calendar.tsx - Calendar view (dense month + week) showing ALL scheduled plans merged
-    new-plan.tsx   - Preference form for generating meal plans
-    plan-generating.tsx - Meal plan generation progress page
-    plan-view.tsx  - View generated plan (meals + grocery list)
-    new-workout.tsx  - Workout preference form
-    workout-generating.tsx - Workout generation progress page
-    workout-view.tsx - View generated workout plan
-    goal-plans.tsx - GoalPlan management (list goals, link/unlink plans, navigates to wizard)
-    goal-wizard.tsx - 4-step goal creation wizard (overview w/ personalization → nutrition → training → review) with conflict-aware date picker, plan type selector, expanded goal types
-    goal-generating.tsx - Goal plan generation progress (polls real backend stage progress: TRAINING→NUTRITION→SCHEDULING→FINALIZING with min display times)
-    goal-ready.tsx - Post-generation goal reveal screen with creative title, summary and CTAs
-    check-ins.tsx  - Weekly check-in logging (weight, energy, compliance, notes) with history
-    preferences.tsx - Manage liked/disliked meals and ingredient preferences
-    exercise-preferences.tsx - Manage liked/disliked/avoided exercise preferences
-    settings.tsx   - Settings page (profile, active goal, check-in link, food/exercise preferences)
+## System Architecture
+The application is built with a modern web stack, emphasizing a responsive and intuitive user experience. The frontend is developed using React with Vite and TypeScript, styled with Tailwind CSS and shadcn/ui components. The UI/UX features a premium visual redesign, including an icon-only navigation sidebar and an active goal bar.
 
-server/
-  index.ts         - Express server setup (connect-pg-simple session store)
-  routes.ts        - API routes (auth + meal plan CRUD + workout plan CRUD + preferences management)
-  storage.ts       - Database storage layer (IStorage interface)
-  db.ts            - PostgreSQL connection
-  openai.ts        - OpenAI integration (meal plan generation, swap, regen, workout plan generation)
-  meal-utils.ts    - Meal fingerprinting and ingredient keyword extraction
+The backend is an Express server written in TypeScript, managing session-based authentication with PostgreSQL for session storage, ensuring 30-day session persistence. PostgreSQL is also used as the primary database, interfaced via Drizzle ORM.
 
-shared/
-  schema.ts        - Drizzle schema + Zod validation schemas
-```
+Core features include:
+- **Personalized Plan Generation**: AI-generated 7-day meal and workout plans based on user preferences and personal data. Meal plans are configurable for 2 or 3 meals per day, with dynamic meal slot selection. Workout plans consider goals, location, training modes, focus areas, session length, experience level, and injuries.
+- **Goal-Oriented Planning**: A `GoalPlan` entity orchestrates the generation of both meal and workout plans, supporting various goal types (e.g., weight loss, muscle gain). It features a sequential generation pipeline (workout → meal plan → scheduling → finalizing) with real-time progress tracking.
+- **Feedback Loop & Adaption**: Users can provide tri-state feedback (like/dislike/neutral) on individual meals and workout sessions. This feedback influences future AI-generated plans by tracking ingredient and exercise preferences/avoids.
+- **Grocery Management**: AI-estimated grocery pricing with confidence levels, and a feature for users to track owned items, dynamically updating totals. Grocery lists can be rebuilt from current meals.
+- **Scheduling & Calendar**: Plans are schedulable with conflict-aware date pickers. A unified calendar view displays all scheduled meal and workout plans.
+- **Wellness Context**: A shared `WellnessContext` on the server ensures cross-plan coupling, adapting nutrition based on workout schedules (e.g., increased carbs/calories on training days).
+- **Check-ins**: Weekly check-in logging for weight, energy, compliance, and notes.
+- **Rate Limiting**: AI calls are rate-limited to 10 per user per day to manage resource usage.
+- **Soft Deletion**: Plans and goals are soft-deleted, maintaining data integrity while allowing for recovery.
 
-## Key Features
-- Email/password authentication with PostgreSQL-backed sessions (30-day duration)
-- AI-generated 7-day meal plans with configurable meals per day (2 or 3)
-- Dynamic meal slots: when mealsPerDay=2, user picks exactly 2 from breakfast/lunch/dinner
-- Personalization: age, current/target weight (lb/kg), workout days/week
-  - Age < 18 triggers safe, non-prescriptive nutrition language
-  - Weight/activity data adapts portion sizes and macro ranges
-- Multi-select diet/cuisine styles with chip UI, including custom style input
-- 14 foods-to-avoid options including Chicken, Beans/Legumes, Spicy Foods, Garlic/Onion
-- Dedicated generation page (/plan/:id/generating) with 4-stage dynamic timeline, progress bar, rotating tips, collapsible preference summary
-- Idempotency keys prevent duplicate plan generation
-- Swap individual meals (max 3 per plan)
-- Regenerate entire day (max 1 per plan)
-- Rebuild grocery list from current meals (no AI needed)
-- Grocery price estimation: AI estimates min/max price ranges per item with confidence levels
-  - groceryPricingJson stored on mealPlans, regenerated on swap/regen/rebuild
-  - pricingStatus column tracks pricing generation independently from plan status (pending/ready/failed)
-  - Owned item tracking: users mark items they already have, adjusted totals update in real-time
-  - ownedGroceryItems table with unique constraint on (userId, mealPlanId, itemKey)
-  - Item key normalization shared between server (meal-utils.ts) and client
-  - Frontend polls for pricing (max 10 polls, 3s interval) with timeout fallback
-- Rate limiting: 10 AI calls per user per day
-- Print-friendly layout
-- Plan Settings panel: collapsible view of plan preferences including personalization, swap/regen limits
-- Tri-state meal feedback: like/dislike/neutral (neutral removes feedback record)
-  - MealFeedback table stores per-meal feedback with fingerprinting
-  - IngredientPreference table tracks derived ingredient avoids/prefers
-  - Dislike triggers ingredient avoid confirmation modal (user chooses which ingredients to avoid)
-  - IngredientAvoidProposal table: pending proposals from dislikes, reviewed in Preferences page
-  - Preferences wired into all OpenAI prompts (plan gen, swap, regen day)
-- Workout session feedback: like/dislike/neutral per workout session (WorkoutFeedback table)
-- Exercise preferences: per-exercise like/dislike/avoid tracking (ExercisePreferences table)
-  - Like/dislike buttons on each exercise in workout view
-  - Dislike triggers avoid confirmation modal (user chooses to just dislike or avoid completely)
-  - Avoided exercises are NEVER included in future AI-generated workout plans
-  - Disliked exercises are deprioritized in future plans
-  - Dedicated /preferences/exercise page for managing exercise preferences (tabs: Liked/Disliked/Avoided)
-  - Settings page links to Exercise Preferences page
-- GoalPlan entity: parent orchestration entity with planType (meal/workout/both), sequential generation pipeline
-  - Fields: goalType, planType, startDate, endDate, pace, title, globalInputs, nutritionInputs, trainingInputs, status, progress JSON
-  - Status enum: draft/generating/ready/failed
-  - Progress tracks per-stage status: TRAINING→NUTRITION→SCHEDULING→FINALIZING (each PENDING/RUNNING/DONE/FAILED/SKIPPED)
-  - Sequential generation: workout first, then meal plan, then scheduling, then finalization
-  - Creative titles auto-generated from goal type + start date
-  - Expanded goal types: weight_loss, muscle_gain, performance, maintenance, energy, general_fitness, mobility, endurance, strength
-  - Availability API (GET /api/availability) returns separate mealDates/workoutDates for conflict-aware scheduling
-  - CRUD API for goal plans
-- Preferences management page (/preferences): view and delete liked/disliked meals, avoided ingredients, pending ingredient proposals
-- Plan lifecycle status badges: Draft, Scheduled, Active, Completed (derived from start date)
-- Calendar filter toggle: Combined/Meals/Workouts view filtering
-- Workout-day-aware meal generation: OpenAI prompts adapt nutrition based on workout schedule
-- Weekly check-in tracking: weight, energy rating, compliance, notes (WeeklyCheckIn table)
-- AI-generated 7-day workout plans with customizable preferences
-  - Goals: weight loss, muscle gain, performance, maintenance
-  - Location: home (no equipment), home (dumbbells/bands), gym, outdoor, mixed
-  - Training modes: strength, cardio, both
-  - Focus areas: full body, upper/lower body, core, back, chest, arms, etc.
-  - Day-of-week selection for workout days
-  - Session length: 20/30/45/60/90 min
-  - Experience level: beginner/intermediate/advanced
-  - Injuries/limitations support
-  - Each session includes warm-up, main exercises (sets/reps/time), optional finisher, cool-down, coaching cues
-  - Progression notes for week-to-week guidance
-  - Plans schedulable via 3-dot menu (same pattern as meal plans)
-  - Plans-list page has tabs for Meal Plans and Workout Plans
-  - Calendar shows workout days with dumbbell icon indicator alongside meals
-
-## Schema Notes
-- `dietStyles` is a string array (replaced old `dietStyle` string field)
-- `mealsPerDay` is 2 or 3 (default 3)
-- `mealSlots` is optional string array; when mealsPerDay=2, stores exactly 2 of ["breakfast","lunch","dinner"]
-- `age`, `currentWeight`, `targetWeight` (optional numbers), `weightUnit` ("lb"|"kg"), `workoutDaysPerWeek` (0-7), `workoutDays` (optional string array of "Sun"|"Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat")
-- `spiceLevel` ("none"|"mild"|"medium"|"hot"), default "medium" — applied independently of cuisine
-- `authenticityMode` ("traditional"|"weeknight"|"mixed"), default "mixed" — controls recipe complexity
-- `planStartDate` is nullable varchar(10) storing YYYY-MM-DD; plans are created without a start date and must be scheduled from the Plan Detail page via 3-dot overflow menu
-- `deletedAt` is nullable timestamp for soft delete; all queries exclude deleted plans; soft delete also clears planStartDate
-- `pricingStatus` column on mealPlans tracks grocery pricing independently (pending/ready/failed)
-- Day schema has optional breakfast, lunch, dinner to support dynamic meal slots
-- OpenAI prompts limited to 6-8 steps per meal, shorter summaries and whyItHelpsGoal
-- Goal enum uses `weight_loss` (backward compat: server normalizes old `fat_loss` values)
-
-## API Endpoints
-- `POST /api/auth/signup` - Create account
-- `POST /api/auth/login` - Login
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Get current user
-- `POST /api/plan` - Generate new meal plan (async, returns immediately with status)
-- `GET /api/plan/:id` - Get saved plan (includes status, errorMessage)
-- `GET /api/plan/:id/status` - Get plan status + pricingStatus (lightweight polling endpoint)
-- `GET /api/plans` - List user's plans
-- `POST /api/plan/:id/swap` - Swap a meal
-- `POST /api/plan/:id/regenerate-day` - Regenerate a day
-- `POST /api/plan/:id/grocery/regenerate` - Rebuild grocery list
-- `GET /api/plan/:id/grocery` - Get grocery data with pricing, owned items, totals
-- `POST /api/plan/:id/grocery/owned` - Toggle owned item status
-- `POST /api/feedback/meal` - Like/dislike a meal (upserts feedback + derives ingredient prefs)
-- `GET /api/feedback/plan/:planId` - Get feedback map for all meals (by fingerprint)
-- `GET /api/preferences` - Get user's full preference data (meals + ingredients with IDs)
-- `DELETE /api/preferences/meal/:id` - Remove a meal feedback entry
-- `DELETE /api/preferences/ingredient/:id` - Remove an ingredient preference
-- `DELETE /api/plans/:id` - Soft delete a plan (sets deletedAt, clears startDate)
-- `GET /api/calendar/all` - Merged calendar data from ALL scheduled plans (no plan selector)
-- `GET /api/calendar/occupied-dates?excludePlanId=X` - List of dates with existing meals (for date picker blocking)
-- `POST /api/workout` - Generate new workout plan (async, returns immediately with status)
-- `GET /api/workout/:id` - Get saved workout plan
-- `GET /api/workout/:id/status` - Get workout plan status (lightweight polling)
-- `GET /api/workouts` - List user's workout plans
-- `POST /api/workout/:id/start-date` - Set/clear workout plan start date
-- `DELETE /api/workouts/:id` - Soft delete a workout plan
-- `GET /api/calendar/workouts` - Merged workout calendar data from ALL scheduled workout plans
-- `GET /api/calendar/workout-occupied-dates?excludePlanId=X` - List of dates with existing workouts
-- `POST /api/feedback/workout` - Like/dislike/neutral a workout session
-- `GET /api/feedback/workout/:planId` - Get feedback map for workout sessions
-- `GET /api/preferences/exercise` - Get exercise preferences (liked/disliked/avoided)
-- `POST /api/preferences/exercise` - Upsert exercise preference
-- `DELETE /api/preferences/exercise/:id` - Delete exercise preference by ID
-- `DELETE /api/preferences/exercise/key/:key` - Delete exercise preference by key
-- `POST /api/goal-plans` - Create a goal plan
-- `POST /api/goal-plans/generate` - Unified goal + plan creation with async AI generation
-- `GET /api/goal-plans/:id/generation-status` - Poll status of both meal + workout plan generation
-- `GET /api/goal-plans/conflicts` - Combined meal + workout occupied dates for conflict-aware scheduling
-- `GET /api/availability` - Separate mealDates/workoutDates for conflict-aware scheduling
-- `GET /api/goal-plans` - List user's goal plans
-- `GET /api/goal-plans/:id` - Get a goal plan
-- `PATCH /api/goal-plans/:id` - Update a goal plan
-- `DELETE /api/goal-plans/:id` - Soft delete a goal plan
-- `GET /api/ingredient-proposals` - Get pending ingredient avoid proposals
-- `POST /api/ingredient-proposals/:id/resolve` - Accept/decline a proposal
-- `POST /api/check-ins` - Create a weekly check-in
-- `GET /api/check-ins` - List check-ins (optional goalPlanId filter)
-
-## Environment Variables
-- `DATABASE_URL` - PostgreSQL connection string
-- `OPENAI_API_KEY` - OpenAI API key
-- `SESSION_SECRET` - Express session secret
-
-## Running
-```bash
-npm run dev        # Start dev server
-npm run db:push    # Push schema to database
-```
+## External Dependencies
+- **OpenAI**: Utilizes `gpt-4.1-mini` for generating personalized meal plans and workout programs.
+- **PostgreSQL**: Primary database for all application data, including user information, session storage, plans, preferences, and check-ins.
+- **connect-pg-simple**: Used for PostgreSQL-backed session storage in the Express backend.

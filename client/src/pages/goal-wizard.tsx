@@ -92,7 +92,7 @@ const EXPERIENCE_OPTIONS = [
 ];
 
 const STEP_INFO = [
-  { title: "Goal Overview", description: "Choose your fitness goal and plan type" },
+  { title: "Wellness Overview", description: "Choose your fitness goal and plan type" },
   { title: "Nutrition Setup", description: "Customize your meal preferences" },
   { title: "Training Setup", description: "Configure your workout preferences" },
   { title: "Review", description: "Review your plan before generating" },
@@ -290,7 +290,7 @@ export default function GoalWizard() {
       setIsPending(false);
       const msg = err?.message?.includes("429")
         ? "Daily AI call limit reached. Try again tomorrow."
-        : "Failed to create goal plan. Please try again.";
+        : "Failed to create wellness plan. Please try again.";
       toast({ title: msg, variant: "destructive" });
     }
   }

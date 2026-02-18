@@ -90,7 +90,7 @@ export default function SettingsPage() {
           <CardContent className="p-5 sm:p-6">
             <div className="flex items-center gap-3 mb-5">
               <Target className="h-5 w-5 text-muted-foreground" />
-              <h2 className="font-semibold text-base">Active Goal</h2>
+              <h2 className="font-semibold text-base">Active Wellness Plan</h2>
             </div>
             {activeGoal ? (
               <div className="space-y-4">
@@ -110,7 +110,7 @@ export default function SettingsPage() {
                 <Link href="/goals">
                   <Button variant="outline" size="sm" data-testid="button-create-goal">
                     <Target className="h-4 w-4 mr-2" />
-                    Create Goal
+                    Create Wellness Plan
                   </Button>
                 </Link>
               </div>

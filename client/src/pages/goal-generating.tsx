@@ -182,7 +182,7 @@ export default function GoalGenerating() {
 
   useEffect(() => {
     if (elapsedSec * 1000 > TIMEOUT_MS && !allDone) {
-      setError("Generation is taking longer than expected. You can check back on the Goals page.");
+      setError("Generation is taking longer than expected. You can check back on the Wellness Plans page.");
       if (pollRef.current) clearInterval(pollRef.current);
     }
   }, [elapsedSec, allDone]);
@@ -231,7 +231,7 @@ export default function GoalGenerating() {
         <p className="text-sm text-muted-foreground mb-6">{error}</p>
         <Button onClick={() => navigate("/goals")} data-testid="button-back-to-goals">
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Goals
+          Back to Wellness Plans
         </Button>
       </div>
     );
@@ -253,7 +253,7 @@ export default function GoalGenerating() {
         </h1>
         <p className="text-sm text-muted-foreground mb-4">
           {partialSuccess
-            ? "One of your plans was created successfully, but the other failed. You can try again from the Goals page."
+            ? "One of your plans was created successfully, but the other failed. You can try again from the Wellness Plans page."
             : errorMsg}
         </p>
         <div className="space-y-2 mb-6">
@@ -275,7 +275,7 @@ export default function GoalGenerating() {
         <div className="flex flex-col gap-3">
           <Button onClick={() => navigate("/goals")} data-testid="button-back-to-goals">
             <Target className="h-4 w-4 mr-2" />
-            View Goals
+            View Wellness Plans
           </Button>
           <Button variant="outline" onClick={() => navigate("/goals/new")} data-testid="button-try-again">
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -292,7 +292,7 @@ export default function GoalGenerating() {
         <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
           <CheckCircle2 className="h-7 w-7 text-primary" />
         </div>
-        <h1 className="text-xl font-bold mb-2" data-testid="text-generation-complete">Your Goal Plan is Ready!</h1>
+        <h1 className="text-xl font-bold mb-2" data-testid="text-generation-complete">Your Wellness Plan is Ready!</h1>
         <p className="text-sm text-muted-foreground mb-6">
           {hasMeal && hasWorkout
             ? "Both your nutrition and training plans have been created and linked to your goal."
@@ -315,7 +315,7 @@ export default function GoalGenerating() {
       <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
         <Target className="h-7 w-7 text-primary animate-pulse" />
       </div>
-      <h1 className="text-xl font-bold mb-1" data-testid="text-building-goal">Building Your Goal Plan</h1>
+      <h1 className="text-xl font-bold mb-1" data-testid="text-building-goal">Building Your Wellness Plan</h1>
       <p className="text-sm text-muted-foreground mb-6">This usually takes 60-90 seconds</p>
 
       <div className="w-full bg-muted rounded-full h-2 mb-8 overflow-hidden">
