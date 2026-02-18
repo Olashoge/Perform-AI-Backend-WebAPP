@@ -73,14 +73,9 @@ export default function Landing() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             {user ? (
-              <>
-                <Link href="/new-plan">
-                  <Button data-testid="button-new-plan">Create Plan</Button>
-                </Link>
-                <Link href="/plans">
-                  <Button variant="outline" data-testid="button-my-plans">My Plans</Button>
-                </Link>
-              </>
+              <Link href="/dashboard">
+                <Button data-testid="button-go-dashboard">Dashboard</Button>
+              </Link>
             ) : (
               <>
                 <Link href="/login">
@@ -114,10 +109,10 @@ export default function Landing() {
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             {user ? (
-              <Link href="/new-plan">
+              <Link href="/dashboard">
                 <Button size="lg" data-testid="button-get-started">
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Create New Plan
+                  Go to Dashboard
                 </Button>
               </Link>
             ) : (
