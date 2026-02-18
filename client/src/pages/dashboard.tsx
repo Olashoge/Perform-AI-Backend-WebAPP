@@ -313,25 +313,42 @@ export default function Dashboard() {
           </h2>
 
           {dayMeals && Object.keys(dayMeals.meals).length > 0 && (
-            <Card className="mb-4 hover-elevate cursor-pointer" onClick={() => dayMeals.planIds?.[0] && navigate(`/plan/${dayMeals.planIds[0]}`)} data-testid="card-day-nutrition">
+            <Card className="mb-4" data-testid="card-day-nutrition">
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
                     <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   </div>
-                  <div className="flex-1">
+                  <div>
                     <div className="font-semibold">Nutrition</div>
-                    <div className="text-xs text-muted-foreground">Day plan</div>
+                    <div className="text-xs text-muted-foreground">Tap a meal to view details</div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </div>
 
                 <div className="space-y-4">
                   {["breakfast", "lunch", "dinner"].map(slot => {
                     const meal = dayMeals.meals[slot];
                     if (!meal) return null;
+                    const planId = dayMeals.planIds?.[0];
                     return (
-                      <div key={slot} className="border-t pt-4 first:border-t-0 first:pt-0">
+                      <div
+                        key={slot}
+                        className="border-t pt-4 first:border-t-0 first:pt-0 cursor-pointer rounded-md hover-elevate p-2 -mx-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (planId) {
+                            const matchingPlan = (mealPlans || []).find(p => String(p.id) === String(planId));
+                            if (matchingPlan?.planStartDate) {
+                              const planStart = new Date(matchingPlan.planStartDate + "T00:00:00");
+                              const diffDays = Math.round((selectedDate.getTime() - planStart.getTime()) / 86400000);
+                              navigate(`/plan/${planId}?scrollTo=day-${diffDays}&meal=${slot}`);
+                            } else {
+                              navigate(`/plan/${planId}`);
+                            }
+                          }
+                        }}
+                        data-testid={`meal-slot-${slot}`}
+                      >
                         <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1 capitalize">{slot}</div>
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1">
@@ -343,6 +360,7 @@ export default function Dashboard() {
                             )}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                            <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
                             {meal.calories && <span className="text-amber-600 dark:text-amber-400">{meal.calories}</span>}
                             {meal.macros?.protein && <span>P: {meal.macros.protein}</span>}
                           </div>

@@ -571,6 +571,20 @@ export default function PlanView() {
   const [startDateOpen, setStartDateOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const scrollTarget = sp.get("scrollTo");
+    if (scrollTarget && data) {
+      const dayIdx = scrollTarget.replace("day-", "");
+      const el = document.querySelector(`[data-testid="text-day-${dayIdx}"]`);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 300);
+      }
+    }
+  }, [data]);
+
   const { data: occupiedDatesData } = useQuery<{ occupiedDates: string[] }>({
     queryKey: ["/api/calendar/occupied-dates", params.id],
     queryFn: async () => {
