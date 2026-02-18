@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -7,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Plus, Sparkles, Loader2,
-  Flame, Dumbbell, Zap, Heart, Trophy,
+  Plus, Sparkles, Loader2, UtensilsCrossed,
+  Dumbbell,
   CheckCircle2, Clock, CalendarCheck, Activity, ChevronRight,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
@@ -48,57 +46,21 @@ function StatusBadge({ startDate }: { startDate: string | null | undefined }) {
   );
 }
 
-const GOAL_LABELS: Record<string, string> = {
-  weight_loss: "Weight Loss",
-  fat_loss: "Weight Loss",
-  muscle_gain: "Muscle Gain",
-  energy: "Energy",
-  maintenance: "Maintenance",
-  performance: "Performance",
-};
-
-const GOAL_ICONS: Record<string, typeof Flame> = {
-  weight_loss: Flame,
-  fat_loss: Flame,
-  muscle_gain: Dumbbell,
-  energy: Zap,
-  maintenance: Heart,
-  performance: Trophy,
-};
-
-const WORKOUT_GOAL_LABELS: Record<string, string> = {
-  weight_loss: "Weight Loss",
-  muscle_gain: "Muscle Gain",
-  performance: "Performance",
-  maintenance: "General Fitness",
-};
-
 export default function PlansList() {
   const { user, isLoading } = useAuth();
-  const [location, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"meals" | "workouts">(location === "/training" ? "workouts" : "meals");
+  const [location] = useLocation();
+
+  const isWorkouts = location === "/training";
 
   const { data: plans, isLoading: plansLoading } = useQuery<MealPlan[]>({
     queryKey: ["/api/plans"],
-    enabled: !!user,
+    enabled: !!user && !isWorkouts,
   });
 
   const { data: workoutPlans, isLoading: workoutsLoading } = useQuery<WorkoutPlan[]>({
     queryKey: ["/api/workouts"],
-    enabled: !!user,
+    enabled: !!user && isWorkouts,
   });
-
-  useEffect(() => {
-    if (!isLoading && !user) {
-      navigate("/login");
-    }
-  }, [isLoading, user, navigate]);
-
-  const handleTabChange = (value: string) => {
-    const tab = value as "meals" | "workouts";
-    setActiveTab(tab);
-    navigate(tab === "meals" ? "/nutrition" : "/training");
-  };
 
   if (isLoading || !user) {
     return (
@@ -108,10 +70,10 @@ export default function PlansList() {
     );
   }
 
-  const pageTitle = activeTab === "meals" ? "Nutrition" : "Training";
-  const pageSubtitle = activeTab === "meals"
-    ? "Meal plans aligned with your goal"
-    : "Workout plans for progressive results";
+  const pageTitle = isWorkouts ? "Training" : "Nutrition";
+  const pageSubtitle = isWorkouts
+    ? "Workout plans for progressive results"
+    : "Meal plans aligned with your goal";
 
   return (
     <div className="px-4 sm:px-6 py-8 sm:py-10">
@@ -120,16 +82,16 @@ export default function PlansList() {
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">{pageTitle}</h1>
           <p className="text-sm text-muted-foreground mt-1" data-testid="text-page-subtitle">{pageSubtitle}</p>
         </div>
-        {activeTab === "meals" ? (
-          <Link href="/new-plan">
-            <Button data-testid="button-create-plan">
+        {isWorkouts ? (
+          <Link href="/workouts/new">
+            <Button data-testid="button-create-workout">
               <Sparkles className="h-4 w-4 mr-2" />
               Generate Plan
             </Button>
           </Link>
         ) : (
-          <Link href="/workouts/new">
-            <Button data-testid="button-create-workout">
+          <Link href="/new-plan">
+            <Button data-testid="button-create-plan">
               <Sparkles className="h-4 w-4 mr-2" />
               Generate Plan
             </Button>
@@ -137,29 +99,16 @@ export default function PlansList() {
         )}
       </div>
 
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList data-testid="tabs-plan-type" className="mb-6">
-          <TabsTrigger value="meals" data-testid="tab-meals">
-            <Flame className="h-3.5 w-3.5 mr-1.5" />
-            Meal Plans
-          </TabsTrigger>
-          <TabsTrigger value="workouts" data-testid="tab-workouts">
-            <Dumbbell className="h-3.5 w-3.5 mr-1.5" />
-            Workouts
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
       <div className="mb-4">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" data-testid="text-section-label">
           Active Plans
         </span>
       </div>
 
-      {activeTab === "meals" ? (
-        <MealPlanList plans={plans} isLoading={plansLoading} />
-      ) : (
+      {isWorkouts ? (
         <WorkoutPlanList plans={workoutPlans} isLoading={workoutsLoading} />
+      ) : (
+        <MealPlanList plans={plans} isLoading={plansLoading} />
       )}
     </div>
   );
@@ -186,8 +135,8 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
     return (
       <Card>
         <CardContent className="p-12 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-            <Sparkles className="h-8 w-8 text-primary" />
+          <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-6">
+            <UtensilsCrossed className="h-8 w-8 text-amber-600 dark:text-amber-400" />
           </div>
           <h2 className="font-semibold text-lg mb-2">No meal plans yet</h2>
           <p className="text-sm text-muted-foreground mb-6">Create your first AI-powered meal plan to get started.</p>
@@ -208,15 +157,15 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
         const plan = mp.planJson as PlanOutput;
         const prefs = mp.preferencesJson as Preferences;
         const status = (mp as any).status as string;
-        const calories = plan?.dailyCalorieTarget || (prefs as any)?.dailyCalories || null;
-        const protein = plan?.dailyProteinTarget || null;
+        const calories = (plan as any)?.dailyCalorieTarget || (prefs as any)?.dailyCalories || null;
+        const protein = (plan as any)?.dailyProteinTarget || null;
         return (
           <Link key={mp.id} href={`/plan/${mp.id}`}>
             <Card className="hover-elevate cursor-pointer" data-testid={`card-plan-${mp.id}`}>
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center gap-3">
                   <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                    <Flame className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    <UtensilsCrossed className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -284,8 +233,8 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
     return (
       <Card>
         <CardContent className="p-12 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-            <Dumbbell className="h-8 w-8 text-primary" />
+          <div className="mx-auto w-16 h-16 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mb-6">
+            <Dumbbell className="h-8 w-8 text-teal-600 dark:text-teal-400" />
           </div>
           <h2 className="font-semibold text-lg mb-2">No workout plans yet</h2>
           <p className="text-sm text-muted-foreground mb-6">Create your first AI-powered workout plan to get started.</p>
@@ -306,7 +255,7 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
         const planJson = wp.planJson as WorkoutPlanOutput | null;
         const prefs = wp.preferencesJson as any;
         const status = wp.status;
-        const daysPerWeek = prefs?.daysPerWeek || planJson?.daysPerWeek || null;
+        const daysPerWeek = prefs?.daysPerWeek || (planJson as any)?.daysPerWeek || null;
         const trainingMode = prefs?.trainingMode || null;
         return (
           <Link key={wp.id} href={status === "generating" ? `/workout/${wp.id}/generating` : `/workout/${wp.id}`}>
