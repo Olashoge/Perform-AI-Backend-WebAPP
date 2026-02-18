@@ -274,3 +274,28 @@
     transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
   }
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+  }
+
+  header, nav, [data-testid="mobile-header"], [data-testid="button-print"],
+  [data-testid="button-menu"], [data-testid="button-back-to-goal"],
+  [data-testid="button-toggle-settings"], [data-sidebar="sidebar"],
+  .no-print, [data-testid="button-like-exercise"], [data-testid="button-dislike-exercise"] {
+    display: none !important;
+  }
+
+  .shadow-sm, .shadow, .shadow-md, .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  * {
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

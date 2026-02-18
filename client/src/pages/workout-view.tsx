@@ -23,7 +23,7 @@ import {
   Flame, Target, MoreVertical, Trash2,
   CalendarPlus, CalendarMinus, CalendarClock,
   Zap, Activity, Timer, ChevronRight,
-  ThumbsUp, ThumbsDown, ArrowLeft, Ban,
+  ThumbsUp, ThumbsDown, ArrowLeft, Ban, Printer,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -466,33 +466,40 @@ export default function WorkoutView() {
           Back to Goal Summary
         </Button>
       )}
-      <div className="flex items-center justify-between gap-2 mb-6 flex-wrap">
-        <h1 className="text-lg sm:text-xl font-semibold truncate" data-testid="text-plan-title">
+      <div className="mb-6">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="ghost" size="icon" onClick={() => window.print()} data-testid="button-print" title="Print workout plan">
+              <Printer className="h-4 w-4" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid="button-menu">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowDatePicker(true)} data-testid="menu-schedule">
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  {plan.planStartDate ? "Reschedule" : "Schedule"}
+                </DropdownMenuItem>
+                {plan.planStartDate && (
+                  <DropdownMenuItem onClick={() => scheduleMutation.mutate(null)} data-testid="menu-unschedule">
+                    <CalendarMinus className="h-4 w-4 mr-2" />
+                    Unschedule
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive" data-testid="menu-delete">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        <h1 className="text-lg sm:text-xl font-semibold mt-2" data-testid="text-plan-title">
           {planJson.title}
         </h1>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" data-testid="button-menu">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setShowDatePicker(true)} data-testid="menu-schedule">
-              <CalendarPlus className="h-4 w-4 mr-2" />
-              {plan.planStartDate ? "Reschedule" : "Schedule"}
-            </DropdownMenuItem>
-            {plan.planStartDate && (
-              <DropdownMenuItem onClick={() => scheduleMutation.mutate(null)} data-testid="menu-unschedule">
-                <CalendarMinus className="h-4 w-4 mr-2" />
-                Unschedule
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive" data-testid="menu-delete">
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
       <div className="space-y-4">
