@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { AllowancePanel } from "@/components/allowance-panel";
 
 const INTENSITY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
@@ -515,6 +516,10 @@ export default function WorkoutView() {
         <h1 className="text-lg sm:text-xl font-semibold mt-2" data-testid="text-plan-title">
           {planJson.title}
         </h1>
+      </div>
+
+      <div className="mb-6">
+        <AllowancePanel />
       </div>
 
       <div className="space-y-4">

@@ -14,6 +14,7 @@ import {
   CheckCircle2, Clock, CalendarCheck, Activity, ChevronRight,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
+import { AllowancePanel } from "@/components/allowance-panel";
 
 type PlanLifecycleStatus = "draft" | "scheduled" | "active" | "completed";
 
@@ -99,6 +100,10 @@ export default function PlansList() {
             </Button>
           </Link>
         )}
+      </div>
+
+      <div className="mb-6">
+        <AllowancePanel />
       </div>
 
       <div className="mb-4">
