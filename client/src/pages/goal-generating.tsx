@@ -11,7 +11,7 @@ import {
 
 const POLL_INTERVAL = 2000;
 const TIMEOUT_MS = 3 * 60 * 1000;
-const MIN_STAGE_DISPLAY_MS = 3000;
+const STEP_DURATION_MS = 20_000;
 
 const TIPS = [
   "Combining nutrition and training amplifies your results.",
@@ -65,53 +65,72 @@ export default function GoalGenerating() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [displayedStatuses, setDisplayedStatuses] = useState<StageStatuses>({
-    TRAINING: hasWorkout ? "PENDING" : "SKIPPED",
-    NUTRITION: hasMeal ? "PENDING" : "SKIPPED",
-    SCHEDULING: "PENDING",
-    FINALIZING: "PENDING",
+  const activeSteps = STAGE_ORDER.filter(s => {
+    if (s === "TRAINING") return hasWorkout;
+    if (s === "NUTRITION") return hasMeal;
+    return true;
   });
-  const stageTransitionRef = useRef<Record<string, number>>({});
+
+  const [visualStepIndex, setVisualStepIndex] = useState(0);
+  const [visualDone, setVisualDone] = useState(false);
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!status?.progress?.stageStatuses) return;
+    if (visualDone) return;
+    const isLastStep = visualStepIndex >= activeSteps.length - 1;
+    if (isLastStep) return;
 
-    const backend = status.progress.stageStatuses;
-    const now = Date.now();
+    stepTimerRef.current = setTimeout(() => {
+      setVisualStepIndex(prev => prev + 1);
+    }, STEP_DURATION_MS);
 
-    setDisplayedStatuses(prev => {
-      const next = { ...prev };
-      for (const stage of STAGE_ORDER) {
-        const backendVal = backend[stage];
-        const currentVal = prev[stage];
+    return () => {
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
+    };
+  }, [visualStepIndex, visualDone, activeSteps.length]);
 
-        if (backendVal === currentVal) continue;
+  const backendReady = status?.status === "ready";
+  const backendFailed = status?.status === "failed";
+  const backendDone = backendReady || backendFailed;
 
-        if (backendVal === "SKIPPED") {
-          next[stage] = "SKIPPED";
-          continue;
-        }
+  useEffect(() => {
+    if (!backendDone) return;
+    const isLastStep = visualStepIndex >= activeSteps.length - 1;
+    if (isLastStep) {
+      setVisualDone(true);
+    }
+  }, [backendDone, visualStepIndex, activeSteps.length]);
 
-        if (currentVal === "RUNNING" && (backendVal === "DONE" || backendVal === "FAILED")) {
-          const transitionTime = stageTransitionRef.current[stage] || 0;
-          const elapsed = now - transitionTime;
-          if (elapsed < MIN_STAGE_DISPLAY_MS) {
-            setTimeout(() => {
-              setDisplayedStatuses(p => ({ ...p, [stage]: backendVal }));
-            }, MIN_STAGE_DISPLAY_MS - elapsed);
-            continue;
+  const displayedStatuses: StageStatuses = (() => {
+    const result: StageStatuses = {
+      TRAINING: hasWorkout ? "PENDING" : "SKIPPED",
+      NUTRITION: hasMeal ? "PENDING" : "SKIPPED",
+      SCHEDULING: "PENDING",
+      FINALIZING: "PENDING",
+    };
+
+    for (let i = 0; i < activeSteps.length; i++) {
+      const stage = activeSteps[i];
+      if (i < visualStepIndex) {
+        result[stage] = "DONE";
+      } else if (i === visualStepIndex) {
+        if (visualDone) {
+          const backendStatus = status?.progress?.stageStatuses?.[stage];
+          result[stage] = backendStatus === "FAILED" ? "FAILED" : "DONE";
+          for (let j = i + 1; j < activeSteps.length; j++) {
+            const laterStage = activeSteps[j];
+            const laterBackend = status?.progress?.stageStatuses?.[laterStage];
+            result[laterStage] = laterBackend === "FAILED" ? "FAILED" : "DONE";
           }
+          break;
+        } else {
+          result[stage] = "RUNNING";
         }
-
-        if (backendVal === "RUNNING") {
-          stageTransitionRef.current[stage] = now;
-        }
-
-        next[stage] = backendVal;
       }
-      return next;
-    });
-  }, [status?.progress?.stageStatuses]);
+    }
+
+    return result;
+  })();
 
   const goalStatus = status?.status || "generating";
   const isComplete = goalStatus === "ready" || goalStatus === "failed";
