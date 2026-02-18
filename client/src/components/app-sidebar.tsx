@@ -10,6 +10,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard, CalendarDays, UtensilsCrossed, Dumbbell, Target, Settings,
@@ -26,13 +27,19 @@ const NAV_ITEMS = [
 
 export function AppSidebar() {
   const [location, navigate] = useLocation();
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  function handleNav(href: string) {
+    navigate(href);
+    if (isMobile) setOpenMobile(false);
+  }
 
   return (
     <Sidebar collapsible="icon" data-testid="app-sidebar">
       <SidebarHeader className="flex items-center justify-center py-4">
         <div
           className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center cursor-pointer"
-          onClick={() => navigate("/dashboard")}
+          onClick={() => handleNav("/dashboard")}
           data-testid="link-logo"
         >
           <span className="text-primary-foreground font-bold text-sm">P</span>
@@ -54,12 +61,11 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   isActive={isActive}
                   tooltip={item.title}
-                  className="h-10 w-10 justify-center"
-                  onClick={() => navigate(item.href)}
+                  onClick={() => handleNav(item.href)}
                   data-testid={`nav-${item.title.toLowerCase()}`}
                 >
                   <item.icon className="h-5 w-5" />
-                  <span className="sr-only">{item.title}</span>
+                  <span>{item.title}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
@@ -94,15 +100,15 @@ export function ActiveGoalBar() {
   if (!activeGoal) return null;
 
   return (
-    <div className="h-12 border-b bg-background flex items-center justify-between px-4 sm:px-6 shrink-0" data-testid="active-goal-bar">
-      <div className="flex items-center gap-3">
-        <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
+    <div className="h-12 border-b bg-background flex items-center justify-between px-3 sm:px-6 shrink-0 overflow-hidden" data-testid="active-goal-bar">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0">
           <Target className="h-3.5 w-3.5 text-muted-foreground" />
         </div>
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Goal</span>
-        <span className="text-sm font-semibold">{GOAL_LABELS[activeGoal.goalType] || activeGoal.goalType}</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">Active Goal</span>
+        <span className="text-sm font-semibold truncate">{GOAL_LABELS[activeGoal.goalType] || activeGoal.goalType}</span>
         {activeGoal.startDate && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground hidden sm:inline shrink-0">
             Target: {new Date(activeGoal.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </span>
         )}

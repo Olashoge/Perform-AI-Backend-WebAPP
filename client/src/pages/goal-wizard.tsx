@@ -381,7 +381,7 @@ export default function GoalWizard() {
 
                 <div className="border-t pt-6">
                   <label className="text-sm font-medium mb-2 block">What would you like to create?</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {PLAN_TYPE_OPTIONS.map(opt => (
                       <Button
                         key={opt.value}

@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar, ActiveGoalBar } from "@/components/app-sidebar";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
@@ -64,6 +64,13 @@ function AuthenticatedLayout() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
+          <header className="h-12 border-b bg-background flex items-center gap-3 px-3 md:hidden shrink-0" data-testid="mobile-header">
+            <SidebarTrigger data-testid="button-mobile-menu" />
+            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-bold text-xs">P</span>
+            </div>
+            <span className="text-sm font-semibold">Perform AI</span>
+          </header>
           <ActiveGoalBar />
           <main className="flex-1 overflow-auto">
             <AuthenticatedRouter />

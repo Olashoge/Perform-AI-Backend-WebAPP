@@ -242,12 +242,12 @@ export default function Dashboard() {
         <div className="flex-1 min-w-0">
           <Card className="mb-6" data-testid="card-week-strip">
             <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
+              <div className="flex items-center justify-between mb-4 gap-2">
+                <div className="min-w-0">
                   <div className="text-xs text-muted-foreground uppercase tracking-wider">Week of</div>
-                  <div className="text-lg font-bold">{format(weekStart, "MMMM d, yyyy")}</div>
+                  <div className="text-base sm:text-lg font-bold truncate">{format(weekStart, "MMMM d, yyyy")}</div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                   <Button variant="ghost" size="icon" onClick={() => setWeekOffset(o => o - 1)} data-testid="button-prev-week">
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
