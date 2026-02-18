@@ -189,6 +189,14 @@ export async function getAllowanceState(userId: string, mealPlanId?: string): Pr
     allowance = await storage.getPlanAllowanceByUser(userId);
   }
 
+  if (!allowance) {
+    const goalPlans = await storage.getGoalPlansByUser(userId);
+    const activeGoal = goalPlans.find(g => g.status === "ready" && !g.deletedAt);
+    if (activeGoal) {
+      allowance = await createAllowanceForGoalPlan(userId, activeGoal.id, activeGoal.startDate ?? undefined, activeGoal.endDate ?? undefined);
+    }
+  }
+
   if (!allowance) return null;
 
   allowance = await resetDailyIfNeeded(allowance);
