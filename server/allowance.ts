@@ -177,6 +177,80 @@ export async function recordMealRegen(allowance: PlanAllowance, userId: string, 
   }
 }
 
+export async function resolveAllowanceForWorkoutPlan(userId: string, workoutPlanId: string): Promise<PlanAllowance | null> {
+  const goalPlan = await storage.getGoalPlanByWorkoutPlanId(workoutPlanId);
+  if (!goalPlan) return null;
+  let allowance = await storage.getPlanAllowanceByGoalPlan(goalPlan.id);
+  if (!allowance) return null;
+  allowance = await resetDailyIfNeeded(allowance);
+  return allowance;
+}
+
+export async function checkWorkoutRegenAllowed(userId: string, workoutPlanId: string): Promise<{ allowance: PlanAllowance | null; result: AllowanceCheckResult }> {
+  const allowance = await resolveAllowanceForWorkoutPlan(userId, workoutPlanId);
+  if (!allowance) {
+    return { allowance: null, result: { allowed: true } };
+  }
+
+  if (allowance.regenCooldownUntil && new Date(allowance.regenCooldownUntil) > new Date()) {
+    const remaining = Math.ceil((new Date(allowance.regenCooldownUntil).getTime() - Date.now()) / 60000);
+    return {
+      allowance,
+      result: {
+        allowed: false,
+        reason: `Regen cooldown active. Available in ${remaining} minutes.`,
+        cooldownMinutesRemaining: remaining,
+      },
+    };
+  }
+
+  const dailyRegenLimit = computedMealRegensPerDay(allowance);
+  if (allowance.mealRegensUsedToday >= dailyRegenLimit) {
+    const tomorrow = new Date();
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(0, 0, 0, 0);
+    return {
+      allowance,
+      result: {
+        allowed: false,
+        reason: `You've used your ${dailyRegenLimit} daily regen${dailyRegenLimit > 1 ? "s" : ""}. Resets at midnight UTC.`,
+        nextResetAt: tomorrow.toISOString(),
+      },
+    };
+  }
+
+  const planLimit = computedPlanRegensTotal(allowance);
+  if (allowance.regensUsedTotal >= planLimit) {
+    return {
+      allowance,
+      result: {
+        allowed: false,
+        reason: `You've used all ${planLimit} regens for this wellness plan.`,
+      },
+    };
+  }
+
+  return { allowance, result: { allowed: true } };
+}
+
+export async function recordWorkoutRegen(allowance: PlanAllowance, userId: string, metadata: any): Promise<void> {
+  await storage.updatePlanAllowance(allowance.id, {
+    mealRegensUsedToday: allowance.mealRegensUsedToday + 1,
+    workoutRegensUsedToday: allowance.workoutRegensUsedToday + 1,
+    regensUsedTotal: allowance.regensUsedTotal + 1,
+  });
+
+  await storage.createPlanUsageEvent(userId, allowance.goalPlanId, "WORKOUT", "REGEN", "SESSION", metadata);
+
+  const recentRegens = await storage.getRecentRegenEvents(userId, 24, allowance.goalPlanId);
+  if (recentRegens.length >= 3) {
+    const cooldownUntil = new Date(Date.now() + 6 * 60 * 60 * 1000);
+    await storage.updatePlanAllowance(allowance.id, {
+      regenCooldownUntil: cooldownUntil,
+    });
+  }
+}
+
 export async function getAllowanceState(userId: string, mealPlanId?: string): Promise<AllowanceState | null> {
   let allowance: PlanAllowance | undefined;
 

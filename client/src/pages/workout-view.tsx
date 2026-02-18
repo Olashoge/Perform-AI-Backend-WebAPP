@@ -128,7 +128,7 @@ function ExerciseRow({ exercise, index, exercisePrefStatus, onExercisePref }: {
   );
 }
 
-function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, exercisePrefMap, onExercisePref, planStartDate }: {
+function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, exercisePrefMap, onExercisePref, planStartDate, onRegenerate, isRegenerating }: {
   session: WorkoutSession;
   dayName: string;
   dayIndex: number;
@@ -137,6 +137,8 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, ex
   exercisePrefMap: Record<string, "liked" | "disliked" | "avoided">;
   onExercisePref: (exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "neutral") => void;
   planStartDate?: string | null;
+  onRegenerate?: (dayIndex: number) => void;
+  isRegenerating?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const ModeIcon = MODE_ICONS[session.mode] || Dumbbell;
@@ -211,6 +213,22 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, ex
                 >
                   <ThumbsDown className="h-3.5 w-3.5" />
                 </Button>
+                {onRegenerate && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={isRegenerating}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRegenerate(dayIndex);
+                    }}
+                    className="text-muted-foreground/50"
+                    title="Regenerate this session"
+                    data-testid={`button-regen-session-${dayIndex}`}
+                  >
+                    {isRegenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                  </Button>
+                )}
                 <ChevronDown className={`h-4 w-4 text-muted-foreground/50 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? "rotate-180" : ""}`} />
               </div>
             </div>
@@ -337,6 +355,33 @@ export default function WorkoutView() {
       toast({ title: "Failed to delete", variant: "destructive" });
     },
   });
+
+  const [regeneratingDay, setRegeneratingDay] = useState<number | null>(null);
+
+  const regenSessionMutation = useMutation({
+    mutationFn: async (dayIndex: number) => {
+      const res = await apiRequest("POST", `/api/workout/${id}/regenerate-session`, { dayIndex });
+      return res.json();
+    },
+    onMutate: (dayIndex) => {
+      setRegeneratingDay(dayIndex);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workout", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/allowance"] });
+      toast({ title: "Session regenerated" });
+      setRegeneratingDay(null);
+    },
+    onError: (err: any) => {
+      const msg = err?.message || "Failed to regenerate session";
+      toast({ title: msg, variant: "destructive" });
+      setRegeneratingDay(null);
+    },
+  });
+
+  const handleRegenSession = useCallback((dayIndex: number) => {
+    regenSessionMutation.mutate(dayIndex);
+  }, [regenSessionMutation]);
 
   const { data: workoutFeedbackMap = {} } = useQuery<Record<string, "like" | "dislike">>({
     queryKey: ["/api/feedback/workout", id],
@@ -607,6 +652,8 @@ export default function WorkoutView() {
                 exercisePrefMap={exercisePrefMap}
                 onExercisePref={handleExercisePref}
                 planStartDate={plan.planStartDate}
+                onRegenerate={handleRegenSession}
+                isRegenerating={regeneratingDay === day.dayIndex}
               />
             );
           })}

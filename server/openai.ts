@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { planOutputSchema, mealSchema, daySchema, groceryPricingSchema, workoutPlanOutputSchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext, type GroceryPricing, type GrocerySection, type WorkoutPreferences, type WorkoutPlanOutput } from "@shared/schema";
+import { planOutputSchema, mealSchema, daySchema, groceryPricingSchema, workoutPlanOutputSchema, workoutSessionSchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext, type GroceryPricing, type GrocerySection, type WorkoutPreferences, type WorkoutPlanOutput, type WorkoutSession } from "@shared/schema";
 import { type WellnessContext, buildMealWellnessBlock, buildWorkoutWellnessBlock } from "./wellness-context";
 
 if (!process.env.OPENAI_API_KEY) {
@@ -569,6 +569,84 @@ ${cleaned}`;
     cleaned = cleanJsonString(raw);
     const parsed = JSON.parse(cleaned);
     return workoutPlanOutputSchema.parse(parsed);
+  }
+}
+
+export async function generateWorkoutSession(
+  prefs: WorkoutPreferences,
+  dayIndex: number,
+  currentSession: WorkoutSession,
+  exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] },
+): Promise<WorkoutSession> {
+  const systemPrompt = buildWorkoutSystemPrompt();
+
+  const locationLabels: Record<string, string> = {
+    home_none: "Home (no equipment — bodyweight only)",
+    home_equipment: "Home (dumbbells and/or resistance bands)",
+    gym: "Gym (full equipment: machines, barbells, dumbbells, cables)",
+    outdoor: "Outdoor (running, walking, bodyweight, hills)",
+    mixed: "Mixed (combination of home, gym, and outdoor)",
+  };
+
+  const userPrompt = `Regenerate a SINGLE workout session for Day ${dayIndex} of a 7-day workout plan.
+
+The current session for this day was:
+- Focus: ${currentSession.focus}
+- Mode: ${currentSession.mode}
+- Duration: ${currentSession.durationMinutes} min
+- Intensity: ${currentSession.intensity}
+- Exercises: ${currentSession.main.map(e => e.name).join(", ")}
+
+Generate a DIFFERENT session that keeps the same general intent but uses different exercises and structure. Make it feel fresh.
+
+User Preferences:
+Goal: ${prefs.goal.replace("_", " ")}
+Location: ${locationLabels[prefs.location] || prefs.location}
+Training Mode: ${prefs.trainingMode}
+Focus Areas: ${prefs.focusAreas.join(", ")}
+Session Length: ${prefs.sessionLength} minutes
+Experience Level: ${prefs.experienceLevel}
+Limitations/Injuries: ${prefs.limitations || "None"}
+${exerciseContext && (exerciseContext.avoidedExercises.length > 0 || exerciseContext.dislikedExercises.length > 0) ? `
+EXERCISE PREFERENCES:
+${exerciseContext.avoidedExercises.length > 0 ? `- AVOIDED exercises (NEVER include these): ${exerciseContext.avoidedExercises.join(", ")}` : ""}
+${exerciseContext.dislikedExercises.length > 0 ? `- Disliked exercises (deprioritize): ${exerciseContext.dislikedExercises.join(", ")}` : ""}
+` : ""}
+Return ONLY a JSON object for the session (NOT the full plan) with this structure:
+{
+  "mode": "strength"|"cardio"|"mixed",
+  "focus": "string describing session focus",
+  "durationMinutes": number,
+  "intensity": "easy"|"moderate"|"hard",
+  "warmup": ["warm-up item 1", ...] (3-5 items),
+  "main": [
+    {
+      "name": "exercise name",
+      "type": "strength"|"cardio"|"mobility",
+      "sets": number or null,
+      "reps": "string or null",
+      "time": "string or null",
+      "restSeconds": number or null,
+      "notes": "string or null"
+    }
+  ],
+  "finisher": ["optional finisher item"],
+  "cooldown": ["cool-down item 1", ...] (2-4 items),
+  "coachingCues": ["cue 1", "cue 2"] (max 3)
+}`;
+
+  let raw = await callOpenAI(systemPrompt, userPrompt);
+  let cleaned = cleanJsonString(raw);
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return workoutSessionSchema.parse(parsed);
+  } catch (firstErr) {
+    const repairPrompt = `The following JSON was invalid. Fix it and return ONLY valid JSON matching the required workout session schema. Error: ${firstErr instanceof Error ? firstErr.message : "Parse error"}\n\nOriginal JSON:\n${cleaned}`;
+    raw = await callOpenAI(systemPrompt, repairPrompt);
+    cleaned = cleanJsonString(raw);
+    const parsed = JSON.parse(cleaned);
+    return workoutSessionSchema.parse(parsed);
   }
 }
 

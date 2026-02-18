@@ -4,11 +4,11 @@ import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
 import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
-import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan } from "./openai";
+import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan, generateWorkoutSession } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import { buildWellnessContext } from "./wellness-context";
-import { checkMealSwapAllowed, checkMealRegenAllowed, recordMealSwap, recordMealRegen, getAllowanceState, redeemFlexToken, createAllowanceForGoalPlan, computeBehaviorSummary } from "./allowance";
+import { checkMealSwapAllowed, checkMealRegenAllowed, recordMealSwap, recordMealRegen, checkWorkoutRegenAllowed, recordWorkoutRegen, getAllowanceState, redeemFlexToken, createAllowanceForGoalPlan, computeBehaviorSummary } from "./allowance";
 import connectPgSimple from "connect-pg-simple";
 
 const PgStore = connectPgSimple(session);
@@ -907,6 +907,70 @@ export async function registerRoutes(
       return res.json({ success: true });
     } catch (err) {
       return res.status(500).json({ message: "Failed to delete workout plan" });
+    }
+  });
+
+  app.post("/api/workout/:id/regenerate-session", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getWorkoutPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+        return res.status(404).json({ message: "Workout plan not found" });
+      }
+
+      const userId = req.session.userId!;
+
+      const { allowance, result: regenCheck } = await checkWorkoutRegenAllowed(userId, plan.id);
+      if (!regenCheck.allowed) {
+        return res.status(403).json({
+          message: regenCheck.reason,
+          cooldownMinutesRemaining: regenCheck.cooldownMinutesRemaining,
+          nextResetAt: regenCheck.nextResetAt,
+        });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) {
+        return res.status(429).json({ message: "Daily AI call limit reached" });
+      }
+
+      const { dayIndex } = req.body;
+      if (!dayIndex || dayIndex < 1 || dayIndex > 7) {
+        return res.status(400).json({ message: "Invalid dayIndex (1-7)" });
+      }
+
+      const planJson = plan.planJson as WorkoutPlanOutput;
+      const prefs = plan.preferencesJson as any;
+
+      const dayData = planJson.days.find(d => d.dayIndex === dayIndex);
+      if (!dayData || !dayData.session) {
+        return res.status(400).json({ message: "No workout session exists for this day" });
+      }
+
+      log(`Regenerating workout session day ${dayIndex} for plan ${plan.id}`, "openai");
+      const prefCtx = await storage.getUserPreferenceContext(userId);
+      const exerciseContext = {
+        avoidedExercises: prefCtx.avoidedExercises,
+        dislikedExercises: prefCtx.dislikedExercises,
+      };
+
+      const newSession = await generateWorkoutSession(prefs, dayIndex, dayData.session, exerciseContext);
+
+      const updatedDays = planJson.days.map(d =>
+        d.dayIndex === dayIndex ? { ...d, session: newSession } : d
+      );
+      const updatedPlanJson = { ...planJson, days: updatedDays };
+
+      const updated = await storage.updateWorkoutPlanStatus(plan.id, plan.status, updatedPlanJson);
+      await storage.logAction(userId, "ai_call_regen_workout_session", { planId: plan.id, dayIndex });
+
+      if (allowance) {
+        await recordWorkoutRegen(allowance, userId, { planId: plan.id, dayIndex });
+      }
+
+      return res.json(updated);
+    } catch (err) {
+      log(`Regen workout session error: ${err}`, "openai");
+      return res.status(500).json({ message: "Failed to regenerate workout session" });
     }
   });
 
