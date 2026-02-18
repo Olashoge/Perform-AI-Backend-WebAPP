@@ -43,9 +43,10 @@ export interface IStorage {
   findByIdempotencyKeyWorkout(userId: string, idempotencyKey: string): Promise<WorkoutPlan | undefined>;
   findGeneratingWorkoutPlan(userId: string): Promise<WorkoutPlan | undefined>;
   createGoalPlan(userId: string, goalType: string, startDate?: string, mealPlanId?: string, workoutPlanId?: string): Promise<GoalPlan>;
+  createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any }): Promise<GoalPlan>;
   getGoalPlan(id: string): Promise<GoalPlan | undefined>;
   getGoalPlansByUser(userId: string): Promise<GoalPlan[]>;
-  updateGoalPlan(id: string, updates: Partial<{ startDate: string | null; mealPlanId: string | null; workoutPlanId: string | null }>): Promise<GoalPlan | undefined>;
+  updateGoalPlan(id: string, updates: Partial<{ startDate: string | null; endDate: string | null; mealPlanId: string | null; workoutPlanId: string | null; status: string; progress: any; title: string | null; planType: string | null }>): Promise<GoalPlan | undefined>;
   softDeleteGoalPlan(id: string): Promise<GoalPlan | undefined>;
   upsertWorkoutFeedback(userId: string, data: { workoutPlanId?: string; dayIndex: number; sessionKey: string; feedback: "like" | "dislike" | "neutral" }): Promise<WorkoutFeedbackRecord | null>;
   getWorkoutFeedbackForPlan(userId: string, planId: string): Promise<WorkoutFeedbackRecord[]>;
@@ -446,6 +447,24 @@ export class DatabaseStorage implements IStorage {
       startDate: startDate || null,
       mealPlanId: mealPlanId || null,
       workoutPlanId: workoutPlanId || null,
+    }).returning();
+    return plan;
+  }
+
+  async createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any }): Promise<GoalPlan> {
+    const [plan] = await db.insert(goalPlans).values({
+      userId,
+      goalType: data.goalType,
+      planType: data.planType || "both",
+      startDate: data.startDate || null,
+      endDate: data.endDate || null,
+      pace: data.pace || null,
+      title: data.title || null,
+      globalInputs: data.globalInputs || null,
+      nutritionInputs: data.nutritionInputs || null,
+      trainingInputs: data.trainingInputs || null,
+      status: data.status || "draft",
+      progress: data.progress || null,
     }).returning();
     return plan;
   }

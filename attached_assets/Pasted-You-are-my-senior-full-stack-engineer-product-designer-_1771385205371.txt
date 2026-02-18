@@ -1,0 +1,148 @@
+You are my senior full-stack engineer + product designer. We are implementing “Goal Orchestration Logic first, then the UI wizard.”
+
+NON-NEGOTIABLES
+- Do NOT break existing infrastructure or routes. Make incremental changes.
+- The Goal object is the parent orchestration entity and is the single source of truth for:
+  (a) date range, (b) what to generate (meal/workout/both), (c) global inputs (age, weight, optional target weight, pace), (d) statuses for generation progress.
+- Enforce: No overlapping plans of the same type in the same date range. A user cannot have two meal plans overlapping, nor two workout plans overlapping. If plan type is “Meal + Workout”, it must validate both.
+- Date pickers must block out dates already occupied (based on overlap rules).
+- Generation flow for Goal must be deterministic and reflected in UI:
+  Step order: Designing training plan (20–30s feel) → Designing nutrition plan (20–30s feel) → Scheduling your week (20–30s feel) → Finalizing (20–30s feel).
+  UI must animate/checkmark each stage based on real backend statuses, not fake timers. (If real generation finishes faster, still keep a smooth minimum-duration feel, but never lie: status must map to actual milestones.)
+
+PHASE 1 — ORCHESTRATION + SCHEDULING RULES (BACKEND FIRST)
+1) Data model / schema (use existing ORM / Prisma patterns in this codebase)
+- Ensure Goal has fields:
+  - id, userId
+  - goalType (Weight Loss, Muscle Gain, Performance, General Fitness + allow more later)
+  - planType (MEAL_ONLY | WORKOUT_ONLY | BOTH)
+  - startDate (date)
+  - endDate (date) (derived from duration; currently 7 days but keep flexible)
+  - pace (optional: Gentle | Steady | Aggressive)
+  - globalInputs JSON:
+      age (optional)
+      currentWeight (optional)
+      targetWeight (optional)
+      units (lb|kg)
+  - nutritionInputs JSON (the full set of what Meal Plan creation normally asks)
+  - trainingInputs JSON (the full set of what Workout Plan creation normally asks)
+  - status enum: DRAFT | GENERATING | READY | FAILED
+  - progress JSON:
+      stage (TRAINING | NUTRITION | SCHEDULING | FINALIZING)
+      stageStatus per stage (PENDING|RUNNING|DONE|FAILED)
+      errorMessage optional
+  - createdAt, updatedAt
+
+2) Conflict detection / availability API
+- Implement a shared function:
+  - getUnavailableRanges(userId, planType) that returns date ranges blocked for that planType.
+  - Overlap logic: if a plan exists with [startDate, endDate], any new plan overlapping any day is invalid.
+- Add endpoints used by the UI:
+  - GET /api/availability?type=meal|workout|goal  -> returns blocked ranges and blocked individual dates for the relevant planType rules.
+  - POST /api/goals/validate -> accepts the draft goal payload and returns either OK or validation errors (including overlaps and which dates are blocked).
+
+3) Goal generation pipeline (server)
+- Add POST /api/goals to create a Goal in DRAFT with all collected inputs.
+- Add POST /api/goals/:id/generate to start generation:
+  - Set status GENERATING
+  - Stage 1: TRAINING generation if planType includes workout
+  - Stage 2: NUTRITION generation if planType includes meal
+  - Stage 3: SCHEDULING (create calendar items, attach plans to dates)
+  - Stage 4: FINALIZING (compute summaries, finalize titles, mark READY)
+- Persist progress updates after each stage change so UI can poll and reflect real progress.
+- Add GET /api/goals/:id to fetch goal + progress.
+- Add GET /api/goals/:id/progress to fetch just progress (cheap polling).
+
+4) Titles (creative but layman-friendly)
+- Replace overly technical titles. Use a naming helper that outputs:
+  - Goal title example formats:
+    “Lean Start”
+    “Level Up”
+    “Strong & Steady”
+    “Fresh Momentum”
+  - Meal plan title should be friendly:
+    “Light & Satisfying Week”
+    “Protein-Powered Plates”
+    “Balanced Fuel Plan”
+  - Workout plan title should be friendly:
+    “Outdoor Burn Week”
+    “Strength Builder”
+    “Cardio Boost”
+- Titles should be short, memorable, and not jargon. Keep a deterministic fallback if AI fails.
+
+PHASE 2 — WIZARD DATA HIERARCHY (FRONTEND)
+We have a 4-step Goal wizard. Update it to:
+
+STEP 1 — Goal Overview (GLOBAL INPUTS)
+- Primary goal options: expand beyond current 4; add at least:
+  Weight Loss, Muscle Gain, Performance, General Fitness, Mobility, Endurance, Strength, Energy & Focus
+  (If backend only supports 4 right now, map new options to closest supported type but store the selected label in goalTypeDisplay.)
+- Plan type selector: Meal + Workout / Meal Only / Workout Only
+- Start Date picker MUST block dates with conflicts (based on plan type). Use availability endpoint.
+- Ask for:
+  - Age (optional)
+  - Current weight (optional)
+  - Target weight (optional)
+  - Units toggle lb/kg
+  - Pace (optional)
+- DO NOT ask workout days here.
+
+STEP 2 — Nutrition Setup (MEAL INPUTS ONLY)
+- Must include what meal plan creation normally asks (diet/cuisine, avoid, allergies, household/cooking preferences, meals per day, etc).
+- Remove age + weight from this step.
+- Remove workout days from this step entirely.
+
+STEP 3 — Training Setup (WORKOUT INPUTS ONLY)
+- Ensure “Training mode”, “Experience level”, and “Focus areas” are in ONE combined section and behave intelligently:
+  - If Training mode = Cardio only, hide/limit strength-focused focus areas.
+  - If Strength only, keep strength focus areas prominent.
+  - If Both, allow mix and ensure plan generation reflects it.
+- Workout days should exist ONLY here.
+- Keep injuries/limitations here.
+
+STEP 4 — Review
+- Show a clean summary card:
+  - Goal overview (goal, planType, date range, pace, weight info)
+  - Nutrition highlights
+  - Training highlights
+- CTA: “Build My Plan”
+
+PHASE 3 — GENERATION UX
+1) Goal Generating page
+- When user clicks “Build My Plan”, navigate to /goals/:id/generating
+- This page must show 4 stages with spinners and checkmarks:
+  - Designing your training plan…
+  - Designing your nutrition plan…
+  - Scheduling your week…
+  - Finalizing…
+- Stages must reflect server progress polling from /api/goals/:id/progress
+- Smoothness rule: if a stage completes instantly, still show it for a minimum of ~1.5s, but never show DONE before backend marks it done.
+
+2) “Your Plan is Ready” page improvements
+- Buttons:
+  - View Meal Plan (if created)
+  - View Workout Plan (if created)
+- When user clicks View Meal Plan, they must be able to return to “Your Plan is Ready” with a Back button that restores them to the ready page (use route state or a query param like ?from=goal-ready).
+- Same behavior for workout.
+
+PHASE 4 — DATE BLOCKING EVERYWHERE
+- New Meal Plan page: block dates that overlap existing meal plans.
+- New Workout Plan page: block dates that overlap existing workout plans.
+- Goal wizard start date: block based on selected plan type (meal/workout/both).
+- Implement a shared date utilities module so rules are consistent.
+
+DELIVERABLES
+- Implement backend endpoints + conflict logic + progress tracking.
+- Update Goal wizard steps exactly as specified.
+- Implement generating page polling real progress.
+- Implement “Plan ready” navigation back behavior.
+- Ensure no console errors, types pass, and app builds.
+
+WORK PLAN
+- First: implement backend changes + availability endpoints + overlap validation.
+- Second: update Goal wizard data flow and move fields to correct steps.
+- Third: implement generating page and progress polling.
+- Fourth: implement plan-ready back behavior and ensure date blocking in all creation flows.
+- Fifth: smoke test all plan types: meal-only, workout-only, both.
+
+Now start by inspecting the current codebase structure (routes/pages/components/api). Then implement Phase 1 first. Explain key file changes briefly as you go, and keep commits small.

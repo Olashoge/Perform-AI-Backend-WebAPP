@@ -91,7 +91,16 @@ export const goalPlans = pgTable("goal_plans", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   goalType: varchar("goal_type", { length: 30 }).notNull(),
+  planType: varchar("plan_type", { length: 20 }).default("both"),
   startDate: varchar("start_date", { length: 10 }),
+  endDate: varchar("end_date", { length: 10 }),
+  pace: varchar("pace", { length: 20 }),
+  title: text("title"),
+  globalInputs: jsonb("global_inputs"),
+  nutritionInputs: jsonb("nutrition_inputs"),
+  trainingInputs: jsonb("training_inputs"),
+  status: varchar("status", { length: 20 }).default("draft"),
+  progress: jsonb("progress"),
   mealPlanId: varchar("meal_plan_id"),
   workoutPlanId: varchar("workout_plan_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -323,9 +332,37 @@ export const workoutFeedbackSchema = z.object({
 });
 
 export const goalPlanCreateSchema = z.object({
-  goalType: z.enum(["weight_loss", "muscle_gain", "performance", "maintenance", "energy", "general_fitness"]),
+  goalType: z.enum(["weight_loss", "muscle_gain", "performance", "maintenance", "energy", "general_fitness", "mobility", "endurance", "strength"]),
   planTypes: z.enum(["meals", "workouts", "both"]),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const goalProgressStageSchema = z.object({
+  stage: z.enum(["TRAINING", "NUTRITION", "SCHEDULING", "FINALIZING"]),
+  stageStatuses: z.object({
+    TRAINING: z.enum(["PENDING", "RUNNING", "DONE", "FAILED", "SKIPPED"]),
+    NUTRITION: z.enum(["PENDING", "RUNNING", "DONE", "FAILED", "SKIPPED"]),
+    SCHEDULING: z.enum(["PENDING", "RUNNING", "DONE", "FAILED", "SKIPPED"]),
+    FINALIZING: z.enum(["PENDING", "RUNNING", "DONE", "FAILED", "SKIPPED"]),
+  }),
+  errorMessage: z.string().optional(),
+});
+
+export type GoalProgress = z.infer<typeof goalProgressStageSchema>;
+
+export const goalGenerateInputSchema = z.object({
+  goalType: z.string(),
+  planType: z.enum(["meal", "workout", "both"]).default("both"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  pace: z.string().optional(),
+  globalInputs: z.object({
+    age: z.number().optional(),
+    currentWeight: z.number().optional(),
+    targetWeight: z.number().optional(),
+    weightUnit: z.enum(["lb", "kg"]).default("lb"),
+  }).optional(),
+  mealPreferences: z.any().optional(),
+  workoutPreferences: z.any().optional(),
 });
 
 export const weeklyCheckInSchema = z.object({

@@ -18,6 +18,9 @@ const GOAL_LABELS: Record<string, string> = {
   maintenance: "Maintenance",
   energy: "Energy & Focus",
   general_fitness: "General Fitness",
+  mobility: "Mobility",
+  endurance: "Endurance",
+  strength: "Strength",
 };
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
@@ -27,6 +30,9 @@ const GOAL_ICONS: Record<string, typeof Flame> = {
   maintenance: Heart,
   energy: Zap,
   general_fitness: Target,
+  mobility: Heart,
+  endurance: Zap,
+  strength: Dumbbell,
 };
 
 export default function GoalReady() {
@@ -62,6 +68,7 @@ export default function GoalReady() {
   const workoutPlanJson = workoutPlan?.planJson as WorkoutPlanOutput | null;
   const mealPrefs = mealPlan?.preferencesJson as any;
   const workoutPrefs = workoutPlan?.preferencesJson as any;
+  const goalTitle = (goalPlan as any).title || null;
 
   return (
     <div className="max-w-xl mx-auto px-4 py-12">
@@ -70,6 +77,9 @@ export default function GoalReady() {
           <Sparkles className="h-8 w-8 text-primary" />
         </div>
         <h1 className="text-2xl font-bold mb-2" data-testid="text-goal-ready-title">Your Plan is Ready</h1>
+        {goalTitle && (
+          <p className="text-lg font-medium text-primary mb-1" data-testid="text-goal-title">{goalTitle}</p>
+        )}
         <p className="text-muted-foreground">
           Here's a summary of what we built for you.
         </p>

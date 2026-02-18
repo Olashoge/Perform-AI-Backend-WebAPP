@@ -32,6 +32,9 @@ const GOAL_LABELS: Record<string, string> = {
   maintenance: "Maintenance",
   energy: "Energy & Focus",
   general_fitness: "General Fitness",
+  mobility: "Mobility",
+  endurance: "Endurance",
+  strength: "Strength",
 };
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
@@ -41,6 +44,9 @@ const GOAL_ICONS: Record<string, typeof Flame> = {
   maintenance: Heart,
   energy: Zap,
   general_fitness: Target,
+  mobility: Heart,
+  endurance: Zap,
+  strength: Dumbbell,
 };
 
 const GOAL_TITLE_PREFIXES: Record<string, string[]> = {
@@ -50,6 +56,9 @@ const GOAL_TITLE_PREFIXES: Record<string, string[]> = {
   maintenance: ["Steady State", "Stay Strong", "Balance"],
   energy: ["Energy Boost", "Power Up", "Recharge"],
   general_fitness: ["Fresh Start", "New Chapter", "Kickoff"],
+  mobility: ["Flex Flow", "Move Better", "Limber Up"],
+  endurance: ["Long Game", "Mile Maker", "Stay Going"],
+  strength: ["Iron Path", "Power Phase", "Lift Off"],
 };
 
 function generateGoalTitle(goalType: string, startDate: string | null, index: number): string {

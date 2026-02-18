@@ -661,6 +661,57 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/availability", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const excludeGoalId = req.query.excludeGoalId as string | undefined;
+
+      const mealDates = new Set<string>();
+      const workoutDates = new Set<string>();
+
+      const mealPlans = await storage.getScheduledPlans(userId);
+      for (const plan of mealPlans) {
+        if (excludeGoalId) {
+          const goalPlans = await storage.getGoalPlansByUser(userId);
+          const parentGoal = goalPlans.find(g => g.mealPlanId === plan.id);
+          if (parentGoal && parentGoal.id === excludeGoalId) continue;
+        }
+        const planJson = plan.planJson as PlanOutput;
+        const startDate = plan.planStartDate!;
+        for (let i = 0; i < planJson.days.length; i++) {
+          const date = new Date(startDate + "T00:00:00");
+          date.setDate(date.getDate() + i);
+          mealDates.add(date.toISOString().slice(0, 10));
+        }
+      }
+
+      const workoutPlansList = await storage.getScheduledWorkoutPlans(userId);
+      for (const plan of workoutPlansList) {
+        if (!plan.planStartDate || !plan.planJson) continue;
+        if (excludeGoalId) {
+          const goalPlans = await storage.getGoalPlansByUser(userId);
+          const parentGoal = goalPlans.find(g => g.workoutPlanId === plan.id);
+          if (parentGoal && parentGoal.id === excludeGoalId) continue;
+        }
+        const planJson = plan.planJson as WorkoutPlanOutput;
+        for (let i = 0; i < planJson.days.length; i++) {
+          const date = new Date(plan.planStartDate + "T00:00:00");
+          date.setDate(date.getDate() + i);
+          workoutDates.add(date.toISOString().slice(0, 10));
+        }
+      }
+
+      return res.json({
+        mealDates: Array.from(mealDates),
+        workoutDates: Array.from(workoutDates),
+        allDates: Array.from(new Set([...mealDates, ...workoutDates])),
+      });
+    } catch (err) {
+      log(`Availability error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to load availability" });
+    }
+  });
+
   app.get("/api/plan/:id/calendar", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
@@ -867,7 +918,7 @@ export async function registerRoutes(
   app.post("/api/goal-plans/generate", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.session.userId!;
-      const { goalType, startDate, mealPreferences, workoutPreferences } = req.body;
+      const { goalType, planType, startDate, pace, globalInputs, mealPreferences, workoutPreferences } = req.body;
 
       if (!goalType) {
         return res.status(400).json({ message: "goalType is required" });
@@ -879,72 +930,190 @@ export async function registerRoutes(
       }
 
       const validStartDate = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
+      const resolvedPlanType = planType || "both";
+      const needsWorkout = resolvedPlanType === "both" || resolvedPlanType === "workout";
+      const needsMeal = resolvedPlanType === "both" || resolvedPlanType === "meal";
 
-      const goalPlan = await storage.createGoalPlan(userId, goalType, validStartDate);
+      const GOAL_TITLE_PREFIXES: Record<string, string[]> = {
+        weight_loss: ["Lean Start", "Cut Phase", "Slim Down"],
+        muscle_gain: ["Strength Sprint", "Build Phase", "Gain Mode"],
+        performance: ["Peak Performance", "Level Up", "Go Mode"],
+        maintenance: ["Steady State", "Stay Strong", "Balance"],
+        energy: ["Energy Boost", "Power Up", "Recharge"],
+        general_fitness: ["Fresh Start", "New Chapter", "Kickoff"],
+        mobility: ["Flex Flow", "Move Better", "Limber Up"],
+        endurance: ["Long Game", "Mile Maker", "Stay Going"],
+        strength: ["Iron Path", "Power Phase", "Lift Off"],
+      };
+      const prefixes = GOAL_TITLE_PREFIXES[goalType] || GOAL_TITLE_PREFIXES["general_fitness"];
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+      const goalTitle = validStartDate
+        ? `${prefix} · ${new Date(validStartDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+        : prefix;
 
-      let mealPlanId: string | null = null;
-      let workoutPlanId: string | null = null;
+      const initialProgress = {
+        stage: needsWorkout ? "TRAINING" : (needsMeal ? "NUTRITION" : "FINALIZING"),
+        stageStatuses: {
+          TRAINING: needsWorkout ? "PENDING" : "SKIPPED",
+          NUTRITION: needsMeal ? "PENDING" : "SKIPPED",
+          SCHEDULING: "PENDING",
+          FINALIZING: "PENDING",
+        },
+      };
 
-      if (mealPreferences) {
-        if (mealPreferences.goal === "fat_loss") mealPreferences.goal = "weight_loss";
-        const parsedMeal = preferencesSchema.safeParse(mealPreferences);
-        if (!parsedMeal.success) {
-          return res.status(400).json({ message: "Invalid meal preferences", errors: parsedMeal.error.flatten() });
-        }
-        const mealIdempotencyKey = crypto.randomUUID();
-        const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, validStartDate);
-        mealPlanId = pendingMeal.id;
+      const goalPlan = await storage.createGoalPlanFull(userId, {
+        goalType,
+        planType: resolvedPlanType,
+        startDate: validStartDate,
+        endDate: validStartDate ? (() => {
+          const d = new Date(validStartDate + "T00:00:00");
+          d.setDate(d.getDate() + 6);
+          return d.toISOString().split("T")[0];
+        })() : undefined,
+        pace: pace || undefined,
+        title: goalTitle,
+        globalInputs: globalInputs || undefined,
+        nutritionInputs: needsMeal ? mealPreferences : undefined,
+        trainingInputs: needsWorkout ? workoutPreferences : undefined,
+        status: "generating",
+        progress: initialProgress,
+      });
 
-        (async () => {
-          try {
+      (async () => {
+        try {
+          let workoutPlanId: string | null = null;
+          let mealPlanId: string | null = null;
+
+          if (needsWorkout && workoutPreferences) {
+            await storage.updateGoalPlan(goalPlan.id, {
+              progress: { ...initialProgress, stage: "TRAINING", stageStatuses: { ...initialProgress.stageStatuses, TRAINING: "RUNNING" } },
+            });
+
+            const parsedWorkout = workoutPreferencesSchema.safeParse(workoutPreferences);
+            if (!parsedWorkout.success) {
+              throw new Error("Invalid workout preferences");
+            }
+            const wIdempotencyKey = crypto.randomUUID();
+            const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, validStartDate);
+            workoutPlanId = pendingWorkout.id;
+            await storage.updateGoalPlan(goalPlan.id, { workoutPlanId });
+
+            log(`Goal gen: generating workout plan ${pendingWorkout.id}`, "openai");
+            const result = await generateWorkoutPlan(parsedWorkout.data);
+            await storage.updateWorkoutPlanStatus(pendingWorkout.id, "ready", result);
+            await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingWorkout.id, type: "workout" });
+            log(`Goal gen: workout plan ${pendingWorkout.id} ready`, "openai");
+
+            const progressAfterTraining = {
+              stage: needsMeal ? "NUTRITION" : "SCHEDULING",
+              stageStatuses: {
+                ...initialProgress.stageStatuses,
+                TRAINING: "DONE" as const,
+                ...(needsMeal ? { NUTRITION: "RUNNING" as const } : { SCHEDULING: "RUNNING" as const }),
+              },
+            };
+            await storage.updateGoalPlan(goalPlan.id, { progress: progressAfterTraining });
+          }
+
+          if (needsMeal && mealPreferences) {
+            if (!needsWorkout) {
+              await storage.updateGoalPlan(goalPlan.id, {
+                progress: { ...initialProgress, stage: "NUTRITION", stageStatuses: { ...initialProgress.stageStatuses, NUTRITION: "RUNNING" } },
+              });
+            }
+
+            const mealPrefs = { ...mealPreferences };
+            if (mealPrefs.goal === "fat_loss") mealPrefs.goal = "weight_loss";
+            const parsedMeal = preferencesSchema.safeParse(mealPrefs);
+            if (!parsedMeal.success) {
+              throw new Error("Invalid meal preferences");
+            }
+            const mealIdempotencyKey = crypto.randomUUID();
+            const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, validStartDate);
+            mealPlanId = pendingMeal.id;
+            await storage.updateGoalPlan(goalPlan.id, { mealPlanId });
+
             const prefCtx = await storage.getUserPreferenceContext(userId);
             const workoutDays = parsedMeal.data.workoutDays || undefined;
             log(`Goal gen: generating meal plan ${pendingMeal.id}`, "openai");
             const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays);
             await storage.updatePlanStatus(pendingMeal.id, "ready", planJson);
-            await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingMeal.id });
+            await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingMeal.id, type: "meal" });
             log(`Goal gen: meal plan ${pendingMeal.id} ready`, "openai");
-            await runGroceryPricing(pendingMeal.id, planJson, parsedMeal.data);
-          } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            log(`Goal gen: meal plan ${pendingMeal.id} failed: ${errMsg}`, "openai");
-            await storage.updatePlanStatus(pendingMeal.id, "failed", undefined, errMsg);
-          }
-        })();
-      }
 
-      if (workoutPreferences) {
-        const parsedWorkout = workoutPreferencesSchema.safeParse(workoutPreferences);
-        if (!parsedWorkout.success) {
-          return res.status(400).json({ message: "Invalid workout preferences", errors: parsedWorkout.error.flatten() });
+            runGroceryPricing(pendingMeal.id, planJson, parsedMeal.data).catch(() => {});
+          }
+
+          await storage.updateGoalPlan(goalPlan.id, {
+            progress: {
+              stage: "SCHEDULING",
+              stageStatuses: {
+                TRAINING: needsWorkout ? "DONE" : "SKIPPED",
+                NUTRITION: needsMeal ? "DONE" : "SKIPPED",
+                SCHEDULING: "RUNNING",
+                FINALIZING: "PENDING",
+              },
+            },
+          });
+
+          if (validStartDate) {
+            if (mealPlanId) {
+              await storage.updatePlanStartDate(mealPlanId, validStartDate);
+            }
+            if (workoutPlanId) {
+              await storage.updateWorkoutStartDate(workoutPlanId, validStartDate);
+            }
+          }
+
+          await storage.updateGoalPlan(goalPlan.id, {
+            progress: {
+              stage: "FINALIZING",
+              stageStatuses: {
+                TRAINING: needsWorkout ? "DONE" : "SKIPPED",
+                NUTRITION: needsMeal ? "DONE" : "SKIPPED",
+                SCHEDULING: "DONE",
+                FINALIZING: "RUNNING",
+              },
+            },
+          });
+
+          await storage.updateGoalPlan(goalPlan.id, {
+            status: "ready",
+            progress: {
+              stage: "FINALIZING",
+              stageStatuses: {
+                TRAINING: needsWorkout ? "DONE" : "SKIPPED",
+                NUTRITION: needsMeal ? "DONE" : "SKIPPED",
+                SCHEDULING: "DONE",
+                FINALIZING: "DONE",
+              },
+            },
+          });
+
+          log(`Goal gen: goal plan ${goalPlan.id} completed`, "openai");
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          log(`Goal gen: goal plan ${goalPlan.id} failed: ${errMsg}`, "openai");
+          const currentGoal = await storage.getGoalPlan(goalPlan.id);
+          const currentProgress = (currentGoal?.progress as any) || initialProgress;
+          await storage.updateGoalPlan(goalPlan.id, {
+            status: "failed",
+            progress: {
+              ...currentProgress,
+              stageStatuses: {
+                ...currentProgress.stageStatuses,
+                [currentProgress.stage]: "FAILED",
+              },
+              errorMessage: errMsg,
+            },
+          });
         }
-        const wIdempotencyKey = crypto.randomUUID();
-        const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, validStartDate);
-        workoutPlanId = pendingWorkout.id;
-
-        (async () => {
-          try {
-            log(`Goal gen: generating workout plan ${pendingWorkout.id}`, "openai");
-            const result = await generateWorkoutPlan(parsedWorkout.data);
-            await storage.updateWorkoutPlanStatus(pendingWorkout.id, "ready", result);
-            log(`Goal gen: workout plan ${pendingWorkout.id} ready`, "openai");
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            log(`Goal gen: workout plan ${pendingWorkout.id} failed: ${msg}`, "openai");
-            await storage.updateWorkoutPlanStatus(pendingWorkout.id, "failed", undefined, msg);
-          }
-        })();
-      }
-
-      await storage.updateGoalPlan(goalPlan.id, {
-        mealPlanId,
-        workoutPlanId,
-      });
+      })();
 
       return res.json({
         goalPlanId: goalPlan.id,
-        mealPlanId,
-        workoutPlanId,
+        mealPlanId: null,
+        workoutPlanId: null,
       });
     } catch (err) {
       log(`Goal generation error: ${err}`, "plan");
@@ -959,7 +1128,12 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Goal plan not found" });
       }
 
-      const result: any = { goalPlanId: goalPlan.id };
+      const result: any = {
+        goalPlanId: goalPlan.id,
+        status: goalPlan.status || "generating",
+        progress: goalPlan.progress || null,
+        planType: goalPlan.planType || "both",
+      };
 
       if (goalPlan.mealPlanId) {
         const mp = await storage.getMealPlan(goalPlan.mealPlanId);

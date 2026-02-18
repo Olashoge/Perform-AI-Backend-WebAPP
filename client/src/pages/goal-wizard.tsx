@@ -32,6 +32,10 @@ const GOAL_OPTIONS = [
   { value: "muscle_gain", label: "Muscle Gain" },
   { value: "performance", label: "Performance" },
   { value: "general_fitness", label: "General Fitness" },
+  { value: "mobility", label: "Mobility" },
+  { value: "endurance", label: "Endurance" },
+  { value: "strength", label: "Strength" },
+  { value: "energy", label: "Energy & Focus" },
 ];
 
 const PLAN_TYPE_OPTIONS = [
@@ -87,13 +91,17 @@ const STEP_INFO = [
 ];
 
 function mapGoalForMeal(goalType: string): "weight_loss" | "muscle_gain" | "energy" | "maintenance" | "performance" {
-  if (goalType === "general_fitness") return "maintenance";
+  if (goalType === "general_fitness" || goalType === "mobility") return "maintenance";
   if (goalType === "energy") return "energy";
+  if (goalType === "endurance") return "performance";
+  if (goalType === "strength") return "muscle_gain";
   return goalType as "weight_loss" | "muscle_gain" | "maintenance" | "performance";
 }
 
 function mapGoalForWorkout(goalType: string): "weight_loss" | "muscle_gain" | "performance" | "maintenance" {
-  if (goalType === "general_fitness" || goalType === "energy") return "maintenance";
+  if (goalType === "general_fitness" || goalType === "energy" || goalType === "mobility") return "maintenance";
+  if (goalType === "endurance") return "performance";
+  if (goalType === "strength") return "muscle_gain";
   return goalType as "weight_loss" | "muscle_gain" | "performance" | "maintenance";
 }
 
@@ -114,23 +122,26 @@ export default function GoalWizard() {
   const includeMeal = planType === "both" || planType === "meal";
   const includeWorkout = planType === "both" || planType === "workout";
 
-  const { data: conflictsData } = useQuery<{ occupiedDates: string[] }>({
-    queryKey: ["/api/goal-plans/conflicts"],
+  const { data: availabilityData } = useQuery<{ mealDates: string[], workoutDates: string[], allDates: string[] }>({
+    queryKey: ["/api/availability"],
     enabled: !!user,
   });
 
   const dateConflicts = useMemo(() => {
-    if (!startDate || !conflictsData?.occupiedDates) return [];
-    const occupied = new Set(conflictsData.occupiedDates);
-    const conflicts: string[] = [];
+    if (!startDate || !availabilityData) return { meal: [] as string[], workout: [] as string[] };
+    const mealOccupied = new Set(availabilityData.mealDates || []);
+    const workoutOccupied = new Set(availabilityData.workoutDates || []);
+    const mealConflicts: string[] = [];
+    const workoutConflicts: string[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(startDate + "T00:00:00");
       d.setDate(d.getDate() + i);
       const ds = d.toISOString().slice(0, 10);
-      if (occupied.has(ds)) conflicts.push(ds);
+      if (includeMeal && mealOccupied.has(ds)) mealConflicts.push(ds);
+      if (includeWorkout && workoutOccupied.has(ds)) workoutConflicts.push(ds);
     }
-    return conflicts;
-  }, [startDate, conflictsData]);
+    return { meal: mealConflicts, workout: workoutConflicts };
+  }, [startDate, availabilityData, includeMeal, includeWorkout]);
 
   const mealForm = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
@@ -214,6 +225,7 @@ export default function GoalWizard() {
     if (step === 3) {
       const valid = await workoutForm.trigger();
       if (!valid) return;
+      mealForm.setValue("workoutDays", workoutForm.getValues("daysOfWeek"));
       setStep(getNextStep());
       return;
     }
@@ -243,13 +255,25 @@ export default function GoalWizard() {
       goal: mapGoalForWorkout(goalType),
     } : undefined;
 
+    const globalInputs: Record<string, any> = {};
+    const age = mealForm.getValues("age");
+    const currentWeight = mealForm.getValues("currentWeight");
+    const targetWeight = mealForm.getValues("targetWeight");
+    const weightUnit = mealForm.getValues("weightUnit");
+    if (age !== undefined && age !== null) globalInputs.age = age;
+    if (currentWeight !== undefined && currentWeight !== null) globalInputs.currentWeight = currentWeight;
+    if (targetWeight !== undefined && targetWeight !== null) globalInputs.targetWeight = targetWeight;
+    if (weightUnit) globalInputs.weightUnit = weightUnit;
+
     try {
       const res = await apiRequest("POST", "/api/goal-plans/generate", {
         goalType,
+        planType,
         startDate: startDate || undefined,
         pace: pace || undefined,
         mealPreferences,
         workoutPreferences,
+        ...(Object.keys(globalInputs).length > 0 ? { globalInputs } : {}),
       });
       const data = await res.json();
       navigate(`/goals/${data.goalPlanId}/generating?meal=${includeMeal}&workout=${includeWorkout}`);
@@ -375,13 +399,22 @@ export default function GoalWizard() {
                     className="max-w-xs"
                     data-testid="input-start-date"
                   />
-                  {dateConflicts.length > 0 && (
+                  {(dateConflicts.meal.length > 0 || dateConflicts.workout.length > 0) && (
                     <div className="mt-2 flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400" data-testid="text-date-conflict-warning">
                       <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                       <span>
-                        {dateConflicts.length === 1
-                          ? "1 day in this week overlaps with an existing plan."
-                          : `${dateConflicts.length} days in this week overlap with existing plans.`}
+                        {planType === "both" ? (
+                          <>
+                            {dateConflicts.meal.length > 0 && `${dateConflicts.meal.length} meal day${dateConflicts.meal.length > 1 ? "s" : ""} overlap. `}
+                            {dateConflicts.workout.length > 0 && `${dateConflicts.workout.length} workout day${dateConflicts.workout.length > 1 ? "s" : ""} overlap. `}
+                          </>
+                        ) : (
+                          <>
+                            {(dateConflicts.meal.length + dateConflicts.workout.length) === 1
+                              ? "1 day in this week overlaps with an existing plan."
+                              : `${dateConflicts.meal.length + dateConflicts.workout.length} days in this week overlap with existing plans.`}
+                          </>
+                        )}
                         {" "}You can still proceed, but plans may conflict.
                       </span>
                     </div>
@@ -404,6 +437,76 @@ export default function GoalWizard() {
                         {opt.label}
                       </Button>
                     ))}
+                  </div>
+                </div>
+
+                <div className="border-t pt-6">
+                  <label className="text-sm font-medium mb-3 block">About You (optional)</label>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm text-muted-foreground mb-1 block">Age</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={120}
+                        placeholder="Your age"
+                        className="w-32"
+                        data-testid="input-age"
+                        value={mealForm.watch("age") ?? ""}
+                        onChange={(e) => mealForm.setValue("age", e.target.value ? parseInt(e.target.value) : undefined)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground mb-1 block">Weight</label>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant={mealForm.watch("weightUnit") === "lb" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => mealForm.setValue("weightUnit", "lb")}
+                          data-testid="button-unit-lb"
+                        >
+                          lb
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={mealForm.watch("weightUnit") === "kg" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => mealForm.setValue("weightUnit", "kg")}
+                          data-testid="button-unit-kg"
+                        >
+                          kg
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-4">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={1000}
+                            placeholder="Current weight"
+                            className="w-36"
+                            data-testid="input-current-weight"
+                            value={mealForm.watch("currentWeight") ?? ""}
+                            onChange={(e) => mealForm.setValue("currentWeight", e.target.value ? parseFloat(e.target.value) : undefined)}
+                          />
+                          <span className="text-sm text-muted-foreground">{mealForm.watch("weightUnit")}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={1000}
+                            placeholder="Target weight"
+                            className="w-36"
+                            data-testid="input-target-weight"
+                            value={mealForm.watch("targetWeight") ?? ""}
+                            onChange={(e) => mealForm.setValue("targetWeight", e.target.value ? parseFloat(e.target.value) : undefined)}
+                          />
+                          <span className="text-sm text-muted-foreground">{mealForm.watch("weightUnit")}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -644,160 +747,6 @@ export default function GoalWizard() {
                       )}
                     />
                   )}
-                </CardContent>
-              </Card>
-            </section>
-
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">About You</h2>
-              </div>
-              <Card>
-                <CardContent className="p-5 sm:p-6 space-y-6">
-                  <FormField
-                    control={mealForm.control}
-                    name="age"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Age (optional)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={120}
-                            placeholder="Your age"
-                            className="w-32"
-                            data-testid="input-age"
-                            value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="border-t pt-6 space-y-3">
-                    <FormLabel>Weight (optional)</FormLabel>
-                    <FormField
-                      control={mealForm.control}
-                      name="weightUnit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex gap-1">
-                            <Button
-                              type="button"
-                              variant={field.value === "lb" ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => field.onChange("lb")}
-                              data-testid="button-unit-lb"
-                            >
-                              lb
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={field.value === "kg" ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => field.onChange("kg")}
-                              data-testid="button-unit-kg"
-                            >
-                              kg
-                            </Button>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex flex-wrap gap-4">
-                      <FormField
-                        control={mealForm.control}
-                        name="currentWeight"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  max={1000}
-                                  placeholder="Current weight"
-                                  className="w-36"
-                                  data-testid="input-current-weight"
-                                  value={field.value ?? ""}
-                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                                />
-                                <span className="text-sm text-muted-foreground">{mealForm.watch("weightUnit")}</span>
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={mealForm.control}
-                        name="targetWeight"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  max={1000}
-                                  placeholder="Target weight"
-                                  className="w-36"
-                                  data-testid="input-target-weight"
-                                  value={field.value ?? ""}
-                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                                />
-                                <span className="text-sm text-muted-foreground">{mealForm.watch("weightUnit")}</span>
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-6">
-                    <FormField
-                      control={mealForm.control}
-                      name="workoutDays"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Workout Days (optional)</FormLabel>
-                          <FormDescription>Select the days you work out</FormDescription>
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const).map((day) => {
-                              const selected = (field.value || []).includes(day);
-                              return (
-                                <Button
-                                  key={day}
-                                  type="button"
-                                  variant={selected ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => {
-                                    const current = field.value || [];
-                                    if (selected) {
-                                      const next = current.filter((d: string) => d !== day);
-                                      field.onChange(next.length > 0 ? next : undefined);
-                                    } else {
-                                      field.onChange([...current, day]);
-                                    }
-                                  }}
-                                  data-testid={`button-workout-${day.toLowerCase()}`}
-                                >
-                                  {day}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
                 </CardContent>
               </Card>
             </section>
@@ -1249,6 +1198,28 @@ export default function GoalWizard() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Pace</span>
                     <span className="font-medium capitalize" data-testid="text-review-pace">{pace}</span>
+                  </div>
+                )}
+                {mealForm.getValues("age") && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Age</span>
+                    <span className="font-medium" data-testid="text-review-age">{mealForm.getValues("age")}</span>
+                  </div>
+                )}
+                {mealForm.getValues("currentWeight") && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Current Weight</span>
+                    <span className="font-medium" data-testid="text-review-current-weight">
+                      {mealForm.getValues("currentWeight")} {mealForm.getValues("weightUnit")}
+                    </span>
+                  </div>
+                )}
+                {mealForm.getValues("targetWeight") && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Target Weight</span>
+                    <span className="font-medium" data-testid="text-review-target-weight">
+                      {mealForm.getValues("targetWeight")} {mealForm.getValues("weightUnit")}
+                    </span>
                   </div>
                 )}
               </div>

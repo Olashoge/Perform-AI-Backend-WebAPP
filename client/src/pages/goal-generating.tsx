@@ -11,7 +11,7 @@ import {
 
 const POLL_INTERVAL = 2000;
 const TIMEOUT_MS = 3 * 60 * 1000;
-const STEP_DURATION_MS = 20_000;
+const MIN_STAGE_DISPLAY_MS = 3000;
 
 const TIPS = [
   "Combining nutrition and training amplifies your results.",
@@ -24,11 +24,29 @@ const TIPS = [
   "Sleep is the most underrated performance enhancer.",
 ];
 
+interface StageStatuses {
+  TRAINING: "PENDING" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED";
+  NUTRITION: "PENDING" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED";
+  SCHEDULING: "PENDING" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED";
+  FINALIZING: "PENDING" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED";
+}
+
+interface GoalProgress {
+  stage: string;
+  stageStatuses: StageStatuses;
+  errorMessage?: string;
+}
+
 interface GenerationStatus {
   goalPlanId: string;
+  status: string;
+  progress: GoalProgress | null;
+  planType: string;
   mealPlan?: { id: string; status: string; errorMessage?: string } | null;
   workoutPlan?: { id: string; status: string; errorMessage?: string } | null;
 }
+
+const STAGE_ORDER: (keyof StageStatuses)[] = ["TRAINING", "NUTRITION", "SCHEDULING", "FINALIZING"];
 
 export default function GoalGenerating() {
   const { id } = useParams<{ id: string }>();
@@ -47,35 +65,63 @@ export default function GoalGenerating() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [visualStep, setVisualStep] = useState(0);
-  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const backendMealStatus = status?.mealPlan?.status || (hasMeal ? "generating" : "none");
-  const backendWorkoutStatus = status?.workoutPlan?.status || (hasWorkout ? "generating" : "none");
-  const backendMealDone = !hasMeal || backendMealStatus === "ready" || backendMealStatus === "failed";
-  const backendWorkoutDone = !hasWorkout || backendWorkoutStatus === "ready" || backendWorkoutStatus === "failed";
-  const backendAllDone = backendMealDone && backendWorkoutDone;
-  const backendMealFailed = hasMeal && backendMealStatus === "failed";
-  const backendWorkoutFailed = hasWorkout && backendWorkoutStatus === "failed";
-  const backendAnyFailed = backendMealFailed || backendWorkoutFailed;
-
-  const VISUAL_STEP_COUNT = 4;
+  const [displayedStatuses, setDisplayedStatuses] = useState<StageStatuses>({
+    TRAINING: hasWorkout ? "PENDING" : "SKIPPED",
+    NUTRITION: hasMeal ? "PENDING" : "SKIPPED",
+    SCHEDULING: "PENDING",
+    FINALIZING: "PENDING",
+  });
+  const stageTransitionRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
-    if (visualStep < VISUAL_STEP_COUNT - 1) {
-      stepTimerRef.current = setTimeout(() => {
-        setVisualStep((s) => s + 1);
-      }, STEP_DURATION_MS);
-      return () => {
-        if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
-      };
-    }
-  }, [visualStep]);
+    if (!status?.progress?.stageStatuses) return;
 
-  const finalizingReady = visualStep >= VISUAL_STEP_COUNT - 1 && backendAllDone;
-  const allDone = finalizingReady;
-  const anyFailed = backendAnyFailed;
-  const allSuccess = allDone && !anyFailed;
+    const backend = status.progress.stageStatuses;
+    const now = Date.now();
+
+    setDisplayedStatuses(prev => {
+      const next = { ...prev };
+      for (const stage of STAGE_ORDER) {
+        const backendVal = backend[stage];
+        const currentVal = prev[stage];
+
+        if (backendVal === currentVal) continue;
+
+        if (backendVal === "SKIPPED") {
+          next[stage] = "SKIPPED";
+          continue;
+        }
+
+        if (currentVal === "RUNNING" && (backendVal === "DONE" || backendVal === "FAILED")) {
+          const transitionTime = stageTransitionRef.current[stage] || 0;
+          const elapsed = now - transitionTime;
+          if (elapsed < MIN_STAGE_DISPLAY_MS) {
+            setTimeout(() => {
+              setDisplayedStatuses(p => ({ ...p, [stage]: backendVal }));
+            }, MIN_STAGE_DISPLAY_MS - elapsed);
+            continue;
+          }
+        }
+
+        if (backendVal === "RUNNING") {
+          stageTransitionRef.current[stage] = now;
+        }
+
+        next[stage] = backendVal;
+      }
+      return next;
+    });
+  }, [status?.progress?.stageStatuses]);
+
+  const goalStatus = status?.status || "generating";
+  const isComplete = goalStatus === "ready" || goalStatus === "failed";
+  const isFailed = goalStatus === "failed";
+  const isSuccess = goalStatus === "ready";
+
+  const allDisplayDone = STAGE_ORDER.every(s => displayedStatuses[s] === "DONE" || displayedStatuses[s] === "SKIPPED" || displayedStatuses[s] === "FAILED");
+  const allDone = isComplete && allDisplayDone;
+  const allSuccess = isSuccess && allDisplayDone;
+  const anyFailed = isFailed && allDisplayDone;
 
   const pollStatus = useCallback(async () => {
     if (!id) return;
@@ -84,7 +130,6 @@ export default function GoalGenerating() {
       const data: GenerationStatus = await res.json();
       setStatus(data);
     } catch {
-      // ignore poll errors
     }
   }, [id]);
 
@@ -132,22 +177,17 @@ export default function GoalGenerating() {
   }, [allSuccess]);
 
   const steps = [
-    { label: "Designing your training plan...", icon: Dumbbell, index: 0 },
-    { label: "Designing your nutrition plan...", icon: UtensilsCrossed, index: 1 },
-    { label: "Scheduling your week...", icon: CalendarCheck, index: 2 },
-    { label: "Finalizing...", icon: Sparkles, index: 3 },
-  ];
+    { label: "Designing your training plan...", icon: Dumbbell, stage: "TRAINING" as keyof StageStatuses },
+    { label: "Designing your nutrition plan...", icon: UtensilsCrossed, stage: "NUTRITION" as keyof StageStatuses },
+    { label: "Scheduling your week...", icon: CalendarCheck, stage: "SCHEDULING" as keyof StageStatuses },
+    { label: "Finalizing...", icon: Sparkles, stage: "FINALIZING" as keyof StageStatuses },
+  ].filter(s => displayedStatuses[s.stage] !== "SKIPPED");
 
-  function getStepState(step: typeof steps[0]): "pending" | "active" | "done" | "failed" {
-    if (step.index < visualStep) return "done";
-    if (step.index === visualStep) {
-      if (step.index === VISUAL_STEP_COUNT - 1) {
-        if (backendAllDone && backendAnyFailed) return "failed";
-        if (backendAllDone) return "done";
-        return "active";
-      }
-      return "active";
-    }
+  function getStepState(stage: keyof StageStatuses): "pending" | "active" | "done" | "failed" {
+    const st = displayedStatuses[stage];
+    if (st === "DONE") return "done";
+    if (st === "RUNNING") return "active";
+    if (st === "FAILED") return "failed";
     return "pending";
   }
 
@@ -155,7 +195,7 @@ export default function GoalGenerating() {
     let done = 0;
     const total = steps.length;
     for (const s of steps) {
-      const st = getStepState(s);
+      const st = getStepState(s.stage);
       if (st === "done") done += 1;
       else if (st === "active") done += 0.5;
     }
@@ -178,10 +218,12 @@ export default function GoalGenerating() {
     );
   }
 
-  if (anyFailed && allDone) {
-    const mealErr = status?.mealPlan?.errorMessage;
-    const workoutErr = status?.workoutPlan?.errorMessage;
-    const partialSuccess = (backendMealFailed && !backendWorkoutFailed) || (!backendMealFailed && backendWorkoutFailed);
+  if (anyFailed) {
+    const progressData = status?.progress;
+    const errorMsg = progressData?.errorMessage || "Something went wrong during generation.";
+    const mealFailed = displayedStatuses.NUTRITION === "FAILED";
+    const workoutFailed = displayedStatuses.TRAINING === "FAILED";
+    const partialSuccess = (mealFailed && !workoutFailed) || (!mealFailed && workoutFailed);
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
         <div className="mx-auto w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
@@ -193,21 +235,21 @@ export default function GoalGenerating() {
         <p className="text-sm text-muted-foreground mb-4">
           {partialSuccess
             ? "One of your plans was created successfully, but the other failed. You can try again from the Goals page."
-            : "Both plans failed to generate. Please try again."}
+            : errorMsg}
         </p>
         <div className="space-y-2 mb-6">
           {hasMeal && (
             <div className="flex items-center gap-2 justify-center text-sm text-muted-foreground">
-              {backendMealFailed ? <AlertCircle className="h-4 w-4 text-destructive shrink-0" /> : <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+              {mealFailed ? <AlertCircle className="h-4 w-4 text-destructive shrink-0" /> : <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
               <UtensilsCrossed className="h-4 w-4 shrink-0" />
-              <span>{backendMealFailed ? `Meal plan failed${mealErr ? `: ${mealErr.slice(0, 80)}` : ""}` : "Meal plan created"}</span>
+              <span>{mealFailed ? "Meal plan failed" : "Meal plan created"}</span>
             </div>
           )}
           {hasWorkout && (
             <div className="flex items-center gap-2 justify-center text-sm text-muted-foreground">
-              {backendWorkoutFailed ? <AlertCircle className="h-4 w-4 text-destructive shrink-0" /> : <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+              {workoutFailed ? <AlertCircle className="h-4 w-4 text-destructive shrink-0" /> : <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
               <Dumbbell className="h-4 w-4 shrink-0" />
-              <span>{backendWorkoutFailed ? `Workout plan failed${workoutErr ? `: ${workoutErr.slice(0, 80)}` : ""}` : "Workout plan created"}</span>
+              <span>{workoutFailed ? "Workout plan failed" : "Workout plan created"}</span>
             </div>
           )}
         </div>
@@ -216,7 +258,7 @@ export default function GoalGenerating() {
             <Target className="h-4 w-4 mr-2" />
             View Goals
           </Button>
-          <Button variant="outline" onClick={() => navigate("/goals")} data-testid="button-try-again">
+          <Button variant="outline" onClick={() => navigate("/goals/new")} data-testid="button-try-again">
             <RefreshCw className="h-4 w-4 mr-2" />
             Try Again
           </Button>
@@ -268,10 +310,10 @@ export default function GoalGenerating() {
       <Card className="text-left mb-6">
         <CardContent className="p-5 space-y-4">
           {steps.map((step, i) => {
-            const state = getStepState(step);
+            const state = getStepState(step.stage);
             const StepIcon = step.icon;
             return (
-              <div key={i} className="flex items-center gap-3" data-testid={`step-${step.index}`}>
+              <div key={i} className="flex items-center gap-3" data-testid={`step-${step.stage}`}>
                 {state === "done" ? (
                   <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
                 ) : state === "active" ? (
