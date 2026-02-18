@@ -93,8 +93,15 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  const weekStartsOn: 0 | 1 = (() => {
+    try {
+      const stored = localStorage.getItem("cal_weekStart");
+      return stored === "1" ? 1 : 0;
+    } catch { return 0 as const; }
+  })();
+
   const now = new Date();
-  const baseWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const baseWeekStart = startOfWeek(now, { weekStartsOn });
   const weekStart = addDays(baseWeekStart, weekOffset * 7);
   const weekEnd = addDays(weekStart, 6);
 

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   CalendarDays, Rows3, Grid3X3,
   Loader2, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown,
-  Settings2, Ban, Dumbbell, UtensilsCrossed,
+  Ban, Dumbbell, UtensilsCrossed,
 } from "lucide-react";
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, isSameMonth, eachDayOfInterval } from "date-fns";
 
@@ -430,69 +430,22 @@ function DayDetailModal({
   );
 }
 
-function SettingsModal({
-  open,
-  onClose,
-  weekStartsOn,
-  setWeekStartsOn,
-}: {
-  open: boolean;
-  onClose: () => void;
-  weekStartsOn: 0 | 1;
-  setWeekStartsOn: (v: 0 | 1) => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="text-base">Calendar Settings</DialogTitle>
-        </DialogHeader>
-        <div className="mt-4 space-y-5">
-          <div>
-            <p className="text-sm font-medium mb-3">Start of the week</p>
-            <div className="space-y-2">
-              {([{ value: 0, label: "Sunday" }, { value: 1, label: "Monday" }] as const).map(opt => (
-                <div
-                  key={opt.value}
-                  className={`flex items-center justify-between gap-2 px-4 py-3 rounded-md cursor-pointer border transition-colors ${weekStartsOn === opt.value ? "border-primary/30 bg-primary/5" : "border-transparent hover-elevate"}`}
-                  onClick={() => {
-                    setWeekStartsOn(opt.value);
-                    try { localStorage.setItem("cal_weekStart", String(opt.value)); } catch {}
-                  }}
-                  data-testid={`option-weekstart-${opt.label.toLowerCase()}`}
-                >
-                  <span className="text-sm">{opt.label}</span>
-                  {weekStartsOn === opt.value && (
-                    <div className="h-4 w-4 rounded-full bg-primary flex items-center justify-center">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function PlanCalendar() {
   const { user, isLoading: authLoading } = useAuth();
+
+  const weekStartsOn: 0 | 1 = (() => {
+    try {
+      const stored = localStorage.getItem("cal_weekStart");
+      return stored === "1" ? 1 : 0;
+    } catch { return 0 as const; }
+  })();
 
   const [viewMode, setViewMode] = useState<"month" | "week">("week");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    return startOfWeek(new Date(), { weekStartsOn: 0 });
+    return startOfWeek(new Date(), { weekStartsOn });
   });
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
-  const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(() => {
-    try {
-      const stored = localStorage.getItem("cal_weekStart");
-      return stored === "1" ? 1 : 0;
-    } catch { return 0; }
-  });
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [calFilter, setCalFilter] = useState<"combined" | "meals" | "workouts">("combined");
 
   const { data: rawCalendarData, isLoading: calLoading } = useQuery<AllCalendarData>({
@@ -587,14 +540,9 @@ export default function PlanCalendar() {
 
   return (
     <div className="px-4 sm:px-6 py-8">
-      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Calendar</h1>
-          <p className="text-sm text-muted-foreground mt-1">Your unified schedule</p>
-        </div>
-        <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} data-testid="button-settings">
-          <Settings2 className="h-4 w-4" />
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Calendar</h1>
+        <p className="text-sm text-muted-foreground mt-1">Your unified schedule</p>
       </div>
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
           <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
@@ -697,12 +645,6 @@ export default function PlanCalendar() {
         />
       )}
 
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        weekStartsOn={weekStartsOn}
-        setWeekStartsOn={setWeekStartsOn}
-      />
     </div>
   );
 }

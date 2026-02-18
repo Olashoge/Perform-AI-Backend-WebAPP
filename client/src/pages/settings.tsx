@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   User, Target, Heart, ClipboardCheck, UtensilsCrossed, Dumbbell,
   Flame, Zap, Trophy, Settings, LogOut, ChevronRight, Sun, Moon, Monitor,
+  CalendarDays,
 } from "lucide-react";
 
 const GOAL_LABELS: Record<string, string> = {
@@ -27,10 +28,21 @@ const THEME_OPTIONS = [
   { value: "system" as const, label: "System", icon: Monitor },
 ];
 
+const WEEK_START_OPTIONS = [
+  { value: 0 as const, label: "Sunday" },
+  { value: 1 as const, label: "Monday" },
+];
+
 export default function SettingsPage() {
   const { user, logout, isLoading } = useAuth();
   const { preference, setPreference } = useTheme();
   const [, navigate] = useLocation();
+  const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(() => {
+    try {
+      const stored = localStorage.getItem("cal_weekStart");
+      return stored === "1" ? 1 : 0;
+    } catch { return 0; }
+  });
 
   const { data: goalPlans } = useQuery<GoalPlan[]>({
     queryKey: ["/api/goal-plans"],
@@ -133,6 +145,38 @@ export default function SettingsPage() {
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <CalendarDays className="h-5 w-5 text-muted-foreground" />
+              <h2 className="font-semibold text-base">Week Starts On</h2>
+            </div>
+            <div className="flex gap-2">
+              {WEEK_START_OPTIONS.map((opt) => {
+                const isSelected = weekStartsOn === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => {
+                      setWeekStartsOn(opt.value);
+                      try { localStorage.setItem("cal_weekStart", String(opt.value)); } catch {}
+                    }}
+                    className={`flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-md border transition-colors duration-150 ${
+                      isSelected
+                        ? "border-primary bg-primary/5 text-foreground"
+                        : "border-border bg-background text-muted-foreground hover-elevate"
+                    }`}
+                    data-testid={`button-weekstart-${opt.label.toLowerCase()}`}
+                  >
+                    <span className="text-sm font-medium">{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">Controls the calendar and dashboard week views.</p>
           </CardContent>
         </Card>
 
