@@ -360,14 +360,24 @@ export default function WorkoutView() {
     enabled: !!user,
   });
 
+  const [optimisticExPrefs, setOptimisticExPrefs] = useState<Record<string, "liked" | "disliked" | "avoided" | null>>({});
+
   const exercisePrefMap = useMemo(() => {
-    if (!exercisePrefData) return {};
     const map: Record<string, "liked" | "disliked" | "avoided"> = {};
-    for (const item of exercisePrefData.liked) map[item.exerciseKey] = "liked";
-    for (const item of exercisePrefData.disliked) map[item.exerciseKey] = "disliked";
-    for (const item of exercisePrefData.avoided) map[item.exerciseKey] = "avoided";
+    if (exercisePrefData) {
+      for (const item of exercisePrefData.liked) map[item.exerciseKey] = "liked";
+      for (const item of exercisePrefData.disliked) map[item.exerciseKey] = "disliked";
+      for (const item of exercisePrefData.avoided) map[item.exerciseKey] = "avoided";
+    }
+    for (const [k, v] of Object.entries(optimisticExPrefs)) {
+      if (v === null) {
+        delete map[k];
+      } else {
+        map[k] = v;
+      }
+    }
     return map;
-  }, [exercisePrefData]);
+  }, [exercisePrefData, optimisticExPrefs]);
 
   const [avoidModalExercise, setAvoidModalExercise] = useState<{ key: string; name: string } | null>(null);
 
@@ -378,7 +388,8 @@ export default function WorkoutView() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/preferences/exercise"] });
     },
-    onError: () => {
+    onError: (_err, variables) => {
+      setOptimisticExPrefs(prev => { const next = { ...prev }; delete next[variables.exerciseKey]; return next; });
       toast({ title: "Failed to save exercise preference", variant: "destructive" });
     },
   });
@@ -390,10 +401,15 @@ export default function WorkoutView() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/preferences/exercise"] });
     },
+    onError: (_err, key) => {
+      setOptimisticExPrefs(prev => { const next = { ...prev }; delete next[key]; return next; });
+      toast({ title: "Failed to remove exercise preference", variant: "destructive" });
+    },
   });
 
   const handleExercisePref = useCallback((exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "neutral") => {
     if (status === "neutral") {
+      setOptimisticExPrefs(prev => ({ ...prev, [exerciseKey]: null }));
       exerciseDeletePrefMutation.mutate(exerciseKey);
       return;
     }
@@ -401,6 +417,7 @@ export default function WorkoutView() {
       setAvoidModalExercise({ key: exerciseKey, name: exerciseName });
       return;
     }
+    setOptimisticExPrefs(prev => ({ ...prev, [exerciseKey]: "liked" }));
     exercisePrefMutation.mutate({ exerciseKey, exerciseName, status: "liked" });
   }, [exercisePrefMutation, exerciseDeletePrefMutation]);
 
@@ -586,6 +603,7 @@ export default function WorkoutView() {
               variant="outline"
               onClick={() => {
                 if (avoidModalExercise) {
+                  setOptimisticExPrefs(prev => ({ ...prev, [avoidModalExercise.key]: "disliked" }));
                   exercisePrefMutation.mutate({
                     exerciseKey: avoidModalExercise.key,
                     exerciseName: avoidModalExercise.name,
@@ -602,6 +620,7 @@ export default function WorkoutView() {
               variant="default"
               onClick={() => {
                 if (avoidModalExercise) {
+                  setOptimisticExPrefs(prev => ({ ...prev, [avoidModalExercise.key]: "avoided" }));
                   exercisePrefMutation.mutate({
                     exerciseKey: avoidModalExercise.key,
                     exerciseName: avoidModalExercise.name,
