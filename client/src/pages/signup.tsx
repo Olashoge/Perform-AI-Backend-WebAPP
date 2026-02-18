@@ -29,7 +29,7 @@ export default function Signup() {
     setIsPending(true);
     try {
       await signup(data.email, data.password);
-      setTimeout(() => navigate("/new-plan"), 50);
+      setTimeout(() => navigate("/dashboard"), 50);
     } catch (err: any) {
       toast({
         title: "Signup failed",

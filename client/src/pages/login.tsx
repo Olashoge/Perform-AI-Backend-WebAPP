@@ -29,7 +29,7 @@ export default function Login() {
     setIsPending(true);
     try {
       await login(data.email, data.password);
-      setTimeout(() => navigate("/plans"), 50);
+      setTimeout(() => navigate("/dashboard"), 50);
     } catch (err: any) {
       toast({
         title: "Login failed",
