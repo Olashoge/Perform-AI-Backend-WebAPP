@@ -173,20 +173,6 @@ export default function GoalReady() {
       </Card>
 
       <div className="flex flex-col gap-3">
-        {mealPlan && (
-          <Button onClick={() => navigate(`/plan/${mealPlan.id}`)} className="w-full" data-testid="button-view-meal-plan">
-            <UtensilsCrossed className="h-4 w-4 mr-2" />
-            View Meal Plan
-            <ArrowRight className="h-4 w-4 ml-auto" />
-          </Button>
-        )}
-        {workoutPlan && (
-          <Button onClick={() => navigate(`/workout/${workoutPlan.id}`)} variant={mealPlan ? "outline" : "default"} className="w-full" data-testid="button-view-workout-plan">
-            <Dumbbell className="h-4 w-4 mr-2" />
-            View Workout Plan
-            <ArrowRight className="h-4 w-4 ml-auto" />
-          </Button>
-        )}
         <Button variant="ghost" onClick={() => navigate("/goals")} className="w-full" data-testid="button-go-to-goals">
           <Target className="h-4 w-4 mr-2" />
           Back to Goals
