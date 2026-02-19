@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   CalendarDays, Rows3, Grid3X3,
   Loader2, ChevronLeft, ChevronRight, ThumbsUp, ThumbsDown,
-  Ban, Dumbbell, UtensilsCrossed,
+  Ban, Dumbbell, UtensilsCrossed, Plus,
 } from "lucide-react";
-import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, isSameMonth, eachDayOfInterval } from "date-fns";
+import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, isSameMonth, eachDayOfInterval, isBefore, startOfDay } from "date-fns";
+import { PlanThisDay } from "@/components/plan-this-day";
 
 const SLOT_ORDER: Record<string, number> = { breakfast: 1, lunch: 2, dinner: 3, snack: 4 };
 
@@ -28,11 +29,30 @@ interface WorkoutCalendarDay {
   workoutPlanId: string;
 }
 
+interface DailyMealRecord {
+  id: string;
+  date: string;
+  status: string;
+  generatedTitle: string | null;
+  planJson: any;
+  mealsPerDay?: number;
+}
+
+interface DailyWorkoutRecord {
+  id: string;
+  date: string;
+  status: string;
+  generatedTitle: string | null;
+  planJson: any;
+}
+
 interface CalendarDay {
   date: string;
   meals: Record<string, Meal>;
   planIds?: string[];
   workout?: WorkoutCalendarDay;
+  dailyMeal?: DailyMealRecord;
+  dailyWorkout?: DailyWorkoutRecord;
 }
 
 interface AllCalendarData {
@@ -68,6 +88,11 @@ const SLOT_BORDER: Record<string, string> = {
 };
 
 const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function isPastDate(date: Date): boolean {
+  const today = startOfDay(new Date());
+  return isBefore(date, today);
+}
 
 function FeedbackDot({ feedback }: { feedback?: "like" | "dislike" | "avoid" }) {
   if (!feedback) return null;
@@ -140,17 +165,21 @@ function WeekView({
       <div className="space-y-2">
         {weekDates.map((date) => {
           const dateStr = format(date, "yyyy-MM-dd");
-          const calDay = dayMap.get(dateStr);
+          const calDay = dayMap.get(dateStr) || { date: dateStr, meals: {} };
           const isToday = isSameDay(date, new Date());
+          const past = isPastDate(date);
           const dayOfWeek = date.getDay();
-          const hasMeals = calDay && Object.keys(calDay.meals).length > 0;
-          const hasWorkout = calDay?.workout?.isWorkoutDay;
+          const hasMeals = Object.keys(calDay.meals).length > 0;
+          const hasWorkout = calDay.workout?.isWorkoutDay;
+          const hasDailyMeal = calDay.dailyMeal?.status === "ready";
+          const hasDailyWorkout = calDay.dailyWorkout?.status === "ready";
+          const hasAnyContent = hasMeals || hasWorkout || hasDailyMeal || hasDailyWorkout;
 
           return (
             <Card
               key={dateStr}
-              className={`cursor-pointer overflow-visible hover-elevate transition-shadow ${isToday ? "ring-1 ring-primary/30" : ""}`}
-              onClick={() => calDay && onDayClick(calDay)}
+              className={`cursor-pointer overflow-visible hover-elevate transition-shadow ${isToday ? "ring-1 ring-primary/30" : ""} ${past ? "opacity-60" : ""}`}
+              onClick={() => onDayClick(calDay)}
               data-testid={`week-row-${dateStr}`}
             >
               <CardContent className="p-3 sm:p-4">
@@ -163,13 +192,13 @@ function WeekView({
                       {DAY_ABBR[dayOfWeek]}
                     </span>
                     <div className="flex items-center gap-1 mt-1.5">
-                      {hasMeals && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
-                      {hasWorkout && <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />}
+                      {(hasMeals || hasDailyMeal) && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                      {(hasWorkout || hasDailyWorkout) && <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />}
                     </div>
                   </div>
                   <div className="flex-1 min-w-0 space-y-1.5">
                     {slots.map(slot => {
-                      const meal = calDay?.meals[slot] as Meal | undefined;
+                      const meal = calDay.meals[slot] as Meal | undefined;
                       if (!meal) return null;
                       const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
                       const feedback = getMealFeedback(meal, fp, feedbackMap, avoidedIngredients);
@@ -191,7 +220,7 @@ function WeekView({
                         </div>
                       );
                     })}
-                    {hasWorkout && calDay?.workout?.session && (
+                    {hasWorkout && calDay.workout?.session && (
                       <div className="flex items-center gap-2">
                         <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-teal-500" />
                         <Dumbbell className="h-3 w-3 text-teal-500 shrink-0" />
@@ -200,7 +229,27 @@ function WeekView({
                         </span>
                       </div>
                     )}
-                    {!hasMeals && !hasWorkout && (
+                    {hasDailyMeal && calDay.dailyMeal?.planJson && (
+                      <div className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-amber-400" />
+                        <UtensilsCrossed className="h-3 w-3 text-amber-500 shrink-0" />
+                        <span className="text-sm leading-tight truncate text-amber-700 dark:text-amber-400">
+                          {calDay.dailyMeal.generatedTitle || "Daily Meals"}
+                        </span>
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0">Daily</Badge>
+                      </div>
+                    )}
+                    {hasDailyWorkout && calDay.dailyWorkout?.planJson && (
+                      <div className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-teal-400" />
+                        <Dumbbell className="h-3 w-3 text-teal-400 shrink-0" />
+                        <span className="text-sm leading-tight truncate text-teal-700 dark:text-teal-400">
+                          {calDay.dailyWorkout.generatedTitle || "Daily Workout"}
+                        </span>
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0">Daily</Badge>
+                      </div>
+                    )}
+                    {!hasAnyContent && (
                       <span className="text-xs text-muted-foreground/60 italic">No plans</span>
                     )}
                   </div>
@@ -287,19 +336,22 @@ function MonthView({
             <div key={wi} className="grid grid-cols-7 gap-1 mb-1">
               {week.map((date) => {
                 const dateStr = format(date, "yyyy-MM-dd");
-                const calDay = dayMap.get(dateStr);
+                const calDay = dayMap.get(dateStr) || { date: dateStr, meals: {} };
                 const isCurrentMonth = isSameMonth(date, currentMonth);
                 const isToday = isSameDay(date, new Date());
+                const past = isPastDate(date);
                 const dayOfWeek = date.getDay();
                 const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                const hasMealData = calDay && Object.keys(calDay.meals).length > 0;
-                const hasWorkoutData = calDay?.workout?.isWorkoutDay;
+                const hasMealData = Object.keys(calDay.meals).length > 0;
+                const hasWorkoutData = calDay.workout?.isWorkoutDay;
+                const hasDailyMeal = calDay.dailyMeal?.status === "ready";
+                const hasDailyWorkout = calDay.dailyWorkout?.status === "ready";
 
                 return (
                   <div
                     key={dateStr}
-                    className={`min-h-[56px] sm:min-h-[80px] lg:min-h-[96px] p-1 sm:p-1.5 cursor-pointer rounded-md border border-transparent transition-all hover-elevate ${!isCurrentMonth ? "opacity-25" : ""} ${isToday ? "ring-1 ring-primary/30 bg-primary/5" : ""}`}
-                    onClick={() => calDay && onDayClick(calDay)}
+                    className={`min-h-[56px] sm:min-h-[80px] lg:min-h-[96px] p-1 sm:p-1.5 cursor-pointer rounded-md border border-transparent transition-all hover-elevate ${!isCurrentMonth ? "opacity-25" : ""} ${isToday ? "ring-1 ring-primary/30 bg-primary/5" : ""} ${past && isCurrentMonth ? "opacity-50" : ""}`}
+                    onClick={() => onDayClick(calDay)}
                     data-testid={`cell-date-${dateStr}`}
                   >
                     <div className="flex items-center justify-between mb-0.5 sm:mb-1">
@@ -311,11 +363,16 @@ function MonthView({
                       <div className="flex items-center gap-1 px-0.5 mb-0.5 sm:mb-1">
                         <Dumbbell className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-teal-500 shrink-0" />
                         <span className="hidden lg:inline text-[9px] lg:text-[10px] leading-tight truncate font-medium text-teal-600 dark:text-teal-400">
-                          {calDay?.workout?.session?.focus || "Workout"}
+                          {calDay.workout?.session?.focus || "Workout"}
                         </span>
                       </div>
                     )}
-                    {calDay && (
+                    {hasDailyWorkout && !hasWorkoutData && (
+                      <div className="flex items-center gap-1 px-0.5 mb-0.5 sm:mb-1">
+                        <Dumbbell className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-teal-400 shrink-0" />
+                      </div>
+                    )}
+                    {calDay && hasMealData && (
                       <div className="space-y-px">
                         {slots.map(slot => {
                           const meal = calDay.meals[slot] as Meal | undefined;
@@ -332,6 +389,12 @@ function MonthView({
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+                    {hasDailyMeal && !hasMealData && (
+                      <div className="flex items-center gap-1 px-0.5">
+                        <UtensilsCrossed className="h-3 w-3 text-amber-400 shrink-0" />
+                        <span className="hidden lg:inline text-[9px] lg:text-[10px] leading-tight truncate font-medium text-amber-600 dark:text-amber-400">Daily</span>
                       </div>
                     )}
                   </div>
@@ -359,6 +422,7 @@ function DayDetailModal({
   onClose,
   onNavigate,
   mealPlanStartDates,
+  onPlanThisDay,
 }: {
   day: CalendarDay;
   mealSlots: string[];
@@ -368,9 +432,16 @@ function DayDetailModal({
   onClose: () => void;
   onNavigate: (path: string) => void;
   mealPlanStartDates: Record<string, string>;
+  onPlanThisDay: () => void;
 }) {
   const date = new Date(day.date + "T00:00:00");
   const slots = sortSlots(mealSlots);
+  const past = isPastDate(date);
+  const hasMeals = Object.keys(day.meals).length > 0;
+  const hasWorkout = day.workout?.isWorkoutDay && day.workout.session;
+  const hasDailyMeal = day.dailyMeal?.status === "ready" && day.dailyMeal?.planJson;
+  const hasDailyWorkout = day.dailyWorkout?.status === "ready" && day.dailyWorkout?.planJson;
+  const hasAnyContent = hasMeals || hasWorkout || hasDailyMeal || hasDailyWorkout;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -407,6 +478,37 @@ function DayDetailModal({
               </div>
             </div>
           )}
+
+          {hasDailyWorkout && (
+            <div
+              className="rounded-md bg-teal-50 dark:bg-teal-950/30 p-3 cursor-pointer hover-elevate"
+              onClick={() => {
+                onClose();
+                onNavigate(`/daily-workout/${day.date}`);
+              }}
+              data-testid="link-daily-workout-detail"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[10px] font-semibold text-teal-600 dark:text-teal-400 uppercase tracking-widest">
+                  Daily Workout
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-teal-400" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Dumbbell className="h-4 w-4 text-teal-500 shrink-0" />
+                <p className="font-medium text-sm">{day.dailyWorkout!.generatedTitle || "Daily Workout"}</p>
+              </div>
+              {day.dailyWorkout!.planJson?.focus && (
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <Badge variant="outline" className="text-xs capitalize">{day.dailyWorkout!.planJson.focus}</Badge>
+                  {day.dailyWorkout!.planJson.durationMinutes && (
+                    <span className="text-[11px] text-muted-foreground">{day.dailyWorkout!.planJson.durationMinutes} min</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {slots.map(slot => {
             const meal = day.meals[slot] as Meal | undefined;
             if (!meal) return null;
@@ -457,6 +559,57 @@ function DayDetailModal({
               </div>
             );
           })}
+
+          {hasDailyMeal && (
+            <div
+              className="rounded-md bg-amber-50 dark:bg-amber-950/30 p-3 cursor-pointer hover-elevate"
+              onClick={() => {
+                onClose();
+                onNavigate(`/daily-meal/${day.date}`);
+              }}
+              data-testid="link-daily-meal-detail"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+                  Daily Meals
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-amber-400" />
+              </div>
+              <div className="flex items-center gap-2">
+                <UtensilsCrossed className="h-4 w-4 text-amber-500 shrink-0" />
+                <p className="font-medium text-sm">{day.dailyMeal!.generatedTitle || "Daily Meals"}</p>
+              </div>
+              {day.dailyMeal!.planJson?.meals && (
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {Object.keys(day.dailyMeal!.planJson.meals).map((slot: string) => (
+                    <Badge key={slot} variant="outline" className="text-xs capitalize">{slot}</Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!hasAnyContent && (
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground">No plans for this day</p>
+            </div>
+          )}
+
+          {!past && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                onClose();
+                onPlanThisDay();
+              }}
+              data-testid="button-plan-this-day-modal"
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Plan this day
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -481,6 +634,8 @@ export default function PlanCalendar() {
   });
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
   const [calFilter, setCalFilter] = useState<"combined" | "meals" | "workouts">("combined");
+  const [planDayOpen, setPlanDayOpen] = useState(false);
+  const [planDayDate, setPlanDayDate] = useState(new Date());
 
   const { data: rawCalendarData, isLoading: calLoading } = useQuery<AllCalendarData>({
     queryKey: ["/api/calendar/all"],
@@ -492,37 +647,95 @@ export default function PlanCalendar() {
     enabled: !!user,
   });
 
+  const { data: dailyMealsAll } = useQuery<DailyMealRecord[]>({
+    queryKey: ["/api/daily-meals", "all-range"],
+    queryFn: async () => {
+      const start = format(addDays(new Date(), -90), "yyyy-MM-dd");
+      const end = format(addDays(new Date(), 90), "yyyy-MM-dd");
+      const res = await fetch(`/api/daily-meals?start=${start}&end=${end}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const { data: dailyWorkoutsAll } = useQuery<DailyWorkoutRecord[]>({
+    queryKey: ["/api/daily-workouts", "all-range"],
+    queryFn: async () => {
+      const start = format(addDays(new Date(), -90), "yyyy-MM-dd");
+      const end = format(addDays(new Date(), 90), "yyyy-MM-dd");
+      const res = await fetch(`/api/daily-workouts?start=${start}&end=${end}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const dailyCoverageForPlanDay = useMemo(() => {
+    if (!selectedDay) return { meal: false, workout: false };
+    const dm = (dailyMealsAll || []).find(m => m.date === selectedDay.date && m.status === "ready");
+    const dw = (dailyWorkoutsAll || []).find(w => w.date === selectedDay.date && w.status === "ready");
+    return { meal: !!dm, workout: !!dw };
+  }, [selectedDay, dailyMealsAll, dailyWorkoutsAll]);
+
   const calendarData = useMemo((): AllCalendarData | undefined => {
     const base: AllCalendarData = rawCalendarData || { mealSlots: ["breakfast", "lunch", "dinner"], days: [] };
     const wDays = workoutCalData?.days || [];
+    const dMeals = dailyMealsAll || [];
+    const dWorkouts = dailyWorkoutsAll || [];
 
-    if (!rawCalendarData && wDays.length === 0) return undefined;
+    if (!rawCalendarData && wDays.length === 0 && dMeals.length === 0 && dWorkouts.length === 0) return undefined;
 
     const workoutMap = new Map<string, WorkoutCalendarDay>();
     for (const wd of wDays) workoutMap.set(wd.date, wd);
+
+    const dailyMealMap = new Map<string, DailyMealRecord>();
+    for (const dm of dMeals) {
+      if (dm.status === "ready") dailyMealMap.set(dm.date, dm);
+    }
+
+    const dailyWorkoutMap = new Map<string, DailyWorkoutRecord>();
+    for (const dw of dWorkouts) {
+      if (dw.status === "ready") dailyWorkoutMap.set(dw.date, dw);
+    }
 
     const existingDates = new Set(base.days.map(d => d.date));
     const mergedDays: CalendarDay[] = base.days.map(d => ({
       ...d,
       workout: workoutMap.get(d.date),
+      dailyMeal: dailyMealMap.get(d.date),
+      dailyWorkout: dailyWorkoutMap.get(d.date),
     }));
 
-    for (const wd of wDays) {
-      if (!existingDates.has(wd.date)) {
-        mergedDays.push({ date: wd.date, meals: {}, workout: wd });
+    const allDailyDates = new Set([
+      ...wDays.map(wd => wd.date),
+      ...dMeals.filter(m => m.status === "ready").map(m => m.date),
+      ...dWorkouts.filter(w => w.status === "ready").map(w => w.date),
+    ]);
+
+    for (const dt of allDailyDates) {
+      if (!existingDates.has(dt)) {
+        mergedDays.push({
+          date: dt,
+          meals: {},
+          workout: workoutMap.get(dt),
+          dailyMeal: dailyMealMap.get(dt),
+          dailyWorkout: dailyWorkoutMap.get(dt),
+        });
+        existingDates.add(dt);
       }
     }
 
     mergedDays.sort((a, b) => a.date.localeCompare(b.date));
 
     if (calFilter === "meals") {
-      return { ...base, days: mergedDays.map(d => ({ ...d, workout: undefined })).filter(d => Object.keys(d.meals).length > 0) };
+      return { ...base, days: mergedDays.map(d => ({ ...d, workout: undefined, dailyWorkout: undefined })).filter(d => Object.keys(d.meals).length > 0 || d.dailyMeal) };
     }
     if (calFilter === "workouts") {
-      return { ...base, days: mergedDays.filter(d => d.workout).map(d => ({ ...d, meals: {} })) };
+      return { ...base, days: mergedDays.filter(d => d.workout || d.dailyWorkout).map(d => ({ ...d, meals: {}, dailyMeal: undefined })) };
     }
     return { ...base, days: mergedDays };
-  }, [rawCalendarData, workoutCalData, calFilter]);
+  }, [rawCalendarData, workoutCalData, dailyMealsAll, dailyWorkoutsAll, calFilter]);
 
   const { data: allFeedback } = useQuery<{ likedMeals: { mealFingerprint: string; feedback: string }[]; dislikedMeals: { mealFingerprint: string; feedback: string }[] }>({
     queryKey: ["/api/preferences"],
@@ -587,7 +800,8 @@ export default function PlanCalendar() {
 
   const hasMeals = calendarData && calendarData.days.length > 0;
   const hasWorkouts = workoutCalData && workoutCalData.days.length > 0;
-  const hasAnyData = hasMeals || hasWorkouts;
+  const hasDailyData = (dailyMealsAll && dailyMealsAll.some(m => m.status === "ready")) || (dailyWorkoutsAll && dailyWorkoutsAll.some(w => w.status === "ready"));
+  const hasAnyData = hasMeals || hasWorkouts || hasDailyData;
 
   return (
     <div className="px-4 sm:px-6 py-8">
@@ -695,8 +909,22 @@ export default function PlanCalendar() {
           onClose={() => setSelectedDay(null)}
           onNavigate={navigate}
           mealPlanStartDates={mealPlanStartDates}
+          onPlanThisDay={() => {
+            const d = new Date(selectedDay.date + "T00:00:00");
+            setPlanDayDate(d);
+            setSelectedDay(null);
+            setPlanDayOpen(true);
+          }}
         />
       )}
+
+      <PlanThisDay
+        open={planDayOpen}
+        onOpenChange={setPlanDayOpen}
+        date={planDayDate}
+        hasMeal={dailyCoverageForPlanDay.meal}
+        hasWorkout={dailyCoverageForPlanDay.workout}
+      />
 
     </div>
   );

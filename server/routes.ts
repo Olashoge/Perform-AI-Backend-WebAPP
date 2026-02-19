@@ -1779,6 +1779,12 @@ export async function registerRoutes(
       if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ message: "Valid date (YYYY-MM-DD) is required" });
       }
+      const requestedDate = new Date(date + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (requestedDate < today) {
+        return res.status(400).json({ message: "Cannot create plans for past dates" });
+      }
       if (![2, 3].includes(Number(mealsPerDay))) {
         return res.status(400).json({ message: "mealsPerDay must be 2 or 3" });
       }
@@ -1867,6 +1873,12 @@ export async function registerRoutes(
       const { date } = req.body;
       if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ message: "Valid date (YYYY-MM-DD) is required" });
+      }
+      const requestedDate = new Date(date + "T00:00:00");
+      const todayWk = new Date();
+      todayWk.setHours(0, 0, 0, 0);
+      if (requestedDate < todayWk) {
+        return res.status(400).json({ message: "Cannot create plans for past dates" });
       }
 
       const existing = await storage.getDailyWorkoutByDate(userId, date);

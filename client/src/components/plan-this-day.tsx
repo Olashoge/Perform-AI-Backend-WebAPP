@@ -4,15 +4,15 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import {
-  UtensilsCrossed, Dumbbell, Loader2, Check, Sparkles,
+  UtensilsCrossed, Dumbbell, Loader2, Check, Sparkles, Ban,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isBefore, startOfDay } from "date-fns";
 
 interface PlanThisDayProps {
   open: boolean;
@@ -22,12 +22,20 @@ interface PlanThisDayProps {
   hasWorkout?: boolean;
 }
 
+function invalidateDailyQueries() {
+  queryClient.invalidateQueries({ predicate: (q) => {
+    const key = q.queryKey[0] as string;
+    return key?.startsWith("/api/daily-coverage") || key?.startsWith("/api/daily-meals") || key?.startsWith("/api/daily-workouts");
+  }});
+}
+
 export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: PlanThisDayProps) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [mealsPerDay, setMealsPerDay] = useState<"2" | "3">("3");
   const dateStr = format(date, "yyyy-MM-dd");
   const dateLabel = format(date, "EEEE, MMMM d");
+  const isPast = isBefore(date, startOfDay(new Date()));
 
   const mealMutation = useMutation({
     mutationFn: async () => {
@@ -39,10 +47,7 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
     },
     onSuccess: (data) => {
       toast({ title: "Generating meals", description: `Your daily meal plan for ${dateLabel} is being created.` });
-      queryClient.invalidateQueries({ predicate: (q) => {
-        const key = q.queryKey[0] as string;
-        return key?.startsWith("/api/daily-coverage") || key?.startsWith("/api/daily-meals");
-      }});
+      invalidateDailyQueries();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-meal", dateStr] });
       onOpenChange(false);
       navigate(`/daily-meal/${dateStr}`);
@@ -72,10 +77,7 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
     },
     onSuccess: (data) => {
       toast({ title: "Generating workout", description: `Your daily workout for ${dateLabel} is being created.` });
-      queryClient.invalidateQueries({ predicate: (q) => {
-        const key = q.queryKey[0] as string;
-        return key?.startsWith("/api/daily-coverage") || key?.startsWith("/api/daily-workouts");
-      }});
+      invalidateDailyQueries();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-workout", dateStr] });
       onOpenChange(false);
       navigate(`/daily-workout/${dateStr}`);
@@ -103,9 +105,18 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
           <DialogTitle className="text-lg font-bold" data-testid="text-plan-day-title">
             Plan {dateLabel}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Generate daily meal or workout plans for {dateLabel}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {isPast && (
+            <div className="flex items-center gap-2 rounded-lg bg-muted/60 p-3" data-testid="past-day-notice">
+              <Ban className="h-4 w-4 text-muted-foreground shrink-0" />
+              <p className="text-sm text-muted-foreground">Past days are view-only. You can only create plans for today or future dates.</p>
+            </div>
+          )}
           <div className="rounded-xl border p-4" data-testid="section-daily-meal">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
@@ -152,7 +163,7 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
                   size="sm"
                   className="w-full"
                   onClick={() => mealMutation.mutate()}
-                  disabled={mealMutation.isPending}
+                  disabled={mealMutation.isPending || isPast}
                   data-testid="button-generate-daily-meal"
                 >
                   {mealMutation.isPending ? (
@@ -198,7 +209,7 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
                 size="sm"
                 className="w-full"
                 onClick={() => workoutMutation.mutate()}
-                disabled={workoutMutation.isPending}
+                disabled={workoutMutation.isPending || isPast}
                 data-testid="button-generate-daily-workout"
               >
                 {workoutMutation.isPending ? (
