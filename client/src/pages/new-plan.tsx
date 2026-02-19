@@ -213,6 +213,59 @@ export default function NewPlan() {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
 
             <section>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Your Profile</h2>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/profile")} data-testid="link-edit-profile">
+                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                  Edit
+                </Button>
+              </div>
+              <Card>
+                <CardContent className="p-5 sm:p-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm" data-testid="profile-summary-meal">
+                    <div>
+                      <span className="text-muted-foreground">Age:</span>{" "}
+                      <span className="font-medium">{profile.age}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Weight:</span>{" "}
+                      <span className="font-medium">{profileWeightDisplay}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Goal:</span>{" "}
+                      <span className="font-medium capitalize">{profile.primaryGoal.replace(/_/g, " ")}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Experience:</span>{" "}
+                      <span className="font-medium capitalize">{profile.trainingExperience}</span>
+                    </div>
+                    {profileDaysOfWeek.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Training:</span>{" "}
+                        <span className="font-medium">{profileDaysOfWeek.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({profileDaysOfWeek.length}/wk)</span>
+                      </div>
+                    )}
+                    {((profile.allergies as string[]) || []).length > 0 && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Allergies:</span>{" "}
+                        <span className="font-medium">{(profile.allergies as string[]).join(", ")}</span>
+                      </div>
+                    )}
+                    {((profile.foodsToAvoid as string[]) || []).length > 0 && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Foods to avoid:</span>{" "}
+                        <span className="font-medium">{(profile.foodsToAvoid as string[]).join(", ")}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+
+            <section>
               <div className="flex items-center gap-2 mb-4">
                 <Target className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Your Goal</h2>
@@ -490,59 +543,6 @@ export default function NewPlan() {
                       )}
                     />
                   )}
-                </CardContent>
-              </Card>
-            </section>
-
-            <section>
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Your Profile</h2>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => navigate("/profile")} data-testid="link-edit-profile">
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                  Edit
-                </Button>
-              </div>
-              <Card>
-                <CardContent className="p-5 sm:p-6">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm" data-testid="profile-summary-meal">
-                    <div>
-                      <span className="text-muted-foreground">Age:</span>{" "}
-                      <span className="font-medium">{profile.age}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Weight:</span>{" "}
-                      <span className="font-medium">{profileWeightDisplay}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Goal:</span>{" "}
-                      <span className="font-medium capitalize">{profile.primaryGoal.replace(/_/g, " ")}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Experience:</span>{" "}
-                      <span className="font-medium capitalize">{profile.trainingExperience}</span>
-                    </div>
-                    {profileDaysOfWeek.length > 0 && (
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">Training:</span>{" "}
-                        <span className="font-medium">{profileDaysOfWeek.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({profileDaysOfWeek.length}/wk)</span>
-                      </div>
-                    )}
-                    {((profile.allergies as string[]) || []).length > 0 && (
-                      <div className="col-span-2 sm:col-span-3">
-                        <span className="text-muted-foreground">Allergies:</span>{" "}
-                        <span className="font-medium">{(profile.allergies as string[]).join(", ")}</span>
-                      </div>
-                    )}
-                    {((profile.foodsToAvoid as string[]) || []).length > 0 && (
-                      <div className="col-span-2 sm:col-span-3">
-                        <span className="text-muted-foreground">Foods to avoid:</span>{" "}
-                        <span className="font-medium">{(profile.foodsToAvoid as string[]).join(", ")}</span>
-                      </div>
-                    )}
-                  </div>
                 </CardContent>
               </Card>
             </section>

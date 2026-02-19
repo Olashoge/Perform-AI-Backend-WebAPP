@@ -443,6 +443,49 @@ export default function GoalWizard() {
         </div>
       </div>
 
+      {profileData && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Your Profile</h2>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/profile")} type="button" data-testid="link-edit-profile-wizard">
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+              Edit
+            </Button>
+          </div>
+          <Card>
+            <CardContent className="p-5 sm:p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm" data-testid="profile-summary-wizard">
+                <div><span className="text-muted-foreground">Age:</span>{" "}<span className="font-medium">{profileData.age}</span></div>
+                <div><span className="text-muted-foreground">Weight:</span>{" "}<span className="font-medium">{profileData.unitSystem === "metric" ? `${profileData.weightKg} kg` : `${Math.round(profileData.weightKg * 2.205)} lbs`}</span></div>
+                <div><span className="text-muted-foreground">Goal:</span>{" "}<span className="font-medium capitalize">{profileData.primaryGoal.replace(/_/g, " ")}</span></div>
+                <div><span className="text-muted-foreground">Experience:</span>{" "}<span className="font-medium capitalize">{profileData.trainingExperience}</span></div>
+                {((profileData.trainingDaysOfWeek as string[]) || []).length > 0 && (
+                  <div className="col-span-2"><span className="text-muted-foreground">Training:</span>{" "}<span className="font-medium">{((profileData.trainingDaysOfWeek as string[]) || []).map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({((profileData.trainingDaysOfWeek as string[]) || []).length}/wk)</span></div>
+                )}
+                {((profileData.allergies as string[]) || []).length > 0 && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Allergies:</span>{" "}<span className="font-medium">{(profileData.allergies as string[]).join(", ")}</span></div>
+                )}
+                {((profileData.foodsToAvoid as string[]) || []).length > 0 && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Foods to avoid:</span>{" "}<span className="font-medium">{(profileData.foodsToAvoid as string[]).join(", ")}</span></div>
+                )}
+                {((profileData.injuries as string[]) || []).length > 0 && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Injuries:</span>{" "}<span className="font-medium">{(profileData.injuries as string[]).join(", ")}</span></div>
+                )}
+                {((profileData.mobilityLimitations as string[]) || []).length > 0 && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Mobility:</span>{" "}<span className="font-medium">{(profileData.mobilityLimitations as string[]).join(", ")}</span></div>
+                )}
+                {((profileData.chronicConditions as string[]) || []).length > 0 && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Conditions:</span>{" "}<span className="font-medium">{(profileData.chronicConditions as string[]).join(", ")}</span></div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
       {step === 1 && (
         <div className="space-y-6">
           <Card>
@@ -536,44 +579,6 @@ export default function GoalWizard() {
                   </div>
                 </div>
 
-                {profileData && (
-                  <div className="border-t pt-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Your Profile</label>
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => navigate("/profile")} type="button" data-testid="link-edit-profile-wizard">
-                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm" data-testid="profile-summary-wizard">
-                      <div><span className="text-muted-foreground">Age:</span>{" "}<span className="font-medium">{profileData.age}</span></div>
-                      <div><span className="text-muted-foreground">Weight:</span>{" "}<span className="font-medium">{profileData.unitSystem === "metric" ? `${profileData.weightKg} kg` : `${Math.round(profileData.weightKg * 2.205)} lbs`}</span></div>
-                      <div><span className="text-muted-foreground">Goal:</span>{" "}<span className="font-medium capitalize">{profileData.primaryGoal.replace(/_/g, " ")}</span></div>
-                      <div><span className="text-muted-foreground">Experience:</span>{" "}<span className="font-medium capitalize">{profileData.trainingExperience}</span></div>
-                      {((profileData.trainingDaysOfWeek as string[]) || []).length > 0 && (
-                        <div className="col-span-2"><span className="text-muted-foreground">Training:</span>{" "}<span className="font-medium">{((profileData.trainingDaysOfWeek as string[]) || []).map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({((profileData.trainingDaysOfWeek as string[]) || []).length}/wk)</span></div>
-                      )}
-                      {((profileData.allergies as string[]) || []).length > 0 && (
-                        <div className="col-span-2"><span className="text-muted-foreground">Allergies:</span>{" "}<span className="font-medium">{(profileData.allergies as string[]).join(", ")}</span></div>
-                      )}
-                      {((profileData.foodsToAvoid as string[]) || []).length > 0 && (
-                        <div className="col-span-2"><span className="text-muted-foreground">Foods to avoid:</span>{" "}<span className="font-medium">{(profileData.foodsToAvoid as string[]).join(", ")}</span></div>
-                      )}
-                      {((profileData.injuries as string[]) || []).length > 0 && (
-                        <div className="col-span-2"><span className="text-muted-foreground">Injuries:</span>{" "}<span className="font-medium">{(profileData.injuries as string[]).join(", ")}</span></div>
-                      )}
-                      {((profileData.mobilityLimitations as string[]) || []).length > 0 && (
-                        <div className="col-span-2"><span className="text-muted-foreground">Mobility:</span>{" "}<span className="font-medium">{(profileData.mobilityLimitations as string[]).join(", ")}</span></div>
-                      )}
-                      {((profileData.chronicConditions as string[]) || []).length > 0 && (
-                        <div className="col-span-2"><span className="text-muted-foreground">Conditions:</span>{" "}<span className="font-medium">{(profileData.chronicConditions as string[]).join(", ")}</span></div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
