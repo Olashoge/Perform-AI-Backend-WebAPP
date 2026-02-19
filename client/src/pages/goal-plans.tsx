@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Target, Plus, Trash2, Loader2, UtensilsCrossed, Dumbbell,
   Flame, Zap, Heart, Trophy, CalendarDays, Link2, Unlink,
+  ArrowUpDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays } from "date-fns";
@@ -77,6 +78,7 @@ export default function GoalPlans() {
   const { toast } = useToast();
   const [linkingPlanId, setLinkingPlanId] = useState<string | null>(null);
   const [linkType, setLinkType] = useState<"meal" | "workout">("meal");
+  const [sortAsc, setSortAsc] = useState(true);
 
   const { data: goalPlans, isLoading: goalLoading } = useQuery<GoalPlan[]>({
     queryKey: ["/api/goal-plans"],
@@ -159,13 +161,23 @@ export default function GoalPlans() {
     <div className="px-4 sm:px-6 py-8">
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Wellness Plans</h1>
-        <Link href="/goals/new">
-          <Button data-testid="button-create-goal">
-            <Plus className="h-4 w-4 mr-1.5" />
-            <span className="hidden sm:inline">New Wellness Plan</span>
-            <span className="sm:hidden">New</span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSortAsc(prev => !prev)}
+            data-testid="button-sort-toggle"
+          >
+            <ArrowUpDown className="h-4 w-4" />
           </Button>
-        </Link>
+          <Link href="/goals/new">
+            <Button data-testid="button-create-goal">
+              <Plus className="h-4 w-4 mr-1.5" />
+              <span className="hidden sm:inline">New Wellness Plan</span>
+              <span className="sm:hidden">New</span>
+            </Button>
+          </Link>
+        </div>
       </div>
       <div>
         {goalLoading ? (
@@ -211,7 +223,7 @@ export default function GoalPlans() {
             {[...goalPlans].sort((a, b) => {
               const dateA = a.startDate ? new Date(a.startDate + "T00:00:00").getTime() : 0;
               const dateB = b.startDate ? new Date(b.startDate + "T00:00:00").getTime() : 0;
-              if (dateA && dateB) return dateB - dateA;
+              if (dateA && dateB) return sortAsc ? dateA - dateB : dateB - dateA;
               if (dateA) return -1;
               if (dateB) return 1;
               return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

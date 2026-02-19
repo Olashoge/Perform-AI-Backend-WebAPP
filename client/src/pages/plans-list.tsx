@@ -8,10 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 import {
   Plus, Sparkles, Loader2, UtensilsCrossed,
   Dumbbell, Trash2,
   CheckCircle2, Clock, CalendarCheck, Activity, ChevronRight,
+  ArrowUpDown,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { AllowancePanel } from "@/components/allowance-panel";
@@ -52,6 +54,7 @@ function StatusBadge({ startDate }: { startDate: string | null | undefined }) {
 export default function PlansList() {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
+  const [sortAsc, setSortAsc] = useState(true);
 
   const isWorkouts = location === "/training";
 
@@ -85,21 +88,31 @@ export default function PlansList() {
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">{pageTitle}</h1>
           <p className="text-sm text-muted-foreground mt-1" data-testid="text-page-subtitle">{pageSubtitle}</p>
         </div>
-        {isWorkouts ? (
-          <Link href="/workouts/new">
-            <Button data-testid="button-create-workout">
-              <Sparkles className="h-4 w-4 mr-2" />
-              New Workout Plan
-            </Button>
-          </Link>
-        ) : (
-          <Link href="/new-plan">
-            <Button data-testid="button-create-plan">
-              <Sparkles className="h-4 w-4 mr-2" />
-              New Meal Plan
-            </Button>
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSortAsc(prev => !prev)}
+            data-testid="button-sort-toggle"
+          >
+            <ArrowUpDown className="h-4 w-4" />
+          </Button>
+          {isWorkouts ? (
+            <Link href="/workouts/new">
+              <Button data-testid="button-create-workout">
+                <Sparkles className="h-4 w-4 mr-2" />
+                New Workout Plan
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/new-plan">
+              <Button data-testid="button-create-plan">
+                <Sparkles className="h-4 w-4 mr-2" />
+                New Meal Plan
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="mb-6">
@@ -113,15 +126,15 @@ export default function PlansList() {
       </div>
 
       {isWorkouts ? (
-        <WorkoutPlanList plans={workoutPlans} isLoading={workoutsLoading} />
+        <WorkoutPlanList plans={workoutPlans} isLoading={workoutsLoading} sortAsc={sortAsc} />
       ) : (
-        <MealPlanList plans={plans} isLoading={plansLoading} />
+        <MealPlanList plans={plans} isLoading={plansLoading} sortAsc={sortAsc} />
       )}
     </div>
   );
 }
 
-function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boolean }) {
+function MealPlanList({ plans, isLoading, sortAsc }: { plans?: MealPlan[]; isLoading: boolean; sortAsc: boolean }) {
   const { toast } = useToast();
 
   const deleteMutation = useMutation({
@@ -178,7 +191,7 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
       {[...plans].sort((a, b) => {
         const dateA = a.planStartDate ? new Date(a.planStartDate + "T00:00:00").getTime() : 0;
         const dateB = b.planStartDate ? new Date(b.planStartDate + "T00:00:00").getTime() : 0;
-        if (dateA && dateB) return dateB - dateA;
+        if (dateA && dateB) return sortAsc ? dateA - dateB : dateB - dateA;
         if (dateA) return -1;
         if (dateB) return 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -259,7 +272,7 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
   );
 }
 
-function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoading: boolean }) {
+function WorkoutPlanList({ plans, isLoading, sortAsc }: { plans?: WorkoutPlan[]; isLoading: boolean; sortAsc: boolean }) {
   const { toast } = useToast();
 
   const deleteMutation = useMutation({
@@ -316,7 +329,7 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
       {[...plans].sort((a, b) => {
         const dateA = a.planStartDate ? new Date(a.planStartDate + "T00:00:00").getTime() : 0;
         const dateB = b.planStartDate ? new Date(b.planStartDate + "T00:00:00").getTime() : 0;
-        if (dateA && dateB) return dateB - dateA;
+        if (dateA && dateB) return sortAsc ? dateA - dateB : dateB - dateA;
         if (dateA) return -1;
         if (dateB) return 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
