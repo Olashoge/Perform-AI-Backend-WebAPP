@@ -567,3 +567,30 @@ export type PlanAllowance = typeof planAllowances.$inferSelect;
 export type PlanUsageEvent = typeof planUsageEvents.$inferSelect;
 export type FlexToken = typeof flexTokens.$inferSelect;
 export type PlanBehaviorSummary = typeof planBehaviorSummaries.$inferSelect;
+
+export const constraintViolations = pgTable("constraint_violations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  planType: varchar("plan_type", { length: 20 }).notNull(),
+  planId: varchar("plan_id"),
+  goalPlanId: varchar("goal_plan_id"),
+  stage: varchar("stage", { length: 10 }).notNull(),
+  ruleKey: varchar("rule_key", { length: 30 }).notNull(),
+  severity: varchar("severity", { length: 10 }).notNull(),
+  message: text("message").notNull(),
+  metaJson: jsonb("meta_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const wellnessPlanSpecs = pgTable("wellness_plan_specs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  planType: varchar("plan_type", { length: 20 }).notNull(),
+  planId: varchar("plan_id"),
+  goalPlanId: varchar("goal_plan_id"),
+  safeSpecJson: jsonb("safe_spec_json").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ConstraintViolation = typeof constraintViolations.$inferSelect;
+export type WellnessPlanSpec = typeof wellnessPlanSpecs.$inferSelect;

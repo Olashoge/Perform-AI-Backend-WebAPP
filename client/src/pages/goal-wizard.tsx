@@ -293,10 +293,30 @@ export default function GoalWizard() {
     } catch (err: any) {
       submittedRef.current = false;
       setIsPending(false);
-      const msg = err?.message?.includes("429")
-        ? "Daily AI call limit reached. Try again tomorrow."
-        : "Failed to create wellness plan. Please try again.";
-      toast({ title: msg, variant: "destructive" });
+      const errMsg = err?.message || "";
+
+      let parsedBody: any = null;
+      try {
+        const jsonStart = errMsg.indexOf("{");
+        if (jsonStart >= 0) {
+          parsedBody = JSON.parse(errMsg.slice(jsonStart));
+        }
+      } catch {}
+
+      if (parsedBody?.blocked && parsedBody?.violations?.length > 0) {
+        const violationMessages = parsedBody.violations
+          .map((v: any) => v.message)
+          .filter(Boolean);
+        toast({
+          title: "Plan cannot be generated",
+          description: violationMessages.join(" "),
+          variant: "destructive",
+        });
+      } else if (errMsg.includes("429")) {
+        toast({ title: "Daily AI call limit reached. Try again tomorrow.", variant: "destructive" });
+      } else {
+        toast({ title: parsedBody?.message || "Failed to create wellness plan. Please try again.", variant: "destructive" });
+      }
     }
   }
 

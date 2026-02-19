@@ -9,6 +9,9 @@ import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from
 import { log } from "./index";
 import { buildWellnessContext } from "./wellness-context";
 import { checkMealSwapAllowed, checkMealRegenAllowed, recordMealSwap, recordMealRegen, checkWorkoutRegenAllowed, recordWorkoutRegen, getAllowanceState, redeemFlexToken, createAllowanceForGoalPlan, computeBehaviorSummary } from "./allowance";
+import { evaluateConstraints, buildConstraintPromptBlock } from "./constraints/engine";
+import { postValidateMealPlan, postValidateWorkoutPlan } from "./constraints/post-validation";
+import type { RuleContext, PlanKind } from "./constraints/types";
 import connectPgSimple from "connect-pg-simple";
 
 const PgStore = connectPgSimple(session);
@@ -217,6 +220,30 @@ export async function registerRoutes(
         return res.status(429).json({ message: "Daily AI call limit reached (10/day). Try again tomorrow." });
       }
 
+      const userProfile = await storage.getUserProfile(userId);
+      let standaloneConstraintBlock = "";
+      if (userProfile) {
+        const scheduledDates = await storage.getScheduledMealPlanDates(userId);
+        const validSD = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
+        const ruleCtx: RuleContext = {
+          profile: userProfile,
+          planKind: "meal",
+          startDate: validSD,
+          mealPreferences: prefsBody,
+          existingScheduledMealDates: scheduledDates,
+          existingScheduledWorkoutDates: [],
+        };
+        const cResult = evaluateConstraints(ruleCtx);
+        if (cResult.blocked) {
+          return res.status(400).json({
+            message: cResult.violations.find(v => v.severity === "BLOCK")?.message || "Plan blocked by safety constraints.",
+            blocked: true,
+            violations: cResult.violations.map(v => ({ ruleKey: v.ruleKey, severity: v.severity, message: v.message, category: v.category })),
+          });
+        }
+        standaloneConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "meal");
+      }
+
       const validStartDate = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
       const pendingPlan = await storage.createPendingMealPlan(userId, idempotencyKey || null, parsed.data, validStartDate);
 
@@ -232,7 +259,7 @@ export async function registerRoutes(
             mealPrefs: parsed.data,
           });
           log(`Generating full plan for user ${userId} (plan ${pendingPlan.id})`, "openai");
-          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays, standaloneCtx);
+          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays, standaloneCtx, standaloneConstraintBlock);
           await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
@@ -865,6 +892,29 @@ export async function registerRoutes(
         return res.json({ id: generating.id, status: "generating" });
       }
 
+      const userProfile = await storage.getUserProfile(userId);
+      let workoutConstraintBlock = "";
+      if (userProfile) {
+        const scheduledDates = await storage.getScheduledWorkoutPlanDates(userId);
+        const ruleCtx: RuleContext = {
+          profile: userProfile,
+          planKind: "workout",
+          startDate: validStartDate,
+          workoutPreferences: req.body.preferences,
+          existingScheduledMealDates: [],
+          existingScheduledWorkoutDates: scheduledDates,
+        };
+        const cResult = evaluateConstraints(ruleCtx);
+        if (cResult.blocked) {
+          return res.status(400).json({
+            message: cResult.violations.find(v => v.severity === "BLOCK")?.message || "Plan blocked by safety constraints.",
+            blocked: true,
+            violations: cResult.violations.map(v => ({ ruleKey: v.ruleKey, severity: v.severity, message: v.message, category: v.category })),
+          });
+        }
+        workoutConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "workout");
+      }
+
       const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs, validStartDate);
 
       (async () => {
@@ -877,7 +927,7 @@ export async function registerRoutes(
             startDate: validStartDate,
             workoutPrefs: prefs,
           });
-          const result = await generateWorkoutPlan(prefs, exerciseContext, standaloneWCtx);
+          const result = await generateWorkoutPlan(prefs, exerciseContext, standaloneWCtx, workoutConstraintBlock);
           await storage.updateWorkoutPlanStatus(plan.id, "ready", result);
           log(`Workout plan ${plan.id} generated successfully`, "openai");
         } catch (err) {
@@ -1172,6 +1222,66 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Profile is required before creating a plan. Please set up your Performance Blueprint first." });
       }
 
+      const planKind: PlanKind = resolvedPlanType === "both" ? "both" : resolvedPlanType === "meal" ? "meal" : "workout";
+      const [scheduledMealDates, scheduledWorkoutDates] = await Promise.all([
+        storage.getScheduledMealPlanDates(userId),
+        storage.getScheduledWorkoutPlanDates(userId),
+      ]);
+
+      const ruleCtx: RuleContext = {
+        profile: userProfile,
+        planKind,
+        startDate: validStartDate,
+        mealPreferences: mealPreferences,
+        workoutPreferences: workoutPreferences,
+        existingScheduledMealDates: scheduledMealDates,
+        existingScheduledWorkoutDates: scheduledWorkoutDates,
+      };
+
+      const constraintResult = evaluateConstraints(ruleCtx);
+      log(`Constraint engine: ${constraintResult.violations.length} violation(s), blocked=${constraintResult.blocked}`, "plan");
+
+      if (constraintResult.blocked) {
+        const blockViolations = constraintResult.violations.filter(v => v.severity === "BLOCK");
+        await storage.createConstraintViolations(
+          constraintResult.violations.map(v => ({
+            userId,
+            planType: planKind,
+            stage: "pre",
+            ruleKey: v.ruleKey,
+            severity: v.severity,
+            message: v.message,
+            metaJson: v.metadata || null,
+          }))
+        );
+        return res.status(400).json({
+          message: blockViolations[0]?.message || "Plan generation blocked by safety constraints.",
+          blocked: true,
+          violations: constraintResult.violations.map(v => ({
+            ruleKey: v.ruleKey,
+            severity: v.severity,
+            message: v.message,
+            category: v.category,
+          })),
+        });
+      }
+
+      if (constraintResult.violations.length > 0) {
+        await storage.createConstraintViolations(
+          constraintResult.violations.map(v => ({
+            userId,
+            planType: planKind,
+            stage: "pre",
+            ruleKey: v.ruleKey,
+            severity: v.severity,
+            message: v.message,
+            metaJson: v.metadata || null,
+          }))
+        );
+      }
+
+      const constraintPromptBlock = buildConstraintPromptBlock(constraintResult.safeSpec, planKind);
+
       const goalPlan = await storage.createGoalPlanFull(userId, {
         goalType,
         planType: resolvedPlanType,
@@ -1225,8 +1335,28 @@ export async function registerRoutes(
             log(`Goal gen: generating workout plan ${pendingWorkout.id}`, "openai");
             const goalPrefContext = await storage.getUserPreferenceContext(userId);
             const goalExerciseCtx = { avoidedExercises: goalPrefContext.avoidedExercises, dislikedExercises: goalPrefContext.dislikedExercises };
-            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx);
-            await storage.updateWorkoutPlanStatus(pendingWorkout.id, "ready", result);
+            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock);
+
+            const workoutPostCheck = postValidateWorkoutPlan(result, constraintResult.safeSpec);
+            let finalWorkoutResult = result;
+            if (workoutPostCheck.fixedPlan && !workoutPostCheck.needsRegen) {
+              finalWorkoutResult = workoutPostCheck.fixedPlan;
+              log(`Goal gen: workout post-validation auto-fixed ${workoutPostCheck.violations.length} violation(s)`, "plan");
+            } else if (workoutPostCheck.needsRegen) {
+              log(`Goal gen: workout post-validation requires regen (${workoutPostCheck.violations.length} violations)`, "plan");
+              const regenResult = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock + "\nSTRICT MODE: Previous generation contained banned exercises. Absolutely do NOT include any banned exercises.");
+              finalWorkoutResult = regenResult;
+            }
+            if (workoutPostCheck.violations.length > 0) {
+              await storage.createConstraintViolations(
+                workoutPostCheck.violations.map(v => ({
+                  userId, planType: "workout", planId: pendingWorkout.id, goalPlanId: goalPlan.id,
+                  stage: "post", ruleKey: v.ruleKey, severity: v.severity, message: v.message, metaJson: v.metadata || null,
+                }))
+              );
+            }
+
+            await storage.updateWorkoutPlanStatus(pendingWorkout.id, "ready", finalWorkoutResult);
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingWorkout.id, type: "workout" });
             log(`Goal gen: workout plan ${pendingWorkout.id} ready`, "openai");
 
@@ -1262,12 +1392,32 @@ export async function registerRoutes(
             const prefCtx = await storage.getUserPreferenceContext(userId);
             const workoutDays = parsedMeal.data.workoutDays || undefined;
             log(`Goal gen: generating meal plan ${pendingMeal.id}`, "openai");
-            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx);
-            await storage.updatePlanStatus(pendingMeal.id, "ready", planJson);
+            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, constraintPromptBlock);
+
+            const mealPostCheck = postValidateMealPlan(planJson, constraintResult.safeSpec);
+            let finalMealJson = planJson;
+            if (mealPostCheck.fixedPlan && !mealPostCheck.needsRegen) {
+              finalMealJson = mealPostCheck.fixedPlan;
+              log(`Goal gen: meal post-validation auto-fixed ${mealPostCheck.violations.length} violation(s)`, "plan");
+            } else if (mealPostCheck.needsRegen) {
+              log(`Goal gen: meal post-validation requires regen (${mealPostCheck.violations.length} violations)`, "plan");
+              const regenPlan = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, constraintPromptBlock + "\nSTRICT MODE: Previous generation contained banned ingredients. Absolutely do NOT include any banned ingredients.");
+              finalMealJson = regenPlan;
+            }
+            if (mealPostCheck.violations.length > 0) {
+              await storage.createConstraintViolations(
+                mealPostCheck.violations.map(v => ({
+                  userId, planType: "meal", planId: pendingMeal.id, goalPlanId: goalPlan.id,
+                  stage: "post", ruleKey: v.ruleKey, severity: v.severity, message: v.message, metaJson: v.metadata || null,
+                }))
+              );
+            }
+
+            await storage.updatePlanStatus(pendingMeal.id, "ready", finalMealJson);
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingMeal.id, type: "meal" });
             log(`Goal gen: meal plan ${pendingMeal.id} ready`, "openai");
 
-            runGroceryPricing(pendingMeal.id, planJson, parsedMeal.data).catch(() => {});
+            runGroceryPricing(pendingMeal.id, finalMealJson, parsedMeal.data).catch(() => {});
           }
 
           await storage.updateGoalPlan(goalPlan.id, {

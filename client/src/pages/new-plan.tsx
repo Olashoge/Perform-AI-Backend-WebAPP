@@ -110,11 +110,19 @@ export default function NewPlan() {
     } catch (err: any) {
       setIsPending(false);
       submittedRef.current = false;
-      toast({
-        title: "Failed to generate plan",
-        description: err.message?.includes("429") ? "You've reached the daily limit for AI calls. Please try again tomorrow." : "Something went wrong generating your meal plan. Please try again.",
-        variant: "destructive",
-      });
+      const errMsg = err?.message || "";
+      let parsedBody: any = null;
+      try { const j = errMsg.indexOf("{"); if (j >= 0) parsedBody = JSON.parse(errMsg.slice(j)); } catch {}
+      if (parsedBody?.blocked) {
+        const msgs = (parsedBody.violations || []).map((v: any) => v.message).filter(Boolean);
+        toast({ title: "Plan cannot be generated", description: msgs.join(" ") || parsedBody.message, variant: "destructive" });
+      } else {
+        toast({
+          title: "Failed to generate plan",
+          description: errMsg.includes("429") ? "You've reached the daily limit for AI calls. Please try again tomorrow." : parsedBody?.message || "Something went wrong generating your meal plan. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   }
 

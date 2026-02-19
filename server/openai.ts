@@ -310,8 +310,11 @@ function cleanJsonString(raw: string): string {
   return cleaned.trim();
 }
 
-export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext, workoutDays?: string[], wellnessCtx?: WellnessContext): Promise<PlanOutput> {
-  const systemPrompt = buildSystemPrompt(prefs);
+export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext, workoutDays?: string[], wellnessCtx?: WellnessContext, constraintBlock?: string): Promise<PlanOutput> {
+  let systemPrompt = buildSystemPrompt(prefs);
+  if (constraintBlock) {
+    systemPrompt += "\n\n" + constraintBlock;
+  }
   let userPrompt = buildPlanPrompt(prefs, prefCtx);
 
   if (wellnessCtx && wellnessCtx.trainingDays.length > 0) {
@@ -545,8 +548,11 @@ Return a JSON object with this exact structure:
 }`;
 }
 
-export async function generateWorkoutPlan(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }, wellnessCtx?: WellnessContext): Promise<WorkoutPlanOutput> {
-  const systemPrompt = buildWorkoutSystemPrompt();
+export async function generateWorkoutPlan(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }, wellnessCtx?: WellnessContext, constraintBlock?: string): Promise<WorkoutPlanOutput> {
+  let systemPrompt = buildWorkoutSystemPrompt();
+  if (constraintBlock) {
+    systemPrompt += "\n\n" + constraintBlock;
+  }
   let userPrompt = buildWorkoutPlanPrompt(prefs, exerciseContext);
 
   if (wellnessCtx) {

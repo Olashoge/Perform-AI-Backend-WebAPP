@@ -110,11 +110,15 @@ export default function NewWorkout() {
     } catch (err: any) {
       submittedRef.current = false;
       setIsPending(false);
-      toast({
-        title: "Error",
-        description: err.message || "Failed to create workout plan",
-        variant: "destructive",
-      });
+      const errMsg = err?.message || "";
+      let parsedBody: any = null;
+      try { const j = errMsg.indexOf("{"); if (j >= 0) parsedBody = JSON.parse(errMsg.slice(j)); } catch {}
+      if (parsedBody?.blocked) {
+        const msgs = (parsedBody.violations || []).map((v: any) => v.message).filter(Boolean);
+        toast({ title: "Plan cannot be generated", description: msgs.join(" ") || parsedBody.message, variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: parsedBody?.message || "Failed to create workout plan", variant: "destructive" });
+      }
     }
   }
 

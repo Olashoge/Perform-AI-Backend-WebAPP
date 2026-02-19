@@ -1,0 +1,153 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-02-19T18:00:00.000Z",
+
+  "identity": {
+    "age": 32,
+    "ageTier": "adult",
+    "sex": "male"
+  },
+
+  "units": {
+    "unitSystem": "imperial",
+    "storageSystem": "metric"
+  },
+
+  "goals": {
+    "primaryGoal": "weight_loss",
+    "targetWeightKg": 77.0,
+    "timelinePreference": "balanced"
+  },
+
+  "schedule": {
+    "startDate": "2026-02-23",
+    "days": 7,
+    "trainingDaysOfWeek": ["mon", "wed", "fri", "sat"],
+    "sessionDurationMinutes": 60,
+    "noOverlapPolicy": "block_if_any_collision",
+    "blockedStartDates": ["2026-02-24", "2026-02-25"]
+  },
+
+  "context": {
+    "trainingLocation": "gym",
+    "equipmentAccess": ["barbell", "dumbbell", "machine", "cable"],
+    "activityLevel": "moderate",
+    "sleepHoursAvg": 6.5,
+    "stressLevel": "moderate"
+  },
+
+  "safety": {
+    "hardBlocks": {
+      "minAgeAllowed": 18,
+      "denyIfUnderAge": true
+    },
+    "nutritionBounds": {
+      "calorieDeficitMaxPercent": 0.25,
+      "calorieDeficitMaxKcal": 700,
+      "calorieSurplusMaxKcal": 500,
+      "minDailyCalories": 1500,
+      "maxDailyCalories": 3500
+    },
+    "intensityCaps": {
+      "maxRPE": 8,
+      "noOneRepMax": true,
+      "noMaxEffortLifts": true,
+      "plyometricsLimit": "moderate"
+    }
+  },
+
+  "constraints": {
+    "bannedFoods": ["peanut", "shrimp"],
+    "avoidFoods": ["pork"],
+    "bannedIngredients": ["peanut oil"],
+
+    "injuries": ["knee_pain"],
+    "bannedExerciseTags": ["highImpact", "deepKneeFlexionLoaded"],
+    "bannedExercisesExact": ["barbell back squat", "jump rope", "box jumps"],
+
+    "requiredTrainingBias": {
+      "warmupMinutesMin": 8,
+      "mobilityMinutesMin": 6,
+      "includeLowImpactCardio": true
+    }
+  },
+
+  "nutritionSpec": {
+    "mealsPerDay": 3,
+    "mealSlots": ["breakfast", "lunch", "dinner"],
+
+    "dietStyles": ["high_protein"],
+    "cuisineStyles": ["nigerian", "mediterranean"],
+
+    "prepStyle": "meal_prep",
+    "budgetSensitivity": "medium",
+
+    "macroTargets": {
+      "proteinGMin": 130,
+      "proteinGMax": 170,
+      "carbsGMin": 140,
+      "carbsGMax": 220,
+      "fatGMin": 45,
+      "fatGMax": 75
+    },
+
+    "workoutDayNutritionRule": {
+      "trainingDayCarbBias": "higher",
+      "restDayCarbBias": "lower",
+      "preWorkoutMealHint": "carb+protein",
+      "postWorkoutMealHint": "protein+carb"
+    }
+  },
+
+  "trainingSpec": {
+    "trainingMode": "strength_plus_cardio",
+    "experienceLevel": "beginner",
+    "focusAreas": ["full_body_strength", "fat_loss_conditioning"],
+
+    "splitTemplate": "full_body_3x",
+    "cardioTemplate": "zone2_2x",
+
+    "exercisePoolPolicy": {
+      "useOnlyAllowedLibrary": true,
+      "libraryKey": "adult_gym_safe_v1"
+    },
+
+    "programmingBounds": {
+      "strengthExercisesPerSessionMin": 4,
+      "strengthExercisesPerSessionMax": 6,
+      "setsPerExerciseMin": 2,
+      "setsPerExerciseMax": 3,
+      "repRangeMin": 8,
+      "repRangeMax": 12,
+      "restSecondsMin": 60,
+      "restSecondsMax": 120
+    }
+  },
+
+  "preferences": {
+    "foodLikes": ["chicken", "rice"],
+    "foodDislikes": ["fish"],
+    "foodAvoidConfirmed": ["peanut"],
+
+    "exerciseLikes": ["dumbbell bench press"],
+    "exerciseDislikes": ["burpees"],
+    "exerciseAvoidConfirmed": ["box jumps"],
+
+    "regenEconomy": {
+      "weeklyRegenLimit": 1,
+      "weeklySwapLimit": 3
+    }
+  },
+
+  "generationInstructions": {
+    "tone": "calm_coach",
+    "strictness": "high",
+    "outputRequirements": {
+      "includeGroceryList": true,
+      "includePrepSteps": true,
+      "includeApproxPriceRanges": true,
+      "includeWorkoutDetails": true,
+      "enforceMealOrder": ["breakfast", "lunch", "dinner"]
+    }
+  }
+}

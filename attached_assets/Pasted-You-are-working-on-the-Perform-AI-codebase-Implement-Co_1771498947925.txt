@@ -1,0 +1,146 @@
+You are working on the Perform AI codebase. Implement "Constraint Engine v1" as a deterministic safety + rules layer that runs BEFORE AI generation and also validates AFTER generation.
+
+GOAL:
+- Prevent unsafe or illogical plans (e.g., 1-year-old receiving barbell back squat workouts).
+- Ensure nutrition + training generation respects Profile, Preferences, Equipment, Injuries, Age, and Schedule.
+- Log all rule decisions for transparency and debugging.
+
+NON-NEGOTIABLE:
+1) Constraint Engine must run before any meal/workout plan generation (Wellness Plan generation).
+2) If constraints produce a BLOCK severity, do not generate. Return a friendly error + structured violations.
+3) After AI generation, run post-validation to ensure the output still respects constraints. If violations exist:
+   - Attempt auto-fix via swaps/removals if safe.
+   - Otherwise fail and request regeneration (with stricter prompt + spec).
+4) Store violations in DB (ConstraintViolation table) and store the final "SafeSpec" used for generation (WellnessPlanSpec JSON or similar).
+5) Do not break existing flows. Add tests and keep changes minimal but robust.
+
+STEP 1 — Locate existing generation endpoints
+- Find where Wellness Plans (Meal + Workout) are generated and saved.
+- Identify the server route(s) for generating meal plans and workout plans (likely /api/...).
+- Identify the existing Profile/Preferences models.
+
+STEP 2 — Data model changes (Prisma or equivalent)
+Add these tables (or equivalent):
+
+A) ConstraintViolation:
+- id (uuid)
+- userId (fk)
+- wellnessPlanId (nullable fk)
+- category (string enum: AGE, INJURY, EQUIPMENT, NUTRITION, SCHEDULE, OTHER)
+- severity (string enum: BLOCK, WARN, ADJUST)
+- message (string)
+- metadata (json)
+- createdAt (timestamp)
+
+B) WellnessPlanSpec (optional but preferred):
+- id (uuid)
+- wellnessPlanId (fk)
+- specJson (json)
+- createdAt
+
+If you already have something similar, reuse it, but ensure we persist: the post-constraint spec used.
+
+Run migrations safely.
+
+STEP 3 — Create Constraint Engine module
+Create a folder like:
+- server/constraints/
+
+Files to create:
+1) server/constraints/types.ts
+Define:
+- UserContext: profile, preferences, schedule context, requested plan type, date range, etc.
+- SafeSpec: normalized units + allowed foods/exercises + macro bounds + schedule rules
+- Violation: category, severity, message, metadata
+- ConstraintResult: { blocked: boolean, violations: Violation[], safeSpec: SafeSpec }
+
+2) server/constraints/rules/age.ts
+Rules:
+- age < 13: BLOCK any Strength/Cardio "adult training plan" generation. Return message: "This plan is not appropriate for this age. Create a kids movement plan instead." (for v1, block; do not generate).
+- age 13-15: ADJUST to remove barbell/heavy intensity patterns.
+- age 16-17: WARN/ADJUST: restrict intensity, avoid advanced lifts unless experience advanced.
+- age >= 60: ADJUST: joint-friendly bias, longer warmup, reduce impact.
+
+3) server/constraints/rules/injury.ts
+Convert injuries/mobility limitations into banned movement tags.
+Create a simple mapping:
+- ACL / knee pain -> ban: jumping/plyo, deep knee flexion loaded, high impact
+- Shoulder limitation -> ban: overhead press, snatch/jerk patterns
+- Lower back pain -> ban: heavy hinge, deadlift patterns; prefer supported
+Return ADJUST violations with metadata: bannedTags, swapHints.
+
+4) server/constraints/rules/equipment.ts
+If equipment = home -> restrict to home-safe library
+If gym -> allow full
+Return ADJUST with metadata.
+
+5) server/constraints/rules/nutrition.ts
+Clamp calorie targets:
+- weight loss: cap deficit max 25% or max -700 kcal/day
+- muscle gain: cap surplus +250 to +500 kcal/day
+- age < 18: do not allow aggressive deficits/surplus; WARN/ADJUST
+Hard-block allergens and avoid foods.
+
+6) server/constraints/rules/schedule.ts
+Prevent overlapping active Wellness Plans for same date range unless the user explicitly replaced it.
+Ensure meal plan dates align with workout plan dates.
+
+7) server/constraints/engine.ts (or index.ts)
+Combine all rules:
+- Start from an initial SafeSpec based on profile + request
+- Apply each rule to mutate SafeSpec and add violations
+- Determine blocked if any BLOCK
+Return ConstraintResult
+
+STEP 4 — Exercise/Food libraries (minimal v1)
+If there is already an exercise database/library, add tags to exercises:
+- barbell, overhead, highImpact, deepKneeFlexion, heavyHinge, etc.
+If there is no exercise library and workouts are AI-only text, implement a post-validation keyword/tag check:
+- detect "barbell", "back squat", "deadlift", "snatch", etc. when banned.
+For nutrition, detect banned foods from avoid/allergy list.
+
+STEP 5 — Hook into generation flow
+In the Wellness Plan generation endpoint:
+1) Load Profile + Preferences + existing plan schedule context
+2) Build UserContext
+3) Run evaluateConstraints(ctx)
+4) If blocked:
+   - Save ConstraintViolation rows (with wellnessPlanId null)
+   - Return 400 with user-friendly error + violations
+5) If not blocked:
+   - Persist WellnessPlanSpec (safeSpec JSON) linked to the new plan (or store after plan creation)
+   - Generate using AI with the safeSpec included as structured constraints
+   - Run post-validation; if violations found:
+       - attempt safe auto-fix (remove banned items, swap with safe alternatives if possible)
+       - otherwise regenerate once with a stricter prompt
+   - Save final plan
+   - Save ConstraintViolation rows linked to wellnessPlanId
+
+STEP 6 — Update AI prompts to include safeSpec
+When calling AI, include:
+- age, equipment, injuries, banned tags, allowed exercise pool summary
+- nutrition bounds + avoid foods
+- schedule days + session length
+Make sure AI is instructed not to output banned movements/foods.
+
+STEP 7 — Testing
+Add unit tests for:
+- age < 13 blocks
+- ACL injury removes jump rope / plyo
+- shoulder limitation removes overhead press
+- home equipment restricts barbell
+- nutrition clamps deficits/surplus
+Also add one integration test for the generation endpoint that verifies:
+- blocked requests return 400 + violations
+- non-blocked requests store spec + violations correctly
+
+STEP 8 — UI handling
+When server returns blocked response, display a clear message and what to change (age/goal/equipment) without crashing.
+
+DELIVERABLES:
+- Working Constraint Engine v1
+- DB migrations
+- Hooked into generation route
+- Post-validation guard
+- Tests passing
+- No regressions to current Wellness Plan generation

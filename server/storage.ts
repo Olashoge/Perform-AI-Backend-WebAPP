@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull, lt } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -79,6 +79,12 @@ export interface IStorage {
   getUserProfile(userId: string): Promise<UserProfile | undefined>;
   createUserProfile(userId: string, data: InsertUserProfile): Promise<UserProfile>;
   updateUserProfile(userId: string, data: Partial<InsertUserProfile>): Promise<UserProfile | undefined>;
+  createConstraintViolations(violations: { userId: string; planType: string; planId?: string; goalPlanId?: string; stage: string; ruleKey: string; severity: string; message: string; metaJson?: any }[]): Promise<ConstraintViolation[]>;
+  getConstraintViolations(userId: string, goalPlanId?: string): Promise<ConstraintViolation[]>;
+  createWellnessPlanSpec(data: { userId: string; planType: string; planId?: string; goalPlanId?: string; safeSpecJson: any }): Promise<WellnessPlanSpec>;
+  getWellnessPlanSpec(planId: string): Promise<WellnessPlanSpec | undefined>;
+  getScheduledMealPlanDates(userId: string): Promise<string[]>;
+  getScheduledWorkoutPlanDates(userId: string): Promise<string[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -845,6 +851,69 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userProfiles.userId, userId))
       .returning();
     return profile;
+  }
+
+  async createConstraintViolations(violations: { userId: string; planType: string; planId?: string; goalPlanId?: string; stage: string; ruleKey: string; severity: string; message: string; metaJson?: any }[]): Promise<ConstraintViolation[]> {
+    if (violations.length === 0) return [];
+    const results = await db.insert(constraintViolations).values(violations).returning();
+    return results;
+  }
+
+  async getConstraintViolations(userId: string, goalPlanId?: string): Promise<ConstraintViolation[]> {
+    if (goalPlanId) {
+      return db.select().from(constraintViolations)
+        .where(and(eq(constraintViolations.userId, userId), eq(constraintViolations.goalPlanId, goalPlanId)))
+        .orderBy(desc(constraintViolations.createdAt));
+    }
+    return db.select().from(constraintViolations)
+      .where(eq(constraintViolations.userId, userId))
+      .orderBy(desc(constraintViolations.createdAt));
+  }
+
+  async createWellnessPlanSpec(data: { userId: string; planType: string; planId?: string; goalPlanId?: string; safeSpecJson: any }): Promise<WellnessPlanSpec> {
+    const [spec] = await db.insert(wellnessPlanSpecs).values(data).returning();
+    return spec;
+  }
+
+  async getWellnessPlanSpec(planId: string): Promise<WellnessPlanSpec | undefined> {
+    const [spec] = await db.select().from(wellnessPlanSpecs)
+      .where(eq(wellnessPlanSpecs.planId, planId))
+      .limit(1);
+    return spec;
+  }
+
+  async getScheduledMealPlanDates(userId: string): Promise<string[]> {
+    const plans = await db.select({ startDate: mealPlans.planStartDate }).from(mealPlans)
+      .where(and(eq(mealPlans.userId, userId), isNull(mealPlans.deletedAt)));
+    const dates: string[] = [];
+    for (const p of plans) {
+      if (p.startDate) {
+        const sd = new Date(p.startDate + "T00:00:00");
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(sd);
+          d.setDate(d.getDate() + i);
+          dates.push(d.toISOString().split("T")[0]);
+        }
+      }
+    }
+    return dates;
+  }
+
+  async getScheduledWorkoutPlanDates(userId: string): Promise<string[]> {
+    const plans = await db.select({ startDate: workoutPlans.planStartDate }).from(workoutPlans)
+      .where(and(eq(workoutPlans.userId, userId), isNull(workoutPlans.deletedAt)));
+    const dates: string[] = [];
+    for (const p of plans) {
+      if (p.startDate) {
+        const sd = new Date(p.startDate + "T00:00:00");
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(sd);
+          d.setDate(d.getDate() + i);
+          dates.push(d.toISOString().split("T")[0]);
+        }
+      }
+    }
+    return dates;
   }
 }
 
