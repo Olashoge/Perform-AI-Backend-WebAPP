@@ -175,7 +175,14 @@ function MealPlanList({ plans, isLoading }: { plans?: MealPlan[]; isLoading: boo
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {plans.map((mp) => {
+      {[...plans].sort((a, b) => {
+        const dateA = a.planStartDate ? new Date(a.planStartDate + "T00:00:00").getTime() : 0;
+        const dateB = b.planStartDate ? new Date(b.planStartDate + "T00:00:00").getTime() : 0;
+        if (dateA && dateB) return dateB - dateA;
+        if (dateA) return -1;
+        if (dateB) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }).map((mp) => {
         const plan = mp.planJson as PlanOutput;
         const prefs = mp.preferencesJson as Preferences;
         const status = (mp as any).status as string;
@@ -306,7 +313,14 @@ function WorkoutPlanList({ plans, isLoading }: { plans?: WorkoutPlan[]; isLoadin
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {plans.map((wp) => {
+      {[...plans].sort((a, b) => {
+        const dateA = a.planStartDate ? new Date(a.planStartDate + "T00:00:00").getTime() : 0;
+        const dateB = b.planStartDate ? new Date(b.planStartDate + "T00:00:00").getTime() : 0;
+        if (dateA && dateB) return dateB - dateA;
+        if (dateA) return -1;
+        if (dateB) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }).map((wp) => {
         const planJson = wp.planJson as WorkoutPlanOutput | null;
         const prefs = wp.preferencesJson as any;
         const status = wp.status;

@@ -208,7 +208,14 @@ export default function GoalPlans() {
           </Card>
         ) : (
           <div className="space-y-5">
-            {goalPlans.map((gp, idx) => {
+            {[...goalPlans].sort((a, b) => {
+              const dateA = a.startDate ? new Date(a.startDate + "T00:00:00").getTime() : 0;
+              const dateB = b.startDate ? new Date(b.startDate + "T00:00:00").getTime() : 0;
+              if (dateA && dateB) return dateB - dateA;
+              if (dateA) return -1;
+              if (dateB) return 1;
+              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            }).map((gp, idx) => {
               const GoalIcon = GOAL_ICONS[gp.goalType] || Target;
               const goalTitle = generateGoalTitle(gp.goalType, gp.startDate, idx);
               return (
