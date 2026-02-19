@@ -527,6 +527,7 @@ export const userProfiles = pgTable("user_profiles", {
   religiousRestrictions: jsonb("religious_restrictions").default([]),
   appetiteLevel: varchar("appetite_level", { length: 20 }),
   spicePreference: varchar("spice_preference", { length: 20 }),
+  nextWeekPlanBias: varchar("next_week_plan_bias", { length: 30 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -594,3 +595,26 @@ export const wellnessPlanSpecs = pgTable("wellness_plan_specs", {
 
 export type ConstraintViolation = typeof constraintViolations.$inferSelect;
 export type WellnessPlanSpec = typeof wellnessPlanSpecs.$inferSelect;
+
+export const performanceSummaries = pgTable("performance_summaries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  weekStartDate: varchar("week_start_date", { length: 10 }).notNull(),
+  weekEndDate: varchar("week_end_date", { length: 10 }).notNull(),
+  mealAdherencePct: real("meal_adherence_pct"),
+  workoutAdherencePct: real("workout_adherence_pct"),
+  energyAvg: real("energy_avg"),
+  weightDeltaKg: real("weight_delta_kg"),
+  adherenceScore: integer("adherence_score").notNull(),
+  momentumState: varchar("momentum_state", { length: 20 }).notNull(),
+  insights: jsonb("insights").notNull().default([]),
+  adjustmentAction: varchar("adjustment_action", { length: 30 }).notNull(),
+  adjustmentStatement: text("adjustment_statement").notNull(),
+  economyDelta: jsonb("economy_delta").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("perf_summary_user_week_idx").on(table.userId, table.weekStartDate),
+]);
+
+export type PerformanceSummary = typeof performanceSummaries.$inferSelect;

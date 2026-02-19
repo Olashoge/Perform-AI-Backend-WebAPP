@@ -1,0 +1,226 @@
+REPLIT AGENT — PERFORMANCE CORE v1 (Inside Check-In) — IMPLEMENT NOW
+
+Objective:
+Turn the existing Check-In tab into a real “coach” layer by computing a Weekly Performance Summary after each check-in, storing it, displaying it, and triggering SMALL adaptive actions (micro-adjustments + economy tweaks). Do NOT add a new Performance tab yet. Keep scope tight and production-safe.
+
+Non-negotiable Outcomes:
+1) After every weekly check-in submission, compute and persist a performance summary:
+   - Adherence Score (0–100)
+   - Momentum State (one of 4)
+   - 2–3 insight bullets (templated, not hallucinated)
+   - One “Coach Adjustment Statement”
+2) Display the latest summary on the Check-In page as the primary UI.
+3) Add micro-adjustment hooks that affect NEXT generation and the swap/regen economy.
+
+============================================================
+1) DATABASE
+============================================================
+
+Create a new table/model: performance_summary
+
+Fields:
+- id (uuid, pk)
+- userId (fk users.id)
+- weekStartDate (date)   // normalized start (Mon) OR chosen based on user’s locale rules; use Monday.
+- weekEndDate (date)     // weekStart + 6
+- mealAdherencePct (float, 0–100, nullable if no meals)
+- workoutAdherencePct (float, 0–100, nullable if no workouts)
+- energyAvg (float, nullable)  // normalized 0–100 after mapping
+- weightDeltaKg (float, nullable) // optional if weight tracked
+- adherenceScore (int 0–100, required)
+- momentumState (enum: 'building' | 'maintaining' | 'fatigue_risk' | 'slipping', required)
+- insights (json array of strings, required, 2–3 items)
+- adjustmentAction (enum: 'maintain' | 'reduce_load' | 'increase_load' | 'simplify_plan' | 'nutrition_bias_training_days', required)
+- adjustmentStatement (string, required)  // calm coach tone
+- economyDelta (json) // e.g. {"regenBonus":1,"swapBonus":0} or {"regenPenalty":0,"swapPenalty":1}
+- createdAt
+- updatedAt
+
+Add indexes:
+- unique (userId, weekStartDate)
+
+Migration must be safe.
+
+============================================================
+2) COMPUTATION LOGIC
+============================================================
+
+Implement deterministic computation in server code (NOT LLM):
+Create: server/performance/computeWeeklySummary.ts
+
+Inputs:
+- userId
+- weekStartDate
+
+Data sources:
+- meals + meal completion tracking for week (whatever your app uses)
+- workouts + workout completion tracking for week
+- check-in responses for week (energy, weight, etc.)
+- swap/regen usage for week (if tracked)
+
+A) Compute Meal adherence %
+- If you track completion per meal instance: completedMeals / plannedMeals * 100
+- If no planned meals exist that week, set mealAdherencePct = null and weight other components accordingly (see scoring rules).
+
+B) Compute Workout adherence %
+- completedWorkouts / plannedWorkouts * 100 (same null handling)
+
+C) Energy mapping to 0–100
+If energy is categorical (e.g., Very Low, Low, Moderate, Good, Great):
+Map:
+- very_low = 20
+- low = 40
+- moderate = 60
+- good = 80
+- great = 100
+If numeric 1–5 or 1–10, map proportionally.
+
+D) Adherence Score (0–100)
+Default weights:
+- meals: 0.4
+- workouts: 0.4
+- energy: 0.2
+
+If meals or workouts are null (no plan scheduled), renormalize weights:
+- If meals missing: workouts 0.67, energy 0.33
+- If workouts missing: meals 0.67, energy 0.33
+- If both missing: energy 1.0 (still produce a score)
+
+Score formula:
+score = round(
+  mealAdherencePct*wm + workoutAdherencePct*ww + energyAvg*we
+)
+
+Clamp 0–100.
+
+E) Momentum State (4 states only)
+Use rules (deterministic):
+
+Let score = adherenceScore.
+Let energy = energyAvg (0–100 or null treated as 60).
+Let workoutAdh = workoutAdherencePct (null treated as 0 only if no workouts planned; otherwise use value).
+Let mealAdh = mealAdherencePct (same idea).
+
+Compute trend:
+- Get previous 2 summaries (if any) and compute score delta:
+  - trendUp = score >= prevScore + 5
+  - trendDown = score <= prevScore - 5
+
+Rules:
+1) fatigue_risk if energy <= 40 AND score >= 70
+2) building if score >= 80 AND (trendUp OR prevScore is null)
+3) slipping if score < 60 OR trendDown
+4) maintaining otherwise
+
+F) Adjustment Action + Statement (templated)
+Pick ONE action:
+
+- If fatigue_risk:
+  action = 'reduce_load'
+  statement = "Reducing training load slightly this week to support recovery and keep consistency high."
+- Else if building:
+  action = 'increase_load'
+  statement = "Consistency is strong. Increasing challenge slightly to keep progress moving."
+- Else if slipping:
+  action = 'simplify_plan'
+  statement = "Simplifying your week to make consistency easier. We’ll rebuild intensity once adherence stabilizes."
+- Else maintaining:
+  action = 'maintain'
+  statement = "Maintaining your structure this week to reinforce consistency and momentum."
+
+G) Insights (2–3 bullets, deterministic)
+Generate bullets based on the computed values:
+Examples:
+- If mealAdh < 70: "Nutrition consistency is the biggest lever this week."
+- If workoutAdh < 70: "Training consistency is the biggest lever this week."
+- If energy <= 40: "Energy is trending low—prioritize sleep and recovery."
+- If score >= 80: "Excellent consistency. Keep the same rhythm."
+- If swap/regen overuse exists: "High plan changes detected—aim to follow the structure before regenerating."
+
+Make sure exactly 2–3 items.
+
+H) Economy Delta (micro rewards/penalties)
+Rules:
+- If score >= 85 for 2 consecutive weeks: economyDelta = {"regenBonus":1,"swapBonus":1}
+- If score < 60 for 2 consecutive weeks: economyDelta = {"regenBonus":0,"swapBonus":0} but also set a “regenCooldown” next week OR reduce allowed regen by 1 (min 0).
+- Otherwise: {"regenBonus":0,"swapBonus":0}
+
+Persist economyDelta in performance_summary.
+
+============================================================
+3) HOOK INTO CHECK-IN FLOW
+============================================================
+
+When user submits check-in:
+1) Save check-in as currently.
+2) Determine weekStartDate (Monday) for the submitted check-in date.
+3) Call computeWeeklySummary(userId, weekStartDate).
+4) Upsert performance_summary for that week.
+5) Return latest summary in response.
+
+Add API routes:
+- GET /api/performance/latest  -> returns latest summary
+- GET /api/performance?from=YYYY-MM-DD&to=YYYY-MM-DD -> returns list (optional; nice to have)
+- POST /api/checkin should return the summary.
+
+============================================================
+4) UI: CHECK-IN TAB UPGRADE
+============================================================
+
+On Check-In page:
+- If latest performance summary exists, show it at top prominently:
+  - Large “Adherence Score” number (0–100)
+  - Momentum badge (Building / Maintaining / Fatigue Risk / Slipping)
+  - 2–3 insight bullets
+  - Coach adjustment statement
+
+After the card, keep the existing check-in form (or if check-in already completed this week, show “Edit check-in” CTA).
+
+Design notes:
+- Calm, premium, minimal.
+- No charts yet.
+- Use existing design system tokens.
+- Make the score card feel like a “coach assessment” not a dashboard.
+
+============================================================
+5) MICRO-ADJUSTMENTS HOOKS
+============================================================
+
+Do NOT rewrite plans automatically in v1.
+We only set flags that influence NEXT generation and economy:
+
+Implement:
+- Store in user settings or profile a “nextWeekAdjustment” derived from latest summary:
+  - e.g. nextWeekPlanBias: 'reduce_load' | 'simplify' | 'increase_load' | 'maintain'
+- When generating the next Wellness Plan, inject this bias into the AI prompt + SafeSpec:
+  - simplify_plan -> fewer exercises/session, shorter sessions, simpler meals
+  - reduce_load -> reduce intensity and add recovery emphasis
+  - increase_load -> slightly more volume/intensity within constraints
+  - maintain -> no change
+
+Also apply economyDelta:
+- Increase next week’s regen/swap limits accordingly (server-side enforced).
+
+============================================================
+6) TESTS
+============================================================
+
+Add tests:
+- Score computation with both meal/workout present
+- Score computation with meals missing
+- Momentum rules for fatigue_risk
+- Building vs maintaining vs slipping thresholds
+- Economy bonus triggers after 2 consecutive high-score weeks
+- API returns latest summary
+
+============================================================
+DELIVERABLES
+============================================================
+
+When done:
+- Provide list of files changed
+- Confirm DB migration applied
+- Confirm check-in now returns performance summary
+- Provide screenshots of updated Check-In page showing score card
+- Confirm next plan generation sees nextWeekPlanBias injected
+- Confirm economy bonuses/penalties apply server-side

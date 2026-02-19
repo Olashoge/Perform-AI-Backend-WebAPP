@@ -116,11 +116,30 @@ export function evaluateConstraints(ctx: RuleContext): ConstraintResult {
   };
 }
 
-export function buildConstraintPromptBlock(safeSpec: SafeSpec, planKind: "meal" | "workout" | "both"): string {
+export function buildConstraintPromptBlock(safeSpec: SafeSpec, planKind: "meal" | "workout" | "both", planBias?: string | null): string {
   const parts: string[] = [];
 
   parts.push(`\n\n--- CONSTRAINT ENGINE SAFETY SPEC ---`);
   parts.push(`Age tier: ${safeSpec.ageTier}`);
+
+  if (planBias && planBias !== "maintain") {
+    parts.push(`\n--- PERFORMANCE COACH ADJUSTMENT ---`);
+    switch (planBias) {
+      case "reduce_load":
+        parts.push("REDUCE training intensity and volume this week. Prioritize recovery. Use lighter weights, fewer sets, and include extra rest days or active recovery sessions. For meals, emphasize anti-inflammatory foods and recovery nutrition.");
+        break;
+      case "increase_load":
+        parts.push("SLIGHTLY INCREASE training challenge this week. Add modest volume or intensity progression. For meals, ensure adequate protein and calories to support increased workload.");
+        break;
+      case "simplify_plan":
+        parts.push("SIMPLIFY the plan this week. Use fewer exercises per session, shorter workouts, and simpler meal preparations. Focus on making adherence easy and rebuilding consistency.");
+        break;
+      case "nutrition_bias_training_days":
+        parts.push("BIAS nutrition toward training days. Increase carbs and total calories on workout days, keep rest days lighter. Focus on timing nutrition around workouts.");
+        break;
+    }
+    parts.push(`--- END PERFORMANCE COACH ADJUSTMENT ---`);
+  }
 
   if (planKind === "workout" || planKind === "both") {
     if (safeSpec.bannedExerciseTags.length > 0) {

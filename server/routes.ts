@@ -12,6 +12,7 @@ import { checkMealSwapAllowed, checkMealRegenAllowed, recordMealSwap, recordMeal
 import { evaluateConstraints, buildConstraintPromptBlock } from "./constraints/engine";
 import { postValidateMealPlan, postValidateWorkoutPlan } from "./constraints/post-validation";
 import type { RuleContext, PlanKind } from "./constraints/types";
+import { computeWeeklySummary } from "./performance/computeWeeklySummary";
 import connectPgSimple from "connect-pg-simple";
 
 const PgStore = connectPgSimple(session);
@@ -241,7 +242,7 @@ export async function registerRoutes(
             violations: cResult.violations.map(v => ({ ruleKey: v.ruleKey, severity: v.severity, message: v.message, category: v.category })),
           });
         }
-        standaloneConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "meal");
+        standaloneConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "meal", userProfile.nextWeekPlanBias);
       }
 
       const validStartDate = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
@@ -912,7 +913,7 @@ export async function registerRoutes(
             violations: cResult.violations.map(v => ({ ruleKey: v.ruleKey, severity: v.severity, message: v.message, category: v.category })),
           });
         }
-        workoutConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "workout");
+        workoutConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "workout", userProfile.nextWeekPlanBias);
       }
 
       const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs, validStartDate);
@@ -1280,7 +1281,7 @@ export async function registerRoutes(
         );
       }
 
-      const constraintPromptBlock = buildConstraintPromptBlock(constraintResult.safeSpec, planKind);
+      const constraintPromptBlock = buildConstraintPromptBlock(constraintResult.safeSpec, planKind, userProfile.nextWeekPlanBias);
 
       const goalPlan = await storage.createGoalPlanFull(userId, {
         goalType,
@@ -1654,7 +1655,16 @@ export async function registerRoutes(
       }
       const userId = req.session.userId!;
       const checkIn = await storage.createWeeklyCheckIn(userId, parsed.data);
-      return res.json(checkIn);
+
+      let performanceSummary = null;
+      try {
+        performanceSummary = await computeWeeklySummary(userId, checkIn.weekStartDate);
+        log(`Performance summary computed for user ${userId}, week ${checkIn.weekStartDate}: score=${performanceSummary.adherenceScore}, momentum=${performanceSummary.momentumState}`, "plan");
+      } catch (perfErr) {
+        log(`Performance summary computation error: ${perfErr}`, "plan");
+      }
+
+      return res.json({ checkIn, performanceSummary });
     } catch (err) {
       log(`Check-in creation error: ${err}`, "plan");
       return res.status(500).json({ message: "Failed to save check-in" });
@@ -1669,6 +1679,32 @@ export async function registerRoutes(
       return res.json(checkIns);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load check-ins" });
+    }
+  });
+
+  app.get("/api/performance/latest", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const summary = await storage.getLatestPerformanceSummary(userId);
+      return res.json(summary || null);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load performance summary" });
+    }
+  });
+
+  app.get("/api/performance", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const from = req.query.from as string | undefined;
+      const to = req.query.to as string | undefined;
+      if (from && to) {
+        const summaries = await storage.getPerformanceSummariesByRange(userId, from, to);
+        return res.json(summaries);
+      }
+      const summaries = await storage.getRecentPerformanceSummaries(userId, 10);
+      return res.json(summaries);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load performance summaries" });
     }
   });
 

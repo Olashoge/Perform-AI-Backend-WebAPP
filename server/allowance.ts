@@ -437,5 +437,22 @@ export async function createAllowanceForGoalPlan(userId: string, goalPlanId: str
     if (p) bonuses.penaltyPlanRegensTotal = p.penaltyPlanRegensTotal || 0;
   }
 
+  const perfSummaries = await storage.getRecentPerformanceSummaries(userId, 1);
+  if (perfSummaries.length > 0) {
+    const delta = perfSummaries[0].economyDelta as any;
+    if (delta) {
+      if (delta.regenBonus) {
+        bonuses.bonusPlanRegensTotal = (bonuses.bonusPlanRegensTotal || 0) + delta.regenBonus;
+      }
+      if (delta.swapBonus) {
+        bonuses.bonusMealSwapsPerDay = (bonuses.bonusMealSwapsPerDay || 0) + delta.swapBonus;
+        bonuses.bonusWorkoutSwapsPerDay = (bonuses.bonusWorkoutSwapsPerDay || 0) + delta.swapBonus;
+      }
+      if (delta.regenPenalty) {
+        bonuses.penaltyPlanRegensTotal = (bonuses.penaltyPlanRegensTotal || 0) + Math.abs(delta.regenPenalty);
+      }
+    }
+  }
+
   return storage.createPlanAllowance(userId, goalPlanId, startDate, endDate, bonuses);
 }

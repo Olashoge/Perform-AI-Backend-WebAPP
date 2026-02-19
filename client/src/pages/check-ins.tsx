@@ -3,9 +3,10 @@ import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { WeeklyCheckIn, GoalPlan } from "@shared/schema";
+import type { WeeklyCheckIn, GoalPlan, PerformanceSummary } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import { Slider } from "@/components/ui/slider";
 import {
   Plus, Loader2, TrendingUp, TrendingDown, Minus,
   Zap, ClipboardCheck, CalendarDays, Target,
+  Activity, Flame, Shield, AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, parseISO } from "date-fns";
@@ -25,6 +27,91 @@ function getMonday(date: Date): string {
 }
 
 const ENERGY_LABELS = ["", "Very Low", "Low", "Moderate", "Good", "Great"];
+
+const MOMENTUM_CONFIG: Record<string, { label: string; icon: typeof Activity; className: string }> = {
+  building: { label: "Building", icon: Flame, className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  maintaining: { label: "Maintaining", icon: Shield, className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  fatigue_risk: { label: "Fatigue Risk", icon: AlertTriangle, className: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  slipping: { label: "Slipping", icon: TrendingDown, className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+};
+
+function PerformanceSummaryCard({ summary }: { summary: PerformanceSummary }) {
+  const momentum = MOMENTUM_CONFIG[summary.momentumState] || MOMENTUM_CONFIG.maintaining;
+  const MomentumIcon = momentum.icon;
+  const insights = (summary.insights || []) as string[];
+
+  const scoreColor = summary.adherenceScore >= 80
+    ? "text-emerald-600 dark:text-emerald-400"
+    : summary.adherenceScore >= 60
+    ? "text-blue-600 dark:text-blue-400"
+    : "text-amber-600 dark:text-amber-400";
+
+  return (
+    <Card className="mb-6" data-testid="card-performance-summary">
+      <CardContent className="p-6">
+        <div className="flex items-start gap-5 flex-wrap">
+          <div className="flex flex-col items-center min-w-[80px]">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Score</p>
+            <span className={`text-4xl font-bold tabular-nums ${scoreColor}`} data-testid="text-adherence-score">
+              {summary.adherenceScore}
+            </span>
+            <p className="text-[10px] text-muted-foreground mt-0.5">/ 100</p>
+          </div>
+
+          <div className="flex-1 min-w-[200px] space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge className={`${momentum.className} no-default-hover-elevate no-default-active-elevate`} data-testid="badge-momentum">
+                <MomentumIcon className="h-3 w-3 mr-1" />
+                {momentum.label}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                Week of {format(parseISO(summary.weekStartDate), "MMM d")}
+              </span>
+            </div>
+
+            <ul className="space-y-1.5">
+              {insights.map((insight, i) => (
+                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2" data-testid={`text-insight-${i}`}>
+                  <span className="text-primary mt-1 flex-shrink-0">&#8226;</span>
+                  <span>{insight}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="pt-2 border-t">
+              <p className="text-sm italic text-foreground/80" data-testid="text-coach-statement">
+                {summary.adjustmentStatement}
+              </p>
+            </div>
+
+            {(summary.mealAdherencePct != null || summary.workoutAdherencePct != null) && (
+              <div className="flex gap-4 pt-1 flex-wrap">
+                {summary.mealAdherencePct != null && (
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">Meals:</span>{" "}
+                    <span className="tabular-nums">{Math.round(summary.mealAdherencePct)}%</span>
+                  </div>
+                )}
+                {summary.workoutAdherencePct != null && (
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">Workouts:</span>{" "}
+                    <span className="tabular-nums">{Math.round(summary.workoutAdherencePct)}%</span>
+                  </div>
+                )}
+                {summary.energyAvg != null && (
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">Energy:</span>{" "}
+                    <span className="tabular-nums">{Math.round(summary.energyAvg)}/100</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function CheckIns() {
   const { user, isLoading } = useAuth();
@@ -59,6 +146,11 @@ export default function CheckIns() {
     enabled: !!user,
   });
 
+  const { data: latestSummary, isLoading: summaryLoading } = useQuery<PerformanceSummary | null>({
+    queryKey: ["/api/performance/latest"],
+    enabled: !!user,
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const body: any = {
@@ -74,11 +166,20 @@ export default function CheckIns() {
       const res = await apiRequest("POST", "/api/check-ins", body);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/check-ins", goalPlanId || "all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/performance/latest"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/performance"] });
       setCreateOpen(false);
       resetForm();
-      toast({ title: "Check-in saved" });
+      if (data?.performanceSummary) {
+        toast({
+          title: "Check-in saved",
+          description: `Adherence score: ${data.performanceSummary.adherenceScore}/100`,
+        });
+      } else {
+        toast({ title: "Check-in saved" });
+      }
     },
     onError: () => {
       toast({ title: "Failed to save check-in", variant: "destructive" });
@@ -131,6 +232,23 @@ export default function CheckIns() {
         </Button>
       </div>
       <div>
+        {summaryLoading ? (
+          <Card className="mb-6">
+            <CardContent className="p-6">
+              <div className="flex gap-5">
+                <Skeleton className="h-16 w-20" />
+                <div className="flex-1 space-y-3">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : latestSummary ? (
+          <PerformanceSummaryCard summary={latestSummary} />
+        ) : null}
+
         {currentGoal && (
           <Card className="mb-6">
             <CardContent className="p-5 flex items-center gap-3">

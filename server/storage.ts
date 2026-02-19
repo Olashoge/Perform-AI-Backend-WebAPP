@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull, lt } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -85,6 +85,10 @@ export interface IStorage {
   getWellnessPlanSpec(planId: string): Promise<WellnessPlanSpec | undefined>;
   getScheduledMealPlanDates(userId: string): Promise<string[]>;
   getScheduledWorkoutPlanDates(userId: string): Promise<string[]>;
+  upsertPerformanceSummary(data: Omit<PerformanceSummary, "id" | "createdAt" | "updatedAt">): Promise<PerformanceSummary>;
+  getLatestPerformanceSummary(userId: string): Promise<PerformanceSummary | undefined>;
+  getRecentPerformanceSummaries(userId: string, limit?: number): Promise<PerformanceSummary[]>;
+  getPerformanceSummariesByRange(userId: string, from: string, to: string): Promise<PerformanceSummary[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -914,6 +918,46 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return dates;
+  }
+
+  async upsertPerformanceSummary(data: Omit<PerformanceSummary, "id" | "createdAt" | "updatedAt">): Promise<PerformanceSummary> {
+    const existing = await db.select().from(performanceSummaries)
+      .where(and(eq(performanceSummaries.userId, data.userId), eq(performanceSummaries.weekStartDate, data.weekStartDate)))
+      .limit(1);
+    if (existing.length > 0) {
+      const [updated] = await db.update(performanceSummaries)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(performanceSummaries.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(performanceSummaries).values(data).returning();
+    return created;
+  }
+
+  async getLatestPerformanceSummary(userId: string): Promise<PerformanceSummary | undefined> {
+    const [summary] = await db.select().from(performanceSummaries)
+      .where(eq(performanceSummaries.userId, userId))
+      .orderBy(desc(performanceSummaries.weekStartDate))
+      .limit(1);
+    return summary;
+  }
+
+  async getRecentPerformanceSummaries(userId: string, limit: number = 5): Promise<PerformanceSummary[]> {
+    return db.select().from(performanceSummaries)
+      .where(eq(performanceSummaries.userId, userId))
+      .orderBy(desc(performanceSummaries.weekStartDate))
+      .limit(limit);
+  }
+
+  async getPerformanceSummariesByRange(userId: string, from: string, to: string): Promise<PerformanceSummary[]> {
+    return db.select().from(performanceSummaries)
+      .where(and(
+        eq(performanceSummaries.userId, userId),
+        gte(performanceSummaries.weekStartDate, from),
+        lt(performanceSummaries.weekStartDate, to),
+      ))
+      .orderBy(desc(performanceSummaries.weekStartDate));
   }
 }
 
