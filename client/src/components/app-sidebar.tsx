@@ -13,7 +13,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
-  LayoutDashboard, CalendarDays, UtensilsCrossed, Dumbbell, Target, Settings,
+  LayoutDashboard, CalendarDays, UtensilsCrossed, Dumbbell, Target, Settings, UserCircle,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { title: "Wellness", icon: Target, href: "/goals" },
   { title: "Nutrition", icon: UtensilsCrossed, href: "/nutrition" },
   { title: "Training", icon: Dumbbell, href: "/training" },
+  { title: "Profile", icon: UserCircle, href: "/profile" },
   { title: "Settings", icon: Settings, href: "/settings" },
 ];
 

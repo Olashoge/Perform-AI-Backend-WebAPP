@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull, lt } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -43,7 +43,7 @@ export interface IStorage {
   findByIdempotencyKeyWorkout(userId: string, idempotencyKey: string): Promise<WorkoutPlan | undefined>;
   findGeneratingWorkoutPlan(userId: string): Promise<WorkoutPlan | undefined>;
   createGoalPlan(userId: string, goalType: string, startDate?: string, mealPlanId?: string, workoutPlanId?: string): Promise<GoalPlan>;
-  createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any }): Promise<GoalPlan>;
+  createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any; profileSnapshot?: any }): Promise<GoalPlan>;
   getGoalPlan(id: string): Promise<GoalPlan | undefined>;
   getGoalPlansByUser(userId: string): Promise<GoalPlan[]>;
   updateGoalPlan(id: string, updates: Partial<{ startDate: string | null; endDate: string | null; mealPlanId: string | null; workoutPlanId: string | null; status: string; progress: any; title: string | null; planType: string | null }>): Promise<GoalPlan | undefined>;
@@ -76,6 +76,9 @@ export interface IStorage {
   createFlexToken(userId: string, goalPlanId: string, expiresAt: Date): Promise<FlexToken>;
   createPlanBehaviorSummary(userId: string, goalPlanId: string, data: Partial<PlanBehaviorSummary>): Promise<PlanBehaviorSummary>;
   getLastBehaviorSummary(userId: string): Promise<PlanBehaviorSummary | undefined>;
+  getUserProfile(userId: string): Promise<UserProfile | undefined>;
+  createUserProfile(userId: string, data: InsertUserProfile): Promise<UserProfile>;
+  updateUserProfile(userId: string, data: Partial<InsertUserProfile>): Promise<UserProfile | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -474,7 +477,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any }): Promise<GoalPlan> {
+  async createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any; profileSnapshot?: any }): Promise<GoalPlan> {
     const [plan] = await db.insert(goalPlans).values({
       userId,
       goalType: data.goalType,
@@ -488,6 +491,7 @@ export class DatabaseStorage implements IStorage {
       trainingInputs: data.trainingInputs || null,
       status: data.status || "draft",
       progress: data.progress || null,
+      profileSnapshot: data.profileSnapshot || null,
     }).returning();
     return plan;
   }
@@ -818,6 +822,29 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(planBehaviorSummaries.computedAt))
       .limit(1);
     return summary;
+  }
+
+  async getUserProfile(userId: string): Promise<UserProfile | undefined> {
+    const [profile] = await db.select().from(userProfiles)
+      .where(eq(userProfiles.userId, userId))
+      .limit(1);
+    return profile;
+  }
+
+  async createUserProfile(userId: string, data: InsertUserProfile): Promise<UserProfile> {
+    const [profile] = await db.insert(userProfiles).values({
+      ...data,
+      userId,
+    }).returning();
+    return profile;
+  }
+
+  async updateUserProfile(userId: string, data: Partial<InsertUserProfile>): Promise<UserProfile | undefined> {
+    const [profile] = await db.update(userProfiles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(userProfiles.userId, userId))
+      .returning();
+    return profile;
   }
 }
 

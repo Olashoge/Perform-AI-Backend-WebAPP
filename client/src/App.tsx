@@ -28,6 +28,7 @@ import CheckIns from "@/pages/check-ins";
 import Dashboard from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
 import ExercisePreferencesPage from "@/pages/exercise-preferences";
+import ProfilePage from "@/pages/profile";
 import NotFound from "@/pages/not-found";
 
 function AuthenticatedRouter() {
@@ -51,6 +52,7 @@ function AuthenticatedRouter() {
       <Route path="/goals/:id/generating" component={GoalGenerating} />
       <Route path="/goals/:id/ready" component={GoalReady} />
       <Route path="/check-ins" component={CheckIns} />
+      <Route path="/profile" component={ProfilePage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>

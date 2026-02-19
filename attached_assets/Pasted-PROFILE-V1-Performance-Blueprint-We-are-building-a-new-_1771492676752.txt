@@ -1,0 +1,269 @@
+PROFILE V1 (Performance Blueprint)
+
+We are building a new foundational feature called Profile (Performance Blueprint).
+
+This must become the single source of truth for user context and must be required before generating any new Wellness Plan.
+
+Do NOT refactor unrelated code. Implement cleanly and integrate into existing architecture.
+
+1️⃣ DATABASE
+
+Create a new table:
+
+user_profile
+
+Fields:
+
+id (uuid, primary key)
+
+userId (foreign key → users.id, unique, required)
+
+age (integer, required, must be >= 18)
+
+sex (string, nullable)
+
+heightCm (integer, nullable)
+
+weightKg (float, required)
+
+targetWeightKg (float, nullable)
+
+primaryGoal (string, required)
+
+trainingExperience (enum: 'beginner' | 'intermediate' | 'advanced', required)
+
+Health Context
+
+injuries (json array, default [])
+
+mobilityLimitations (json array, default [])
+
+chronicConditions (json array, default [])
+
+Lifestyle Context
+
+sleepHours (float, nullable)
+
+stressLevel (enum: 'low' | 'moderate' | 'high', nullable)
+
+activityLevel (enum: 'sedentary' | 'moderate' | 'active', nullable)
+
+availableTrainingDays (integer, nullable)
+
+sessionDurationMinutes (integer, nullable)
+
+Nutrition Context
+
+allergies (json array, default [])
+
+intolerances (json array, default [])
+
+religiousRestrictions (json array, default [])
+
+appetiteLevel (enum: 'low' | 'normal' | 'high', nullable)
+
+spicePreference (enum: 'mild' | 'medium' | 'spicy', nullable)
+
+Metadata
+
+createdAt
+
+updatedAt
+
+Constraints:
+
+One profile per user (unique userId)
+
+Age must be >= 18 (hard validation at API level)
+
+Run migration safely.
+
+2️⃣ API ROUTES
+
+Create:
+
+GET /api/profile
+POST /api/profile
+PUT /api/profile
+
+Behavior:
+
+If profile does not exist → GET returns null
+
+POST creates profile
+
+PUT updates profile
+
+Validate:
+
+age required and >= 18
+
+weightKg required
+
+primaryGoal required
+
+trainingExperience required
+
+Return structured validation errors.
+
+3️⃣ UI — NEW NAV ITEM
+
+Add new navigation tab:
+
+Profile
+
+Position it directly above Settings in the sidebar/navbar.
+
+4️⃣ PROFILE PAGE UI
+
+Create clean, sectioned layout.
+
+Title: Performance Blueprint
+
+Sections:
+
+Section 1 — Body & Goals
+
+Age (required)
+
+Sex
+
+Height (cm)
+
+Weight (kg) (required)
+
+Target Weight
+
+Primary Goal (existing goal options)
+
+Training Experience (Beginner / Intermediate / Advanced)
+
+Section 2 — Health & Limitations
+
+Multi-select injuries
+
+Mobility limitations (free text or multi-select)
+
+Chronic conditions (free text or multi-select)
+
+Section 3 — Lifestyle
+
+Sleep hours
+
+Stress level (low / moderate / high)
+
+Activity level (sedentary / moderate / active)
+
+Available training days
+
+Session duration (minutes)
+
+Section 4 — Nutrition Context
+
+Allergies (multi-select + custom input)
+
+Intolerances
+
+Religious restrictions
+
+Appetite level
+
+Spice preference
+
+Add:
+
+Save button
+
+Show “Last updated” timestamp
+
+Success toast on save
+
+5️⃣ PLAN GENERATION INTEGRATION
+
+Modify Wellness Plan creation flow:
+
+Before generating a plan:
+
+Fetch user_profile.
+
+If profile does not exist:
+
+Block plan creation.
+
+Show message:
+“Complete your Performance Blueprint before generating a plan.”
+
+Button → Redirect to Profile.
+
+If profile exists:
+
+Inject profile data into generation payload.
+
+Include profile data in AI prompt context.
+
+Example context added:
+
+User Profile Context:
+Age: 32
+Training Experience: Beginner
+Sleep: 6.5 hours
+Stress Level: Moderate
+Injuries: Knee
+Primary Goal: Muscle Gain
+Available Training Days: 4
+Session Duration: 60 minutes
+6️⃣ SNAPSHOT PROFILE INTO PLAN
+
+When creating a new Wellness Plan:
+
+Add field:
+
+profileSnapshot (json)
+
+Store full profile object at generation time.
+
+This ensures plan reproducibility even if profile changes later.
+
+7️⃣ AGE BLOCK
+
+If age < 18:
+
+Block profile save with error:
+
+“Perform AI currently supports users 18+.”
+
+(No teen mode yet.)
+
+8️⃣ DO NOT IMPLEMENT YET
+
+No constraint engine logic
+
+No automatic volume adjustment
+
+No injury-based filtering
+
+No teen tiers
+
+No progression modeling
+
+This step is strictly data foundation.
+
+Expected Outcome
+
+After implementation:
+
+Profile tab exists.
+
+Profile is required before plan creation.
+
+Plan generation is context-aware.
+
+Profile snapshot is saved into each plan.
+
+Under-18 users are blocked.
+
+Implement cleanly.
+Avoid breaking existing plan logic.
+Preserve current UI styling and theme system.
+
+Once complete, notify that Profile V1 is live and stable.

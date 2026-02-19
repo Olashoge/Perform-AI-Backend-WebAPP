@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { preferencesSchema, workoutPreferencesSchema, type Preferences, type WorkoutPreferences } from "@shared/schema";
+import { preferencesSchema, workoutPreferencesSchema, type Preferences, type WorkoutPreferences, type UserProfile } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -132,6 +132,11 @@ export default function GoalWizard() {
 
   const { data: availabilityData } = useQuery<{ mealDates: string[], workoutDates: string[], allDates: string[] }>({
     queryKey: ["/api/availability"],
+    enabled: !!user,
+  });
+
+  const { data: profileData, isLoading: profileLoading } = useQuery<UserProfile | null>({
+    queryKey: ["/api/profile"],
     enabled: !!user,
   });
 
@@ -295,10 +300,29 @@ export default function GoalWizard() {
     }
   }
 
-  if (isLoading || !user) {
+  if (isLoading || profileLoading || !user) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!profileData) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center">
+        <Card>
+          <CardContent className="p-6 space-y-4">
+            <User className="h-10 w-10 mx-auto text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Profile Required</h2>
+            <p className="text-sm text-muted-foreground">
+              Set up your Performance Blueprint before creating a plan. This helps us personalize your meals and workouts.
+            </p>
+            <Button onClick={() => navigate("/profile")} data-testid="button-go-to-profile">
+              Set Up Profile
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

@@ -101,6 +101,7 @@ export const goalPlans = pgTable("goal_plans", {
   trainingInputs: jsonb("training_inputs"),
   status: varchar("status", { length: 20 }).default("draft"),
   progress: jsonb("progress"),
+  profileSnapshot: jsonb("profile_snapshot"),
   mealPlanId: varchar("meal_plan_id"),
   workoutPlanId: varchar("workout_plan_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -501,6 +502,64 @@ export const planBehaviorSummaries = pgTable("plan_behavior_summaries", {
   resultingPenaltyJson: jsonb("resulting_penalty_json"),
   computedAt: timestamp("computed_at").defaultNow().notNull(),
 });
+
+export const userProfiles = pgTable("user_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  age: integer("age").notNull(),
+  sex: varchar("sex", { length: 20 }),
+  heightCm: integer("height_cm"),
+  weightKg: real("weight_kg").notNull(),
+  targetWeightKg: real("target_weight_kg"),
+  primaryGoal: varchar("primary_goal", { length: 30 }).notNull(),
+  trainingExperience: varchar("training_experience", { length: 20 }).notNull(),
+  injuries: jsonb("injuries").default([]),
+  mobilityLimitations: jsonb("mobility_limitations").default([]),
+  chronicConditions: jsonb("chronic_conditions").default([]),
+  sleepHours: real("sleep_hours"),
+  stressLevel: varchar("stress_level", { length: 20 }),
+  activityLevel: varchar("activity_level", { length: 20 }),
+  availableTrainingDays: integer("available_training_days"),
+  sessionDurationMinutes: integer("session_duration_minutes"),
+  allergies: jsonb("allergies").default([]),
+  intolerances: jsonb("intolerances").default([]),
+  religiousRestrictions: jsonb("religious_restrictions").default([]),
+  appetiteLevel: varchar("appetite_level", { length: 20 }),
+  spicePreference: varchar("spice_preference", { length: 20 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  age: z.coerce.number().int().min(18, "You must be 18 or older"),
+  weightKg: z.coerce.number().positive("Weight is required"),
+  primaryGoal: z.string().min(1, "Primary goal is required"),
+  trainingExperience: z.enum(["beginner", "intermediate", "advanced"]),
+  sex: z.string().nullable().optional(),
+  heightCm: z.coerce.number().int().positive().nullable().optional(),
+  targetWeightKg: z.coerce.number().positive().nullable().optional(),
+  sleepHours: z.coerce.number().min(0).max(24).nullable().optional(),
+  stressLevel: z.enum(["low", "moderate", "high"]).nullable().optional(),
+  activityLevel: z.enum(["sedentary", "moderate", "active"]).nullable().optional(),
+  availableTrainingDays: z.coerce.number().int().min(0).max(7).nullable().optional(),
+  sessionDurationMinutes: z.coerce.number().int().min(10).max(180).nullable().optional(),
+  appetiteLevel: z.enum(["low", "normal", "high"]).nullable().optional(),
+  spicePreference: z.enum(["mild", "medium", "spicy"]).nullable().optional(),
+  injuries: z.array(z.string()).default([]),
+  mobilityLimitations: z.array(z.string()).default([]),
+  chronicConditions: z.array(z.string()).default([]),
+  allergies: z.array(z.string()).default([]),
+  intolerances: z.array(z.string()).default([]),
+  religiousRestrictions: z.array(z.string()).default([]),
+});
+
+export type InsertUserProfile = z.infer<typeof insertUserProfileSchema>;
+export type UserProfile = typeof userProfiles.$inferSelect;
 
 export type PlanAllowance = typeof planAllowances.$inferSelect;
 export type PlanUsageEvent = typeof planUsageEvents.$inferSelect;

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
 import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan, generateWorkoutSession } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
@@ -141,6 +141,50 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Not authenticated" });
     }
     return res.json({ id: user.id, email: user.email });
+  });
+
+  app.get("/api/profile", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const profile = await storage.getUserProfile(req.session.userId!);
+      return res.json(profile || null);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load profile" });
+    }
+  });
+
+  app.post("/api/profile", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const parsed = insertUserProfileSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid profile data", errors: parsed.error.errors });
+      }
+      const existing = await storage.getUserProfile(req.session.userId!);
+      if (existing) {
+        return res.status(409).json({ message: "Profile already exists. Use PUT to update." });
+      }
+      const profile = await storage.createUserProfile(req.session.userId!, parsed.data);
+      return res.json(profile);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to create profile" });
+    }
+  });
+
+  app.put("/api/profile", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const parsed = insertUserProfileSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid profile data", errors: parsed.error.errors });
+      }
+      const existing = await storage.getUserProfile(req.session.userId!);
+      if (!existing) {
+        const profile = await storage.createUserProfile(req.session.userId!, parsed.data);
+        return res.json(profile);
+      }
+      const profile = await storage.updateUserProfile(req.session.userId!, parsed.data);
+      return res.json(profile);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to update profile" });
+    }
   });
 
   app.post("/api/plan", requireAuth, async (req: Request, res: Response) => {
@@ -1123,6 +1167,11 @@ export async function registerRoutes(
         },
       };
 
+      const userProfile = await storage.getUserProfile(userId);
+      if (!userProfile) {
+        return res.status(400).json({ message: "Profile is required before creating a plan. Please set up your Performance Blueprint first." });
+      }
+
       const goalPlan = await storage.createGoalPlanFull(userId, {
         goalType,
         planType: resolvedPlanType,
@@ -1139,6 +1188,7 @@ export async function registerRoutes(
         trainingInputs: needsWorkout ? workoutPreferences : undefined,
         status: "generating",
         progress: initialProgress,
+        profileSnapshot: userProfile || undefined,
       });
 
       (async () => {
