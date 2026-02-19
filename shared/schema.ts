@@ -527,6 +527,8 @@ export const userProfiles = pgTable("user_profiles", {
   allergies: jsonb("allergies").default([]),
   intolerances: jsonb("intolerances").default([]),
   religiousRestrictions: jsonb("religious_restrictions").default([]),
+  foodsToAvoid: jsonb("foods_to_avoid").default([]),
+  foodsToAvoidNotes: varchar("foods_to_avoid_notes", { length: 500 }),
   appetiteLevel: varchar("appetite_level", { length: 20 }),
   spicePreference: varchar("spice_preference", { length: 20 }),
   nextWeekPlanBias: varchar("next_week_plan_bias", { length: 30 }),
@@ -561,6 +563,8 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
   allergies: z.array(z.string()).default([]),
   intolerances: z.array(z.string()).default([]),
   religiousRestrictions: z.array(z.string()).default([]),
+  foodsToAvoid: z.array(z.string()).default([]),
+  foodsToAvoidNotes: z.string().nullable().optional(),
 });
 
 export type InsertUserProfile = z.infer<typeof insertUserProfileSchema>;

@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, Sparkles, X, Plus, ChefHat, User, Home, Target, Clock, Crosshair, AlertTriangle, ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { Loader2, Sparkles, X, Plus, ChefHat, User, Home, Target, Clock, Crosshair, AlertTriangle, ArrowLeft, ArrowRight, Check, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const COMMON_FOODS_TO_AVOID = [
@@ -126,6 +126,8 @@ export default function GoalWizard() {
   const [planType, setPlanType] = useState<"both" | "meal" | "workout">("both");
   const [startDate, setStartDate] = useState("");
   const [pace, setPace] = useState<string>("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const prefillDone = useRef(false);
 
   const includeMeal = planType === "both" || planType === "meal";
   const includeWorkout = planType === "both" || planType === "workout";
@@ -193,6 +195,47 @@ export default function GoalWizard() {
       limitations: "",
     },
   });
+
+  useEffect(() => {
+    if (!profileData || prefillDone.current) return;
+    prefillDone.current = true;
+    const validGoals = GOAL_OPTIONS.map(g => g.value);
+    if (validGoals.includes(profileData.primaryGoal)) {
+      setGoalType(profileData.primaryGoal);
+    }
+    const profileFoods = (profileData.foodsToAvoid as string[]) || [];
+    if (profileFoods.length > 0) {
+      mealForm.setValue("foodsToAvoid", profileFoods);
+    }
+    const profileAllergies = (profileData.allergies as string[]) || [];
+    if (profileAllergies.length > 0) {
+      mealForm.setValue("allergies", profileAllergies.join(", "));
+    }
+    if (profileData.spicePreference) {
+      const spiceMap: Record<string, "none" | "mild" | "medium" | "hot"> = { mild: "mild", medium: "medium", spicy: "hot" };
+      mealForm.setValue("spiceLevel", spiceMap[profileData.spicePreference] || "medium");
+    }
+    workoutForm.setValue("experienceLevel", profileData.trainingExperience as "beginner" | "intermediate" | "advanced");
+    const profileDays = (profileData.trainingDaysOfWeek as string[]) || [];
+    if (profileDays.length > 0) {
+      const mapped = profileDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)) as ("Sun" | "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat")[];
+      workoutForm.setValue("daysOfWeek", mapped);
+    }
+    if (profileData.sessionDurationMinutes) {
+      const validLengths = [20, 30, 45, 60] as const;
+      const closest = validLengths.reduce((prev, curr) =>
+        Math.abs(curr - profileData.sessionDurationMinutes!) < Math.abs(prev - profileData.sessionDurationMinutes!) ? curr : prev
+      );
+      workoutForm.setValue("sessionLength", closest);
+    }
+    const injuries = (profileData.injuries as string[]) || [];
+    const mobility = (profileData.mobilityLimitations as string[]) || [];
+    const chronic = (profileData.chronicConditions as string[]) || [];
+    const allLimitations = [...injuries, ...mobility, ...chronic].filter(Boolean);
+    if (allLimitations.length > 0) {
+      workoutForm.setValue("limitations", allLimitations.join(", "));
+    }
+  }, [profileData, mealForm, workoutForm]);
 
   function getVisibleSteps() {
     const steps = [1];
@@ -476,6 +519,7 @@ export default function GoalWizard() {
 
                 <div className="border-t pt-6">
                   <label className="text-sm font-medium mb-2 block">Pace (optional)</label>
+                  <p className="text-xs text-muted-foreground mb-3">Gentle = easier adherence · Steady = balanced default · Aggressive = faster change, harder adherence</p>
                   <div className="flex gap-2 flex-wrap">
                     {PACE_OPTIONS.map(opt => (
                       <Button
@@ -495,18 +539,37 @@ export default function GoalWizard() {
                 {profileData && (
                   <div className="border-t pt-6">
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-medium block">Using Your Profile</label>
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Your Profile</label>
+                      </div>
                       <Button variant="ghost" size="sm" onClick={() => navigate("/profile")} type="button" data-testid="link-edit-profile-wizard">
-                        Edit Profile
+                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                        Edit
                       </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                      <div><span className="text-muted-foreground">Age:</span> <span className="font-medium">{profileData.age}</span></div>
-                      <div><span className="text-muted-foreground">Weight:</span> <span className="font-medium">{profileData.unitSystem === "metric" ? `${profileData.weightKg} kg` : `${Math.round(profileData.weightKg * 2.205)} lbs`}</span></div>
-                      <div><span className="text-muted-foreground">Goal:</span> <span className="font-medium capitalize">{profileData.primaryGoal.replace(/_/g, " ")}</span></div>
-                      <div><span className="text-muted-foreground">Experience:</span> <span className="font-medium capitalize">{profileData.trainingExperience}</span></div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm" data-testid="profile-summary-wizard">
+                      <div><span className="text-muted-foreground">Age:</span>{" "}<span className="font-medium">{profileData.age}</span></div>
+                      <div><span className="text-muted-foreground">Weight:</span>{" "}<span className="font-medium">{profileData.unitSystem === "metric" ? `${profileData.weightKg} kg` : `${Math.round(profileData.weightKg * 2.205)} lbs`}</span></div>
+                      <div><span className="text-muted-foreground">Goal:</span>{" "}<span className="font-medium capitalize">{profileData.primaryGoal.replace(/_/g, " ")}</span></div>
+                      <div><span className="text-muted-foreground">Experience:</span>{" "}<span className="font-medium capitalize">{profileData.trainingExperience}</span></div>
                       {((profileData.trainingDaysOfWeek as string[]) || []).length > 0 && (
-                        <div className="col-span-2"><span className="text-muted-foreground">Training:</span> <span className="font-medium">{((profileData.trainingDaysOfWeek as string[]) || []).map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")}</span></div>
+                        <div className="col-span-2"><span className="text-muted-foreground">Training:</span>{" "}<span className="font-medium">{((profileData.trainingDaysOfWeek as string[]) || []).map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({((profileData.trainingDaysOfWeek as string[]) || []).length}/wk)</span></div>
+                      )}
+                      {((profileData.allergies as string[]) || []).length > 0 && (
+                        <div className="col-span-2"><span className="text-muted-foreground">Allergies:</span>{" "}<span className="font-medium">{(profileData.allergies as string[]).join(", ")}</span></div>
+                      )}
+                      {((profileData.foodsToAvoid as string[]) || []).length > 0 && (
+                        <div className="col-span-2"><span className="text-muted-foreground">Foods to avoid:</span>{" "}<span className="font-medium">{(profileData.foodsToAvoid as string[]).join(", ")}</span></div>
+                      )}
+                      {((profileData.injuries as string[]) || []).length > 0 && (
+                        <div className="col-span-2"><span className="text-muted-foreground">Injuries:</span>{" "}<span className="font-medium">{(profileData.injuries as string[]).join(", ")}</span></div>
+                      )}
+                      {((profileData.mobilityLimitations as string[]) || []).length > 0 && (
+                        <div className="col-span-2"><span className="text-muted-foreground">Mobility:</span>{" "}<span className="font-medium">{(profileData.mobilityLimitations as string[]).join(", ")}</span></div>
+                      )}
+                      {((profileData.chronicConditions as string[]) || []).length > 0 && (
+                        <div className="col-span-2"><span className="text-muted-foreground">Conditions:</span>{" "}<span className="font-medium">{(profileData.chronicConditions as string[]).join(", ")}</span></div>
                       )}
                     </div>
                   </div>
@@ -756,38 +819,11 @@ export default function GoalWizard() {
             <section>
               <div className="flex items-center gap-2 mb-4">
                 <Home className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Household & Cooking</h2>
+                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Cooking Preferences</h2>
               </div>
               <Card>
                 <CardContent className="p-5 sm:p-6 space-y-6">
-                  <FormField
-                    control={mealForm.control}
-                    name="householdSize"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Household Size</FormLabel>
-                        <FormControl>
-                          <div className="flex items-center gap-3">
-                            <Input
-                              type="number"
-                              min={1}
-                              max={8}
-                              className="w-24"
-                              data-testid="input-household-size"
-                              value={field.value}
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                            />
-                            <span className="text-sm text-muted-foreground">
-                              {field.value === 1 ? "person" : "people"}
-                            </span>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="border-t pt-6">
+                  <div>
                     <FormField
                       control={mealForm.control}
                       name="prepStyle"
@@ -921,6 +957,49 @@ export default function GoalWizard() {
                         )}
                       />
                     </div>
+                  </div>
+
+                  <div className="border-t pt-6">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground"
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      data-testid="button-toggle-advanced-wizard"
+                    >
+                      {showAdvanced ? "Hide" : "Show"} advanced options
+                    </Button>
+                    {showAdvanced && (
+                      <div className="mt-4">
+                        <FormField
+                          control={mealForm.control}
+                          name="householdSize"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Household Size</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-3">
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={8}
+                                    className="w-24"
+                                    data-testid="input-household-size-wizard"
+                                    value={field.value}
+                                    onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                                  />
+                                  <span className="text-sm text-muted-foreground">
+                                    {field.value === 1 ? "person" : "people"}
+                                  </span>
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

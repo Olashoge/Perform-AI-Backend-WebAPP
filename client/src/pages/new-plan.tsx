@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
@@ -51,11 +51,20 @@ export default function NewPlan() {
   const submittedRef = useRef(false);
   const [customStyleInput, setCustomStyleInput] = useState("");
   const [planStartDate, setPlanStartDate] = useState(startDateFromUrl || "");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const prefillDone = useRef(false);
 
   const { data: profile, isLoading: profileLoading } = useQuery<UserProfile>({
     queryKey: ["/api/profile"],
     enabled: !!user,
   });
+
+  const mapProfileGoalToMealGoal = (g: string): "weight_loss" | "muscle_gain" | "energy" | "maintenance" | "performance" => {
+    if (["weight_loss", "muscle_gain", "energy", "maintenance", "performance"].includes(g)) return g as any;
+    if (g === "general_fitness" || g === "mobility") return "maintenance";
+    if (g === "endurance" || g === "strength") return "performance";
+    return "maintenance";
+  };
 
   const form = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
@@ -80,6 +89,32 @@ export default function NewPlan() {
       authenticityMode: "mixed",
     },
   });
+
+  useEffect(() => {
+    if (!profile || prefillDone.current) return;
+    prefillDone.current = true;
+    if (!goalFromUrl) {
+      form.setValue("goal", mapProfileGoalToMealGoal(profile.primaryGoal));
+    }
+    const profileFoods = (profile.foodsToAvoid as string[]) || [];
+    if (profileFoods.length > 0) {
+      form.setValue("foodsToAvoid", profileFoods);
+    }
+    const profileAllergies = (profile.allergies as string[]) || [];
+    if (profileAllergies.length > 0) {
+      form.setValue("allergies", profileAllergies.join(", "));
+    }
+    const profileDays = (profile.trainingDaysOfWeek as string[]) || [];
+    if (profileDays.length > 0) {
+      const mapped = profileDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)) as ("Sun" | "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat")[];
+      form.setValue("workoutDays", mapped);
+      form.setValue("workoutDaysPerWeek", mapped.length);
+    }
+    if (profile.spicePreference) {
+      const spiceMap: Record<string, "none" | "mild" | "medium" | "hot"> = { mild: "mild", medium: "medium", spicy: "hot" };
+      form.setValue("spiceLevel", spiceMap[profile.spicePreference] || "medium");
+    }
+  }, [profile, goalFromUrl, form]);
 
   async function onSubmit(data: Preferences) {
     if (!user || isPending || submittedRef.current) return;
@@ -501,6 +536,12 @@ export default function NewPlan() {
                         <span className="font-medium">{(profile.allergies as string[]).join(", ")}</span>
                       </div>
                     )}
+                    {((profile.foodsToAvoid as string[]) || []).length > 0 && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Foods to avoid:</span>{" "}
+                        <span className="font-medium">{(profile.foodsToAvoid as string[]).join(", ")}</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -509,39 +550,11 @@ export default function NewPlan() {
             <section>
               <div className="flex items-center gap-2 mb-4">
                 <Home className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Household & Cooking</h2>
+                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Cooking Preferences</h2>
               </div>
               <Card>
                 <CardContent className="p-5 sm:p-6 space-y-6">
-                  <FormField
-                    control={form.control}
-                    name="householdSize"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Household Size</FormLabel>
-                        <FormControl>
-                          <div className="flex items-center gap-3">
-                            <Input
-                              type="number"
-                              min={1}
-                              max={8}
-                              className="w-24"
-                              disabled={isPending}
-                              data-testid="input-household-size"
-                              value={field.value}
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                            />
-                            <span className="text-sm text-muted-foreground">
-                              {field.value === 1 ? "person" : "people"}
-                            </span>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="border-t pt-6">
+                  <div>
                     <FormField
                       control={form.control}
                       name="prepStyle"
@@ -678,6 +691,46 @@ export default function NewPlan() {
                       />
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors mt-2"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    data-testid="button-toggle-advanced"
+                  >
+                    {showAdvanced ? "Hide advanced options" : "Show advanced options"}
+                  </button>
+                  {showAdvanced && (
+                    <div className="border-t pt-4 mt-2">
+                      <FormField
+                        control={form.control}
+                        name="householdSize"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Household Size</FormLabel>
+                            <FormControl>
+                              <div className="flex items-center gap-3">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={8}
+                                  className="w-24"
+                                  disabled={isPending}
+                                  data-testid="input-household-size"
+                                  value={field.value}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                                />
+                                <span className="text-sm text-muted-foreground">
+                                  {field.value === 1 ? "person" : "people"}
+                                </span>
+                              </div>
+                            </FormControl>
+                            <FormDescription>Scales recipe servings to match</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </section>

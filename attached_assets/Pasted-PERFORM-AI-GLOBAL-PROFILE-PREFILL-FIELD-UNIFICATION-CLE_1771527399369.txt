@@ -1,0 +1,75 @@
+PERFORM AI — GLOBAL PROFILE PREFILL + FIELD UNIFICATION (CLEANUP SPRINT)
+
+Goal:
+Make the app feel like one intelligent system: Profile is the canonical source of truth, and all plan creation flows (Wellness, Nutrition, Training, standalone meal/workout if they exist) must prefill from Profile, show what was pulled, and only allow optional overrides.
+
+Non-negotiable rules:
+1) Require Profile BEFORE any plan can be generated (Wellness, standalone meal, standalone workout).
+2) Every form page must display a “Using Your Profile” summary card + an “Edit Profile” link/button.
+3) Profile values prefill all matching fields automatically. Users may override on that form, but overrides must NOT modify profile unless the user edits/saves profile explicitly.
+4) Unify naming + schema: one canonical field name per concept across UI + DB + code.
+
+Tasks (implement all):
+A) Canonical field names (use consistently everywhere):
+- primaryGoal
+- trainingExperience
+- trainingDays (array of weekdays)
+- sessionDurationMinutes
+- foodsToAvoid (array) + foodsToAvoidNotes (string optional)
+- allergies (array) + allergiesNotes (string optional)
+- injuries (array/string) + mobilityLimitations (array/string) + chronicConditions (array/string)
+- (optional) combinedLimitationsText (computed) for prompts
+
+B) Profile -> Form Prefill mapping (must work end-to-end):
+1) Wellness Overview:
+- primaryGoal preselected from profile.primaryGoal
+- show Using Your Profile card (age, weight, goal, trainingDays, experience, sessionDuration)
+- remove redundant About You collection if profile exists; keep overrides optional only
+2) Nutrition Setup:
+- foodsToAvoid should pre-check from profile.foodsToAvoid
+- allergies field should prefill from profile.allergies/allergiesNotes
+- add “Pace (optional)” helper text explaining Gentle/Steady/Aggressive
+- show Using Your Profile card + Edit Profile link
+- de-scope Household Size from generation (either remove, or keep but do not require; default to 1 and hide unless user expands “Advanced”)
+3) Training Setup:
+- trainingExperience preselected from profile.trainingExperience
+- trainingDays preselected from profile.trainingDays
+- sessionDurationMinutes preselected from profile.sessionDurationMinutes
+- injuries/limitations textarea prefilled from profile medical fields (merge injuries + mobility limitations + chronic conditions into a readable string)
+- add “Pace (optional)” helper text if pace appears here or in wellness
+- show Using Your Profile card + Edit Profile link
+
+C) Units strategy:
+- Profile supports Imperial/Metric UI preference.
+- Store canonical values in metric in DB (heightCm, weightKg, targetWeightKg) and store unitPreference.
+- Convert on input and output.
+- Ensure prompts do NOT accidentally mix units; pass both display and canonical as needed, but calculations should use canonical metric.
+
+D) Foods to Avoid in Profile (if missing):
+- Add structured foodsToAvoid + notes to profile and UI.
+- Ensure Nutrition Setup + Wellness use these by default.
+
+E) Safety/Constraint parity:
+- Ensure age validation + constraint engine enforcement applies to standalone meal/workout generators too, not just wellness wizard.
+- If age is invalid / too young, block generation with a clear message.
+
+F) Global audit for duplicates:
+- Search codebase for “Session Length”, “Session Duration”, “days/week”, “training days”, “About You”, “weight”, “target weight”, etc.
+- Identify any duplicated fields or DB columns collecting the same concept.
+- Replace duplicates with the canonical field names above.
+- Ensure DB tables do not store both sessionLength and sessionDuration; keep one canonical.
+- Where needed, add migrations safely.
+
+G) Snapshot strategy:
+- For every generated plan (wellness, meal-only, workout-only), store a profileSnapshot (merged profile defaults + overrides used).
+- The profileSnapshot must record canonical fields and unitPreference, so future viewing is consistent.
+
+H) UX:
+- Add short helper text under “Pace (optional)” everywhere it appears:
+  Gentle = easier adherence; Steady = balanced default; Aggressive = faster change, harder adherence.
+- Ensure “Using Your Profile” card appears on every relevant input screen (wellness overview, nutrition setup, training setup, standalone meal/workout if present).
+
+Deliverable:
+- Implement changes + migrations
+- Verify flows: profile required -> prefill works -> overrides work -> profile not mutated -> snapshot saved
+- Provide a short checklist of what you changed + where.

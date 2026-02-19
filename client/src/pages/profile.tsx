@@ -95,6 +95,11 @@ const APPETITE_OPTIONS = [
   { value: "high", label: "High" },
 ];
 
+const COMMON_FOODS_TO_AVOID = [
+  "Pork", "Shellfish", "Dairy", "Gluten", "Soy", "Eggs", "Nuts", "Red Meat",
+  "Fish", "Mushrooms", "Chicken", "Beans/Legumes", "Spicy Foods", "Garlic/Onion",
+];
+
 const SPICE_OPTIONS = [
   { value: "mild", label: "Mild" },
   { value: "medium", label: "Medium" },
@@ -210,6 +215,8 @@ export default function ProfilePage() {
       allergies: [],
       intolerances: [],
       religiousRestrictions: [],
+      foodsToAvoid: [],
+      foodsToAvoidNotes: null,
       appetiteLevel: null,
       spicePreference: null,
     },
@@ -252,6 +259,8 @@ export default function ProfilePage() {
         allergies: (profile.allergies as string[]) || [],
         intolerances: (profile.intolerances as string[]) || [],
         religiousRestrictions: (profile.religiousRestrictions as string[]) || [],
+        foodsToAvoid: (profile.foodsToAvoid as string[]) || [],
+        foodsToAvoidNotes: profile.foodsToAvoidNotes || null,
         appetiteLevel: (profile.appetiteLevel as "low" | "normal" | "high") || null,
         spicePreference: (profile.spicePreference as "mild" | "medium" | "spicy") || null,
       });
@@ -829,6 +838,46 @@ export default function ProfilePage() {
                     onChange={(v) => form.setValue("religiousRestrictions", v)}
                     placeholder="e.g. halal, kosher"
                     testIdPrefix="restrictions"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">Foods to Avoid</Label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {COMMON_FOODS_TO_AVOID.map((food) => {
+                      const selected = ((form.watch("foodsToAvoid") as string[]) || []).includes(food);
+                      return (
+                        <Badge
+                          key={food}
+                          variant={selected ? "default" : "outline"}
+                          className="cursor-pointer select-none"
+                          onClick={() => {
+                            const current = (form.getValues("foodsToAvoid") as string[]) || [];
+                            form.setValue("foodsToAvoid", selected ? current.filter(f => f !== food) : [...current, food]);
+                          }}
+                          data-testid={`chip-avoid-${food.toLowerCase().replace(/[^a-z]/g, "-")}`}
+                        >
+                          {food}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                  <TagInput
+                    value={((form.watch("foodsToAvoid") as string[]) || []).filter(f => !COMMON_FOODS_TO_AVOID.includes(f))}
+                    onChange={(custom) => {
+                      const common = ((form.getValues("foodsToAvoid") as string[]) || []).filter(f => COMMON_FOODS_TO_AVOID.includes(f));
+                      form.setValue("foodsToAvoid", [...common, ...custom]);
+                    }}
+                    placeholder="Add other foods to avoid..."
+                    testIdPrefix="foods-avoid"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">Foods to Avoid Notes (optional)</Label>
+                  <Input
+                    placeholder="e.g. allergic to tree nuts but not peanuts"
+                    value={form.watch("foodsToAvoidNotes") || ""}
+                    onChange={(e) => form.setValue("foodsToAvoidNotes", e.target.value || null)}
+                    data-testid="input-foods-avoid-notes"
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

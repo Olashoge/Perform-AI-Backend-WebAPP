@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
@@ -78,6 +78,16 @@ export default function NewWorkout() {
     enabled: !!user,
   });
 
+  const prefillDone = useRef(false);
+
+  const mapProfileGoalToWorkoutGoal = (g: string): "weight_loss" | "muscle_gain" | "performance" | "maintenance" => {
+    if (["weight_loss", "muscle_gain", "performance", "maintenance"].includes(g)) return g as any;
+    if (g === "general_fitness" || g === "energy" || g === "mobility") return "maintenance";
+    if (g === "endurance") return "performance";
+    if (g === "strength") return "muscle_gain";
+    return "maintenance";
+  };
+
   const form = useForm<WorkoutPreferences>({
     resolver: zodResolver(workoutPreferencesSchema),
     defaultValues: {
@@ -91,6 +101,34 @@ export default function NewWorkout() {
       limitations: "",
     },
   });
+
+  useEffect(() => {
+    if (!profile || prefillDone.current) return;
+    prefillDone.current = true;
+    if (!goalFromUrl) {
+      form.setValue("goal", mapProfileGoalToWorkoutGoal(profile.primaryGoal));
+    }
+    form.setValue("experienceLevel", profile.trainingExperience as "beginner" | "intermediate" | "advanced");
+    const profileDays = (profile.trainingDaysOfWeek as string[]) || [];
+    if (profileDays.length > 0) {
+      const mapped = profileDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)) as ("Sun" | "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat")[];
+      form.setValue("daysOfWeek", mapped);
+    }
+    if (profile.sessionDurationMinutes) {
+      const validLengths = [20, 30, 45, 60] as const;
+      const closest = validLengths.reduce((prev, curr) =>
+        Math.abs(curr - profile.sessionDurationMinutes!) < Math.abs(prev - profile.sessionDurationMinutes!) ? curr : prev
+      );
+      form.setValue("sessionLength", closest);
+    }
+    const injuries = (profile.injuries as string[]) || [];
+    const mobility = (profile.mobilityLimitations as string[]) || [];
+    const chronic = (profile.chronicConditions as string[]) || [];
+    const allLimitations = [...injuries, ...mobility, ...chronic].filter(Boolean);
+    if (allLimitations.length > 0) {
+      form.setValue("limitations", allLimitations.join(", "));
+    }
+  }, [profile, goalFromUrl, form]);
 
   async function onSubmit(data: WorkoutPreferences) {
     if (!user || isPending || submittedRef.current) return;
@@ -215,6 +253,18 @@ export default function NewWorkout() {
                       <div className="col-span-2 sm:col-span-3">
                         <span className="text-muted-foreground">Injuries:</span>{" "}
                         <span className="font-medium">{(profile.injuries as string[]).join(", ")}</span>
+                      </div>
+                    )}
+                    {((profile.mobilityLimitations as string[]) || []).length > 0 && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Mobility:</span>{" "}
+                        <span className="font-medium">{(profile.mobilityLimitations as string[]).join(", ")}</span>
+                      </div>
+                    )}
+                    {((profile.chronicConditions as string[]) || []).length > 0 && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Conditions:</span>{" "}
+                        <span className="font-medium">{(profile.chronicConditions as string[]).join(", ")}</span>
                       </div>
                     )}
                   </div>
