@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -91,13 +91,13 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
   });
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh]" data-testid="sheet-plan-this-day">
-        <SheetHeader className="pb-2">
-          <SheetTitle className="text-lg font-bold" data-testid="text-plan-day-title">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md rounded-2xl" data-testid="sheet-plan-this-day">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="text-lg font-bold" data-testid="text-plan-day-title">
             Plan {dateLabel}
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+        </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="rounded-xl border p-4" data-testid="section-daily-meal">
@@ -205,7 +205,7 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
             )}
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
