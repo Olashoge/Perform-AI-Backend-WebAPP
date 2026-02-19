@@ -1936,6 +1936,108 @@ export async function registerRoutes(
     }
   });
 
+  // ── Daily Plan Regeneration ──
+  app.post("/api/daily-meal/:date/regenerate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const { date } = req.params;
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const existing = await storage.getDailyMealByDate(userId, date);
+      if (!existing) return res.status(404).json({ message: "No daily meal found for this date" });
+
+      const mealsPerDay = existing.mealsPerDay || 3;
+      await storage.updateDailyMealStatus(existing.id, "generating");
+      res.json({ id: existing.id, status: "generating" });
+
+      (async () => {
+        try {
+          const prefCtx = await storage.getUserPreferenceContext(userId);
+          const prof = profile as any;
+          const result = await generateSingleDayMeals({
+            date,
+            mealsPerDay: mealsPerDay as 2 | 3,
+            goal: profile.primaryGoal || "maintenance",
+            dietStyles: [],
+            foodsToAvoid: (profile.foodsToAvoid as string[]) || [],
+            allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
+            spiceLevel: profile.spicePreference || "medium",
+            age: profile.age || undefined,
+            currentWeight: prof.weight ? Number(prof.weight) : (profile.weightKg ? Number(profile.weightKg) : undefined),
+            targetWeight: prof.targetWeight ? Number(prof.targetWeight) : (profile.targetWeightKg ? Number(profile.targetWeightKg) : undefined),
+            weightUnit: prof.weightUnit || "lb",
+          }, prefCtx);
+
+          const groceryItems: any[] = [];
+          for (const [, meal] of Object.entries(result.meals)) {
+            if (meal.ingredients) {
+              for (const ing of meal.ingredients) {
+                groceryItems.push({ item: ing, quantity: ing });
+              }
+            }
+          }
+
+          await storage.updateDailyMealStatus(existing.id, "ready", result, { sections: [{ name: "Ingredients", items: groceryItems }] }, result.title);
+          log(`Daily meal regenerated for ${date} (user ${userId})`, "openai");
+        } catch (err) {
+          log(`Daily meal regeneration failed for ${date}: ${err instanceof Error ? err.message : String(err)}`, "openai");
+          await storage.updateDailyMealStatus(existing.id, "failed");
+        }
+      })();
+    } catch (err) {
+      log(`Daily meal regeneration error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to regenerate daily meal" });
+    }
+  });
+
+  app.post("/api/daily-workout/:date/regenerate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const { date } = req.params;
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const existing = await storage.getDailyWorkoutByDate(userId, date);
+      if (!existing) return res.status(404).json({ message: "No daily workout found for this date" });
+
+      await storage.updateDailyWorkoutStatus(existing.id, "generating");
+      res.json({ id: existing.id, status: "generating" });
+
+      (async () => {
+        try {
+          const exercisePrefs = await storage.getExercisePreferences(userId);
+          const exerciseContext = {
+            avoidedExercises: exercisePrefs.filter((p: any) => p.status === "avoided" || p.preference === "avoid").map((p: any) => p.exerciseName),
+            dislikedExercises: exercisePrefs.filter((p: any) => p.status === "disliked" || p.preference === "dislike").map((p: any) => p.exerciseName),
+          };
+
+          const result = await generateSingleDayWorkout({
+            date,
+            goal: profile.primaryGoal || "maintenance",
+            location: "gym",
+            trainingMode: "both",
+            focusAreas: ["full_body"],
+            sessionLength: (profile as any).sessionDuration || 45,
+            experienceLevel: profile.trainingExperience || "intermediate",
+            healthConstraints: (profile.healthConstraints as string[]) || [],
+          }, exerciseContext);
+
+          const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+          const title = `Daily Workout — ${dateLabel}`;
+          await storage.updateDailyWorkoutStatus(existing.id, "ready", result, title);
+          log(`Daily workout regenerated for ${date} (user ${userId})`, "openai");
+        } catch (err) {
+          log(`Daily workout regeneration failed for ${date}: ${err instanceof Error ? err.message : String(err)}`, "openai");
+          await storage.updateDailyWorkoutStatus(existing.id, "failed");
+        }
+      })();
+    } catch (err) {
+      log(`Daily workout regeneration error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to regenerate daily workout" });
+    }
+  });
+
   // ── Daily Coverage Check ──
   app.get("/api/daily-coverage", requireAuth, async (req: Request, res: Response) => {
     try {
