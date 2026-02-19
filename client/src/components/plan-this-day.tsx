@@ -39,7 +39,10 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
     },
     onSuccess: (data) => {
       toast({ title: "Generating meals", description: `Your daily meal plan for ${dateLabel} is being created.` });
-      queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith("/api/daily-coverage") || q.queryKey[0] === "/api/daily-coverage" });
+      queryClient.invalidateQueries({ predicate: (q) => {
+        const key = q.queryKey[0] as string;
+        return key?.startsWith("/api/daily-coverage") || key?.startsWith("/api/daily-meals");
+      }});
       queryClient.invalidateQueries({ queryKey: ["/api/daily-meal", dateStr] });
       onOpenChange(false);
       navigate(`/daily-meal/${dateStr}`);
@@ -69,7 +72,10 @@ export function PlanThisDay({ open, onOpenChange, date, hasMeal, hasWorkout }: P
     },
     onSuccess: (data) => {
       toast({ title: "Generating workout", description: `Your daily workout for ${dateLabel} is being created.` });
-      queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith("/api/daily-coverage") || q.queryKey[0] === "/api/daily-coverage" });
+      queryClient.invalidateQueries({ predicate: (q) => {
+        const key = q.queryKey[0] as string;
+        return key?.startsWith("/api/daily-coverage") || key?.startsWith("/api/daily-workouts");
+      }});
       queryClient.invalidateQueries({ queryKey: ["/api/daily-workout", dateStr] });
       onOpenChange(false);
       navigate(`/daily-workout/${dateStr}`);

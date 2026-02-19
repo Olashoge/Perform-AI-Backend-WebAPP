@@ -121,6 +121,26 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  const { data: dailyMealsRange } = useQuery<any[]>({
+    queryKey: ["/api/daily-meals", weekStartStr, weekEndStr],
+    queryFn: async () => {
+      const res = await fetch(`/api/daily-meals?start=${weekStartStr}&end=${weekEndStr}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const { data: dailyWorkoutsRange } = useQuery<any[]>({
+    queryKey: ["/api/daily-workouts", weekStartStr, weekEndStr],
+    queryFn: async () => {
+      const res = await fetch(`/api/daily-workouts?start=${weekStartStr}&end=${weekEndStr}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const stats = useMemo(() => {
@@ -144,16 +164,28 @@ export default function Dashboard() {
     return workoutCalendarData.days.find(d => d.date === selectedDateStr && d.isWorkoutDay);
   }, [workoutCalendarData, selectedDateStr]);
 
+  const selectedDailyMeal = useMemo(() => {
+    if (!dailyMealsRange) return null;
+    return dailyMealsRange.find(m => m.date === selectedDateStr && m.status === "ready") || null;
+  }, [dailyMealsRange, selectedDateStr]);
+
+  const selectedDailyWorkout = useMemo(() => {
+    if (!dailyWorkoutsRange) return null;
+    return dailyWorkoutsRange.find(w => w.date === selectedDateStr && w.status === "ready") || null;
+  }, [dailyWorkoutsRange, selectedDateStr]);
+
   function hasMealsOnDate(date: Date): boolean {
-    if (!calendarData?.days) return false;
     const ds = format(date, "yyyy-MM-dd");
-    return calendarData.days.some(d => d.date === ds && Object.keys(d.meals).length > 0);
+    const fromPlan = calendarData?.days?.some(d => d.date === ds && Object.keys(d.meals).length > 0) ?? false;
+    const fromDaily = dailyCoverage?.[ds]?.meal ?? false;
+    return fromPlan || fromDaily;
   }
 
   function hasWorkoutOnDate(date: Date): boolean {
-    if (!workoutCalendarData?.days) return false;
     const ds = format(date, "yyyy-MM-dd");
-    return workoutCalendarData.days.some(d => d.date === ds && d.isWorkoutDay);
+    const fromPlan = workoutCalendarData?.days?.some(d => d.date === ds && d.isWorkoutDay) ?? false;
+    const fromDaily = dailyCoverage?.[ds]?.workout ?? false;
+    return fromPlan || fromDaily;
   }
 
   if (isLoading || !user) {
@@ -423,7 +455,85 @@ export default function Dashboard() {
             </Card>
           )}
 
-          {(!dayMeals || Object.keys(dayMeals?.meals || {}).length === 0) && !dayWorkout && (
+          {selectedDailyMeal && selectedDailyMeal.planJson && (
+            <Card className="mb-4 hover-elevate cursor-pointer" onClick={() => navigate(`/daily-meal/${selectedDateStr}`)} data-testid="card-daily-meal">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold">{selectedDailyMeal.generatedTitle || "Daily Meals"}</div>
+                    <div className="text-xs text-muted-foreground">Daily plan · Tap to view details</div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </div>
+                <div className="space-y-4">
+                  {["breakfast", "lunch", "dinner"].map(slot => {
+                    const meal = selectedDailyMeal.planJson?.meals?.[slot];
+                    if (!meal) return null;
+                    return (
+                      <div key={slot} className="border-t pt-4 first:border-t-0 first:pt-0" data-testid={`daily-meal-slot-${slot}`}>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1 capitalize">{slot}</div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="font-semibold text-sm">{meal.name}</div>
+                            {meal.ingredients && meal.ingredients.length > 0 && (
+                              <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                {meal.ingredients.slice(0, 4).join(", ")}{meal.ingredients.length > 4 ? ` +${meal.ingredients.length - 4} more` : ""}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                            {meal.calories && <span className="text-amber-600 dark:text-amber-400">{meal.calories}</span>}
+                            {meal.macros?.protein && <span>P: {meal.macros.protein}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedDailyWorkout && selectedDailyWorkout.planJson && (
+            <Card className="mb-4 hover-elevate cursor-pointer" onClick={() => navigate(`/daily-workout/${selectedDateStr}`)} data-testid="card-daily-workout">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+                    <Dumbbell className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold">{selectedDailyWorkout.generatedTitle || "Daily Workout"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Daily plan{selectedDailyWorkout.planJson.focus ? ` · ${selectedDailyWorkout.planJson.focus}` : ""}{selectedDailyWorkout.planJson.durationMinutes ? ` · ${selectedDailyWorkout.planJson.durationMinutes} min` : ""}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </div>
+                <div className="space-y-3">
+                  {selectedDailyWorkout.planJson.main?.slice(0, 5).map((ex: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between py-2 border-t first:border-t-0 first:pt-0">
+                      <div>
+                        <div className="text-sm font-medium">{ex.name}</div>
+                        {ex.notes && <div className="text-xs text-muted-foreground">{ex.notes}</div>}
+                      </div>
+                      <div className="text-right text-xs text-muted-foreground">
+                        {ex.sets && ex.reps && <div>{ex.sets} × {ex.reps}</div>}
+                        {ex.time && !ex.sets && <div>{ex.time}</div>}
+                      </div>
+                    </div>
+                  ))}
+                  {selectedDailyWorkout.planJson.main?.length > 5 && (
+                    <div className="text-xs text-muted-foreground text-center pt-1">+{selectedDailyWorkout.planJson.main.length - 5} more exercises</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {(!dayMeals || Object.keys(dayMeals?.meals || {}).length === 0) && !dayWorkout && !selectedDailyMeal && !selectedDailyWorkout && (
             <Card className="mb-4">
               <CardContent className="p-8 text-center">
                 <p className="text-sm text-muted-foreground mb-3">No meals or workouts scheduled for this day</p>
@@ -440,7 +550,7 @@ export default function Dashboard() {
             </Card>
           )}
 
-          {(dayMeals && Object.keys(dayMeals?.meals || {}).length > 0 || dayWorkout) && (
+          {(dayMeals && Object.keys(dayMeals?.meals || {}).length > 0 || dayWorkout || selectedDailyMeal || selectedDailyWorkout) && (
             <div className="mb-4">
               <Button
                 variant="ghost"
