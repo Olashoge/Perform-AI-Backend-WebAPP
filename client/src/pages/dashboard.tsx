@@ -2,16 +2,17 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import type { MealPlan, WorkoutPlan, GoalPlan, PlanOutput, WorkoutPlanOutput, Meal, WorkoutSession } from "@shared/schema";
+import type { MealPlan, WorkoutPlan, GoalPlan, PlanOutput, WorkoutPlanOutput, Meal, WorkoutSession, WeeklyCheckIn } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   CalendarDays, ChevronLeft, ChevronRight,
   Dumbbell, UtensilsCrossed, Target, Flame, Trophy, Heart, Zap,
-  Sparkles, ClipboardCheck, ArrowRight,
+  Sparkles, ClipboardCheck, ArrowRight, Plus,
 } from "lucide-react";
 import { format, startOfWeek, addDays, isWithinInterval, isSameDay } from "date-fns";
+import { PlanThisDay } from "@/components/plan-this-day";
 
 const GOAL_LABELS: Record<string, string> = {
   weight_loss: "Weight Loss",
@@ -58,6 +59,7 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const { data: mealPlans } = useQuery<MealPlan[]>({
     queryKey: ["/api/plans"],
@@ -105,6 +107,19 @@ export default function Dashboard() {
   const baseWeekStart = startOfWeek(now, { weekStartsOn });
   const weekStart = addDays(baseWeekStart, weekOffset * 7);
   const weekEnd = addDays(weekStart, 6);
+
+  const weekStartStr = format(weekStart, "yyyy-MM-dd");
+  const weekEndStr = format(weekEnd, "yyyy-MM-dd");
+
+  const { data: dailyCoverage } = useQuery<Record<string, { meal: boolean; workout: boolean }>>({
+    queryKey: ["/api/daily-coverage", weekStartStr, weekEndStr],
+    queryFn: async () => {
+      const res = await fetch(`/api/daily-coverage?start=${weekStartStr}&end=${weekEndStr}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!user,
+  });
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -411,9 +426,33 @@ export default function Dashboard() {
           {(!dayMeals || Object.keys(dayMeals?.meals || {}).length === 0) && !dayWorkout && (
             <Card className="mb-4">
               <CardContent className="p-8 text-center">
-                <p className="text-sm text-muted-foreground">No meals or workouts scheduled for this day</p>
+                <p className="text-sm text-muted-foreground mb-3">No meals or workouts scheduled for this day</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSheetOpen(true)}
+                  data-testid="button-plan-this-day-empty"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Plan this day
+                </Button>
               </CardContent>
             </Card>
+          )}
+
+          {(dayMeals && Object.keys(dayMeals?.meals || {}).length > 0 || dayWorkout) && (
+            <div className="mb-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSheetOpen(true)}
+                className="text-xs"
+                data-testid="button-plan-this-day"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Plan this day
+              </Button>
+            </div>
           )}
         </div>
 
@@ -489,6 +528,14 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <PlanThisDay
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        date={selectedDate}
+        hasMeal={dailyCoverage?.[selectedDateStr]?.meal}
+        hasWorkout={dailyCoverage?.[selectedDateStr]?.workout}
+      />
     </div>
   );
 }

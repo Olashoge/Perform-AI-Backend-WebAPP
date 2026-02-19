@@ -29,6 +29,8 @@ import Dashboard from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
 import ExercisePreferencesPage from "@/pages/exercise-preferences";
 import ProfilePage from "@/pages/profile";
+import DailyMealView from "@/pages/daily-meal-view";
+import DailyWorkoutView from "@/pages/daily-workout-view";
 import NotFound from "@/pages/not-found";
 
 function AuthenticatedRouter() {
@@ -52,6 +54,8 @@ function AuthenticatedRouter() {
       <Route path="/goals/:id/generating" component={GoalGenerating} />
       <Route path="/goals/:id/ready" component={GoalReady} />
       <Route path="/check-ins" component={CheckIns} />
+      <Route path="/daily-meal/:date" component={DailyMealView} />
+      <Route path="/daily-workout/:date" component={DailyWorkoutView} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />

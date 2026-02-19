@@ -1,6 +1,6 @@
-import { eq, desc, and, gte, isNull, lt } from "drizzle-orm";
+import { eq, desc, and, gte, isNull, lt, lte } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -89,6 +89,14 @@ export interface IStorage {
   getLatestPerformanceSummary(userId: string): Promise<PerformanceSummary | undefined>;
   getRecentPerformanceSummaries(userId: string, limit?: number): Promise<PerformanceSummary[]>;
   getPerformanceSummariesByRange(userId: string, from: string, to: string): Promise<PerformanceSummary[]>;
+  createDailyMeal(userId: string, date: string, mealsPerDay: number, profileSnapshot: any): Promise<DailyMeal>;
+  getDailyMealByDate(userId: string, date: string): Promise<DailyMeal | undefined>;
+  getDailyMealsByDateRange(userId: string, startDate: string, endDate: string): Promise<DailyMeal[]>;
+  updateDailyMealStatus(id: string, status: string, planJson?: any, groceryJson?: any, title?: string): Promise<DailyMeal | undefined>;
+  createDailyWorkout(userId: string, date: string, profileSnapshot: any): Promise<DailyWorkout>;
+  getDailyWorkoutByDate(userId: string, date: string): Promise<DailyWorkout | undefined>;
+  getDailyWorkoutsByDateRange(userId: string, startDate: string, endDate: string): Promise<DailyWorkout[]>;
+  updateDailyWorkoutStatus(id: string, status: string, planJson?: any, title?: string): Promise<DailyWorkout | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -960,6 +968,76 @@ export class DatabaseStorage implements IStorage {
         lt(performanceSummaries.weekStartDate, to),
       ))
       .orderBy(desc(performanceSummaries.weekStartDate));
+  }
+
+  async createDailyMeal(userId: string, date: string, mealsPerDay: number, profileSnapshot: any): Promise<DailyMeal> {
+    const [meal] = await db.insert(dailyMeals).values({
+      userId,
+      date,
+      mealsPerDay,
+      profileSnapshot,
+      status: "generating",
+    }).returning();
+    return meal;
+  }
+
+  async getDailyMealByDate(userId: string, date: string): Promise<DailyMeal | undefined> {
+    const [meal] = await db.select().from(dailyMeals)
+      .where(and(eq(dailyMeals.userId, userId), eq(dailyMeals.date, date)))
+      .limit(1);
+    return meal;
+  }
+
+  async getDailyMealsByDateRange(userId: string, startDate: string, endDate: string): Promise<DailyMeal[]> {
+    return db.select().from(dailyMeals)
+      .where(and(
+        eq(dailyMeals.userId, userId),
+        gte(dailyMeals.date, startDate),
+        lte(dailyMeals.date, endDate),
+      ));
+  }
+
+  async updateDailyMealStatus(id: string, status: string, planJson?: any, groceryJson?: any, title?: string): Promise<DailyMeal | undefined> {
+    const updates: any = { status, updatedAt: new Date() };
+    if (planJson !== undefined) updates.planJson = planJson;
+    if (groceryJson !== undefined) updates.groceryJson = groceryJson;
+    if (title !== undefined) updates.generatedTitle = title;
+    const [meal] = await db.update(dailyMeals).set(updates).where(eq(dailyMeals.id, id)).returning();
+    return meal;
+  }
+
+  async createDailyWorkout(userId: string, date: string, profileSnapshot: any): Promise<DailyWorkout> {
+    const [workout] = await db.insert(dailyWorkouts).values({
+      userId,
+      date,
+      profileSnapshot,
+      status: "generating",
+    }).returning();
+    return workout;
+  }
+
+  async getDailyWorkoutByDate(userId: string, date: string): Promise<DailyWorkout | undefined> {
+    const [workout] = await db.select().from(dailyWorkouts)
+      .where(and(eq(dailyWorkouts.userId, userId), eq(dailyWorkouts.date, date)))
+      .limit(1);
+    return workout;
+  }
+
+  async getDailyWorkoutsByDateRange(userId: string, startDate: string, endDate: string): Promise<DailyWorkout[]> {
+    return db.select().from(dailyWorkouts)
+      .where(and(
+        eq(dailyWorkouts.userId, userId),
+        gte(dailyWorkouts.date, startDate),
+        lte(dailyWorkouts.date, endDate),
+      ));
+  }
+
+  async updateDailyWorkoutStatus(id: string, status: string, planJson?: any, title?: string): Promise<DailyWorkout | undefined> {
+    const updates: any = { status, updatedAt: new Date() };
+    if (planJson !== undefined) updates.planJson = planJson;
+    if (title !== undefined) updates.generatedTitle = title;
+    const [workout] = await db.update(dailyWorkouts).set(updates).where(eq(dailyWorkouts.id, id)).returning();
+    return workout;
   }
 }
 

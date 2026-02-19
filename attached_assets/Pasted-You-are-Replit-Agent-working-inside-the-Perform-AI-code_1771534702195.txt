@@ -1,0 +1,201 @@
+You are Replit Agent working inside the Perform AI codebase. Implement “Daily Meal” and “Daily Workout” (single-day items) and add a smart “Plan this day” action menu when a user clicks an empty date on Dashboard or Calendar.
+
+GOALS
+1) Add two new 1-day content types:
+   - Daily Meal (for a single calendar date; user can choose 2 or 3 meals)
+   - Daily Workout (for a single calendar date)
+2) Rewire the existing Dashboard buttons (“New Meal”, “New Workout”) to create Daily Meal / Daily Workout for a selected date (default to “today” if no date picker exists).
+3) When the user clicks any date on Dashboard week strip or Calendar day cell, show a bottom sheet/modal: “Plan this day”.
+   - It must show only relevant actions based on what is already scheduled for that date.
+   - It must optionally show “Start a 7-day plan” actions if and only if the next 7 consecutive days are completely empty of ALL meal/workout coverage.
+4) Respect our “profile required” rule: users must have a completed profile before generating anything (daily or plans). If not, redirect to Profile and show a friendly message.
+
+KEY BUSINESS RULES
+A) Day Coverage (Meal/Workout) for a given date D:
+   A day counts as having MEAL coverage if ANY of these exist covering D:
+     - Wellness plan day items that include meals
+     - Meal plan day items
+     - Daily Meal for D
+   A day counts as having WORKOUT coverage if ANY of these exist covering D:
+     - Wellness plan day items that include workouts
+     - Workout plan day items
+     - Daily Workout for D
+
+B) Date click menu logic for date D:
+   1) Compute coverage on D: hasMealCoverage(D), hasWorkoutCoverage(D).
+   2) Show “For this day” actions ONLY for missing items:
+       - If !hasMealCoverage(D) => show “Add Daily Meal”
+       - If !hasWorkoutCoverage(D) => show “Add Daily Workout”
+   3) Compute 7-day window emptiness for [D..D+6]:
+       - The window is “completely free” ONLY if for every day in the window:
+           no meal coverage AND no workout coverage
+       - If window is completely free:
+           show a second section “Or build a 7-day structure” with:
+             - Create Wellness Plan (7-day)
+             - Create Meal Plan (7-day)
+             - Create Workout Plan (7-day)
+       - If window is NOT completely free:
+           DO NOT show plan creation options in this date-click menu.
+           Only show Daily Meal/Workout actions (as in step 2).
+
+C) If the user clicks a date that is already fully covered (meal+workout), the menu should either:
+   - show “View Day” / “Go to day details” (optional), OR
+   - show nothing but close (choose the simplest).
+   Do NOT offer redundant “Add Daily Meal/Workout” unless we decide to allow extra sessions. For now, treat “covered = no add”.
+
+UX REQUIREMENTS
+- Use the naming exactly:
+  - “Daily Meal”
+  - “Daily Workout”
+- The date click UI should be a clean bottom sheet/modal titled: “Plan this day”.
+- Sections:
+  1) “For this day”
+  2) “Or build a 7-day structure” (only if eligible)
+- From the Dashboard:
+  - “New Meal” button should open Daily Meal for selected date (default today).
+  - “New Workout” button should open Daily Workout for selected date (default today).
+- After creating a Daily Meal/Workout, the day should show those items in the daily schedule list (the same area where meals/workouts appear).
+
+DATA MODEL / DB
+Implement database tables for these daily items. Use Prisma.
+
+Create tables similar in quality to existing plan tables (include createdAt/updatedAt, userId, date, title, content json, and profileSnapshot used for generation).
+
+1) daily_meals
+   - id (uuid)
+   - userId (fk)
+   - date (date-only, normalized; store as YYYY-MM-DD in UTC or store Date but always normalize to day)
+   - mealsPerDay (int: 2 or 3)
+   - generatedTitle (string) e.g. “Daily Meal — Feb 23”
+   - planJson (json) containing meals and macros for that day
+   - groceryJson (json, optional)
+   - profileSnapshot (json) of merged profile + overrides used at generation time
+   - createdAt, updatedAt
+
+2) daily_workouts
+   - id (uuid)
+   - userId (fk)
+   - date (date-only)
+   - generatedTitle (string) e.g. “Daily Workout — Feb 23”
+   - planJson (json) containing exercises for that day
+   - profileSnapshot (json)
+   - createdAt, updatedAt
+
+Uniqueness:
+- Enforce at most 1 Daily Meal per user per date.
+- Enforce at most 1 Daily Workout per user per date.
+
+BACKEND / API
+Add API routes and server actions consistent with the existing architecture.
+
+Endpoints/actions needed:
+- GET coverage for date D (or compute server-side when opening menu):
+    returns { hasMeal, hasWorkout, sources: { dailyMeal, dailyWorkout, planMeal, planWorkout } }
+- GET 7-day window emptiness starting D:
+    returns boolean
+- POST create Daily Meal:
+    Input: date, mealsPerDay (2|3), optional overrides (keep minimal)
+    Behavior:
+      - require profile exists and passes constraint checks (age safety etc.)
+      - merge profile + overrides into snapshot
+      - generate daily meal via AI using our existing prompt pattern + constraint engine
+      - save daily_meals row
+- POST create Daily Workout:
+    Input: date, optional overrides
+    Behavior:
+      - require profile exists and passes safety checks
+      - merge into snapshot
+      - generate daily workout via AI
+      - save daily_workouts row
+
+CRITICAL SAFETY / INTELLIGENCE REQUIREMENTS
+- Reuse the same constraint engine checks we use for plan generation:
+  - Age validations must run here too (we already had a case: 1-year old got adult workout).
+  - Enforce age-appropriate training. If under minimum allowed age for structured workouts, block with a friendly message and guidance.
+- Must use profile snapshot logic:
+  - Always generate from profile defaults.
+  - Overrides are allowed per request but do NOT modify the profile.
+  - Store the merged result as profileSnapshot on the daily record.
+
+AI PROMPTS
+- Create two AI prompts:
+  1) Daily Meal prompt:
+     - Takes goal context, cuisine preferences if any, foods to avoid, allergies/intolerances, budget/time, spice level, etc.
+     - Must output exactly 1 day of meals (2 or 3) with ingredients and macro estimates.
+  2) Daily Workout prompt:
+     - Takes goal, training experience, injuries/limitations/chronic conditions, available equipment/location, session duration, focus areas.
+     - Must output exactly 1 workout session for that day (or “rest day” if rules require it).
+- Keep outputs structured in JSON to match existing frontend rendering.
+
+FRONTEND
+1) Add “Daily Meal” and “Daily Workout” creation flows:
+   - If you already have Meal Plan / Workout Plan pages, add a mode or new pages:
+     - /daily-meal/new?date=YYYY-MM-DD
+     - /daily-workout/new?date=YYYY-MM-DD
+   - Prefill date; show “Using Your Profile” summary card with Edit link (same pattern used elsewhere).
+   - For Daily Meal:
+       - mealsPerDay selector: 2 meals or 3 meals (full day)
+   - For Daily Workout:
+       - no complex form needed initially; just confirm date and show profile summary + “Generate”
+2) Date click menu:
+   - On Dashboard week-strip date click and Calendar date click:
+       - open “Plan this day” bottom sheet
+       - call backend to compute coverage for that date and 7-day emptiness
+       - render actions based on business rules
+       - route actions accordingly
+3) Dashboard buttons:
+   - Replace current “New Meal” and “New Workout” behaviors:
+       - open daily creation for today (or selected date if you have a selected day state)
+4) Scheduling display:
+   - When a Daily Meal exists for date D, show it in the day schedule list under Nutrition.
+   - When a Daily Workout exists for date D, show it in the day schedule list under Workout.
+   - Ensure day view shows the right content when tapped.
+
+INTEGRATION WITH EXISTING PLANS
+- Coverage calculation must consider:
+  - Daily items
+  - Meal plan items
+  - Workout plan items
+  - Wellness plan items
+If there is any coverage from plans, daily add options should not appear for that type on that day.
+
+TESTING CHECKLIST (must do)
+- User without profile:
+  - clicking New Meal/New Workout -> redirected to Profile
+  - clicking a date -> menu opens but any “Add” action redirects to Profile
+- User with profile:
+  - clicking empty day shows Add Daily Meal and Add Daily Workout
+  - after creating Daily Meal, same day menu no longer offers Add Daily Meal
+  - after creating Daily Workout, same day menu no longer offers Add Daily Workout
+- 7-day emptiness:
+  - If next 7 days are all empty => menu shows plan creation options
+  - If any day in next 7 days has any meal or workout coverage => plan creation options are hidden
+- Uniqueness:
+  - attempt to create a second Daily Meal on same date => prevent and show message
+- Age safety:
+  - set profile age to 1 => generation blocked with safe message (both daily and plans)
+
+IMPLEMENTATION ORDER
+1) Prisma schema + migration for daily tables + constraints.
+2) Server-side utilities:
+   - normalizeDateToDayKey()
+   - getDayCoverage(userId, date)
+   - isSevenDayWindowEmpty(userId, date)
+3) API routes/actions for create + coverage.
+4) Frontend pages for daily creation.
+5) Dashboard + Calendar integration and “Plan this day” bottom sheet.
+6) Update schedule display to include daily items.
+7) Final tests and bug fixes.
+
+IMPORTANT STYLE / ARCHITECTURE
+- Keep naming consistent: “Daily Meal” / “Daily Workout”.
+- Reuse existing “Using Your Profile” card component if available.
+- Keep date normalization consistent across the app.
+- Do not break existing plan flows.
+
+DELIVERABLE
+Commit all changes. When done, provide:
+- list of files changed
+- brief summary of new routes/components
+- how to test locally
+- any edge cases you handled

@@ -628,3 +628,61 @@ export const performanceSummaries = pgTable("performance_summaries", {
 ]);
 
 export type PerformanceSummary = typeof performanceSummaries.$inferSelect;
+
+export const dailyMeals = pgTable("daily_meals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  date: varchar("date", { length: 10 }).notNull(),
+  mealsPerDay: integer("meals_per_day").notNull().default(3),
+  generatedTitle: text("generated_title"),
+  planJson: jsonb("plan_json"),
+  groceryJson: jsonb("grocery_json"),
+  profileSnapshot: jsonb("profile_snapshot"),
+  status: varchar("status", { length: 20 }).notNull().default("ready"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("daily_meals_user_date_idx").on(table.userId, table.date),
+]);
+
+export const dailyWorkouts = pgTable("daily_workouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  date: varchar("date", { length: 10 }).notNull(),
+  generatedTitle: text("generated_title"),
+  planJson: jsonb("plan_json"),
+  profileSnapshot: jsonb("profile_snapshot"),
+  status: varchar("status", { length: 20 }).notNull().default("ready"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("daily_workouts_user_date_idx").on(table.userId, table.date),
+]);
+
+export const insertDailyMealSchema = createInsertSchema(dailyMeals).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDailyWorkoutSchema = createInsertSchema(dailyWorkouts).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const dailyMealCreateSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  mealsPerDay: z.union([z.literal(2), z.literal(3)]).default(3),
+});
+
+export const dailyWorkoutCreateSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+});
+
+export type DailyMeal = typeof dailyMeals.$inferSelect;
+export type DailyWorkout = typeof dailyWorkouts.$inferSelect;
+export type InsertDailyMeal = z.infer<typeof insertDailyMealSchema>;
+export type InsertDailyWorkout = z.infer<typeof insertDailyWorkoutSchema>;

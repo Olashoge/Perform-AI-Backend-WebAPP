@@ -4,7 +4,7 @@ import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
 import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
-import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan, generateWorkoutSession } from "./openai";
+import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan, generateWorkoutSession, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import { buildWellnessContext } from "./wellness-context";
@@ -1763,6 +1763,199 @@ export async function registerRoutes(
     } catch (err) {
       log(`Calendar workouts fetch error: ${err}`, "plan");
       return res.status(500).json({ message: "Failed to load workout calendar data" });
+    }
+  });
+
+  // ── Daily Meal Planning ──
+  app.post("/api/daily-meal", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) {
+        return res.status(400).json({ message: "Profile required", profileRequired: true });
+      }
+
+      const { date, mealsPerDay } = req.body;
+      if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ message: "Valid date (YYYY-MM-DD) is required" });
+      }
+      if (![2, 3].includes(Number(mealsPerDay))) {
+        return res.status(400).json({ message: "mealsPerDay must be 2 or 3" });
+      }
+
+      const existing = await storage.getDailyMealByDate(userId, date);
+      if (existing && existing.status !== "failed") {
+        return res.status(409).json({ message: "A daily meal already exists for this date", existing });
+      }
+
+      const profileSnapshot = { ...profile };
+      const record = await storage.createDailyMeal(userId, date, mealsPerDay, profileSnapshot);
+
+      res.json({ id: record.id, status: "generating" });
+
+      (async () => {
+        try {
+          const prefCtx = await storage.getUserPreferenceContext(userId);
+          const result = await generateSingleDayMeals({
+            date,
+            mealsPerDay: mealsPerDay as 2 | 3,
+            goal: profile.primaryGoal || "maintenance",
+            dietStyles: [],
+            foodsToAvoid: (profile.foodsToAvoid as string[]) || [],
+            allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
+            spiceLevel: profile.spicePreference || "medium",
+            age: profile.age || undefined,
+            currentWeight: profile.weight ? Number(profile.weight) : undefined,
+            targetWeight: profile.targetWeight ? Number(profile.targetWeight) : undefined,
+            weightUnit: profile.weightUnit || "lb",
+          }, prefCtx);
+
+          const groceryItems: any[] = [];
+          for (const [, meal] of Object.entries(result.meals)) {
+            if (meal.ingredients) {
+              for (const ing of meal.ingredients) {
+                groceryItems.push({ item: ing, quantity: ing });
+              }
+            }
+          }
+
+          await storage.updateDailyMealStatus(record.id, "ready", result, { sections: [{ name: "Ingredients", items: groceryItems }] }, result.title);
+          log(`Daily meal generated for ${date} (user ${userId})`, "openai");
+        } catch (err) {
+          log(`Daily meal generation failed for ${date}: ${err instanceof Error ? err.message : String(err)}`, "openai");
+          await storage.updateDailyMealStatus(record.id, "failed");
+        }
+      })();
+    } catch (err) {
+      log(`Daily meal creation error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to create daily meal" });
+    }
+  });
+
+  app.get("/api/daily-meal/:date", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const meal = await storage.getDailyMealByDate(userId, req.params.date);
+      if (!meal) return res.status(404).json({ message: "No daily meal for this date" });
+      return res.json(meal);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load daily meal" });
+    }
+  });
+
+  app.get("/api/daily-meals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const { start, end } = req.query;
+      if (!start || !end) return res.status(400).json({ message: "start and end query params required" });
+      const meals = await storage.getDailyMealsByDateRange(userId, start as string, end as string);
+      return res.json(meals);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load daily meals" });
+    }
+  });
+
+  // ── Daily Workout Planning ──
+  app.post("/api/daily-workout", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) {
+        return res.status(400).json({ message: "Profile required", profileRequired: true });
+      }
+
+      const { date } = req.body;
+      if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ message: "Valid date (YYYY-MM-DD) is required" });
+      }
+
+      const existing = await storage.getDailyWorkoutByDate(userId, date);
+      if (existing && existing.status !== "failed") {
+        return res.status(409).json({ message: "A daily workout already exists for this date", existing });
+      }
+
+      const profileSnapshot = { ...profile };
+      const record = await storage.createDailyWorkout(userId, date, profileSnapshot);
+
+      res.json({ id: record.id, status: "generating" });
+
+      (async () => {
+        try {
+          const exercisePrefs = await storage.getExercisePreferences(userId);
+          const exerciseContext = {
+            avoidedExercises: exercisePrefs.filter(p => p.preference === "avoid").map(p => p.exerciseName),
+            dislikedExercises: exercisePrefs.filter(p => p.preference === "dislike").map(p => p.exerciseName),
+          };
+
+          const result = await generateSingleDayWorkout({
+            date,
+            goal: profile.primaryGoal || "maintenance",
+            location: "gym",
+            trainingMode: "both",
+            focusAreas: ["full_body"],
+            sessionLength: profile.sessionDuration || 45,
+            experienceLevel: profile.trainingExperience || "intermediate",
+            healthConstraints: (profile.healthConstraints as string[]) || [],
+          }, exerciseContext);
+
+          const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+          const title = `Daily Workout — ${dateLabel}`;
+          await storage.updateDailyWorkoutStatus(record.id, "ready", result, title);
+          log(`Daily workout generated for ${date} (user ${userId})`, "openai");
+        } catch (err) {
+          log(`Daily workout generation failed for ${date}: ${err instanceof Error ? err.message : String(err)}`, "openai");
+          await storage.updateDailyWorkoutStatus(record.id, "failed");
+        }
+      })();
+    } catch (err) {
+      log(`Daily workout creation error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to create daily workout" });
+    }
+  });
+
+  app.get("/api/daily-workout/:date", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const workout = await storage.getDailyWorkoutByDate(userId, req.params.date);
+      if (!workout) return res.status(404).json({ message: "No daily workout for this date" });
+      return res.json(workout);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load daily workout" });
+    }
+  });
+
+  app.get("/api/daily-workouts", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const { start, end } = req.query;
+      if (!start || !end) return res.status(400).json({ message: "start and end query params required" });
+      const workouts = await storage.getDailyWorkoutsByDateRange(userId, start as string, end as string);
+      return res.json(workouts);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load daily workouts" });
+    }
+  });
+
+  // ── Daily Coverage Check ──
+  app.get("/api/daily-coverage", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const { start, end } = req.query;
+      if (!start || !end) return res.status(400).json({ message: "start and end required" });
+      const meals = await storage.getDailyMealsByDateRange(userId, start as string, end as string);
+      const workouts = await storage.getDailyWorkoutsByDateRange(userId, start as string, end as string);
+      const coverage: Record<string, { meal: boolean; workout: boolean }> = {};
+      for (const m of meals) {
+        if (!coverage[m.date]) coverage[m.date] = { meal: false, workout: false };
+        coverage[m.date].meal = m.status === "ready";
+      }
+      for (const w of workouts) {
+        if (!coverage[w.date]) coverage[w.date] = { meal: false, workout: false };
+        coverage[w.date].workout = w.status === "ready";
+      }
+      return res.json(coverage);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load coverage" });
     }
   });
 

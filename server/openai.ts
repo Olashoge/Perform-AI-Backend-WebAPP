@@ -656,6 +656,184 @@ Return ONLY a JSON object for the session (NOT the full plan) with this structur
   }
 }
 
+export interface DailyMealInput {
+  date: string;
+  mealsPerDay: 2 | 3;
+  goal: string;
+  dietStyles?: string[];
+  foodsToAvoid?: string[];
+  allergiesIntolerances?: string[];
+  spiceLevel?: string;
+  cookingTime?: string;
+  budgetMode?: string;
+  age?: number;
+  currentWeight?: number;
+  targetWeight?: number;
+  weightUnit?: string;
+  constraintBlock?: string;
+}
+
+export interface DailyMealOutput {
+  title: string;
+  date: string;
+  meals: Record<string, {
+    name: string;
+    cuisineTag: string;
+    prepTimeMinutes: number;
+    servings: number;
+    ingredients: string[];
+    steps: string[];
+    nutritionEstimateRange: { calories: string; protein_g: string; carbs_g: string; fat_g: string };
+    whyItHelpsGoal: string;
+  }>;
+  nutritionSummary: { calories: string; protein_g: string; carbs_g: string; fat_g: string };
+}
+
+export async function generateSingleDayMeals(input: DailyMealInput, prefCtx?: UserPreferenceContext): Promise<DailyMealOutput> {
+  const mealSlots = input.mealsPerDay === 2 ? ["lunch", "dinner"] : ["breakfast", "lunch", "dinner"];
+  const slotsLabel = mealSlots.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ");
+
+  let systemPrompt = `You are a professional meal planning nutritionist. You generate detailed, practical single-day meal plans.
+
+RULES:
+- Return ONLY valid JSON. No markdown, no commentary, no code fences.
+- Always respect foodsToAvoid and allergies/intolerances — never include them as ingredients.
+- Keep ingredients realistic and accessible at US grocery stores.
+- Each meal must have 6-8 steps maximum. Keep steps concise.
+- Keep ingredient lines short (quantity + ingredient name only).`;
+
+  if (input.age && input.age < 18) {
+    systemPrompt += `\n\nIMPORTANT: This user is under 18. Use supportive, non-prescriptive language. Avoid "diet", "restrict", "deficit". Focus on balanced growth.`;
+  }
+
+  if (input.constraintBlock) {
+    systemPrompt += "\n\n" + input.constraintBlock;
+  }
+
+  const dateLabel = new Date(input.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  let userPrompt = `Generate meals for a SINGLE day (${dateLabel}). Generate only ${slotsLabel} (${input.mealsPerDay} meals).
+
+Goal: ${input.goal.replace("_", " ")}
+Diet/Cuisine Styles: ${input.dietStyles?.join(", ") || "No preference"}
+Foods to Avoid: ${input.foodsToAvoid?.length ? input.foodsToAvoid.join(", ") : "None"}
+Allergies & Intolerances: ${input.allergiesIntolerances?.length ? input.allergiesIntolerances.join(", ") : "None"}
+Spice Level: ${input.spiceLevel || "medium"}
+Cooking Time: ${input.cookingTime || "normal"}
+Budget Mode: ${input.budgetMode || "normal"}
+${input.age ? `Age: ${input.age}` : ""}
+${input.currentWeight ? `Current Weight: ${input.currentWeight} ${input.weightUnit || "lb"}` : ""}
+${input.targetWeight ? `Target Weight: ${input.targetWeight} ${input.weightUnit || "lb"}` : ""}
+
+Return ONLY a JSON object:
+{
+  "title": "Daily Meal — ${dateLabel}",
+  "date": "${input.date}",
+  "meals": {
+    ${mealSlots.map(s => `"${s}": { meal object }`).join(",\n    ")}
+  },
+  "nutritionSummary": { "calories": "range", "protein_g": "range", "carbs_g": "range", "fat_g": "range" }
+}
+
+Meal object: { "name", "cuisineTag", "prepTimeMinutes", "servings": 1, "ingredients": ["short string with qty"], "steps": [...max 6-8], "nutritionEstimateRange": { "calories", "protein_g", "carbs_g", "fat_g" }, "whyItHelpsGoal": "1 brief sentence" }`;
+
+  if (prefCtx) {
+    userPrompt += buildPreferenceContextBlock(prefCtx);
+  }
+
+  let raw = await callOpenAI(systemPrompt, userPrompt);
+  let cleaned = cleanJsonString(raw);
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return parsed as DailyMealOutput;
+  } catch (firstErr) {
+    const repairPrompt = `The following JSON was invalid. Fix it and return ONLY valid JSON. Error: ${firstErr instanceof Error ? firstErr.message : "Parse error"}\n\nOriginal JSON:\n${cleaned}`;
+    raw = await callOpenAI(systemPrompt, repairPrompt);
+    cleaned = cleanJsonString(raw);
+    return JSON.parse(cleaned) as DailyMealOutput;
+  }
+}
+
+export interface DailyWorkoutInput {
+  date: string;
+  goal: string;
+  location?: string;
+  trainingMode?: string;
+  focusAreas?: string[];
+  sessionLength?: number;
+  experienceLevel?: string;
+  healthConstraints?: string[];
+  constraintBlock?: string;
+}
+
+export async function generateSingleDayWorkout(input: DailyWorkoutInput, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }): Promise<WorkoutSession> {
+  let systemPrompt = buildWorkoutSystemPrompt();
+  if (input.constraintBlock) {
+    systemPrompt += "\n\n" + input.constraintBlock;
+  }
+
+  const locationLabels: Record<string, string> = {
+    home_none: "Home (no equipment — bodyweight only)",
+    home_equipment: "Home (dumbbells and/or resistance bands)",
+    gym: "Gym (full equipment: machines, barbells, dumbbells, cables)",
+    outdoor: "Outdoor (running, walking, bodyweight, hills)",
+    mixed: "Mixed (combination of home, gym, and outdoor)",
+  };
+
+  const dateLabel = new Date(input.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  const userPrompt = `Generate a SINGLE workout session for ${dateLabel}.
+
+Goal: ${input.goal.replace("_", " ")}
+Location: ${locationLabels[input.location || "gym"] || input.location || "Gym"}
+Training Mode: ${input.trainingMode || "both"}
+Focus Areas: ${input.focusAreas?.join(", ") || "Full Body"}
+Session Length: ${input.sessionLength || 45} minutes
+Experience Level: ${input.experienceLevel || "intermediate"}
+Injuries/Limitations: ${input.healthConstraints?.length ? input.healthConstraints.join(", ") : "None"}
+${exerciseContext && (exerciseContext.avoidedExercises.length > 0 || exerciseContext.dislikedExercises.length > 0) ? `
+EXERCISE PREFERENCES:
+${exerciseContext.avoidedExercises.length > 0 ? `- AVOIDED exercises (NEVER include): ${exerciseContext.avoidedExercises.join(", ")}` : ""}
+${exerciseContext.dislikedExercises.length > 0 ? `- Disliked exercises (deprioritize): ${exerciseContext.dislikedExercises.join(", ")}` : ""}
+` : ""}
+Return ONLY a JSON object for the session:
+{
+  "mode": "strength"|"cardio"|"mixed",
+  "focus": "string describing session focus",
+  "durationMinutes": number,
+  "intensity": "easy"|"moderate"|"hard",
+  "warmup": ["warm-up item 1", ...] (3-5 items),
+  "main": [
+    {
+      "name": "exercise name",
+      "type": "strength"|"cardio"|"mobility",
+      "sets": number or null,
+      "reps": "string or null",
+      "time": "string or null",
+      "restSeconds": number or null,
+      "notes": "string or null"
+    }
+  ],
+  "finisher": ["optional finisher item"],
+  "cooldown": ["cool-down item 1", ...] (2-4 items),
+  "coachingCues": ["cue 1", "cue 2"] (max 3)
+}`;
+
+  let raw = await callOpenAI(systemPrompt, userPrompt);
+  let cleaned = cleanJsonString(raw);
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return workoutSessionSchema.parse(parsed);
+  } catch (firstErr) {
+    const repairPrompt = `The following JSON was invalid. Fix it and return ONLY valid JSON matching the workout session schema. Error: ${firstErr instanceof Error ? firstErr.message : "Parse error"}\n\nOriginal JSON:\n${cleaned}`;
+    raw = await callOpenAI(systemPrompt, repairPrompt);
+    cleaned = cleanJsonString(raw);
+    return workoutSessionSchema.parse(JSON.parse(cleaned));
+  }
+}
+
 export function rebuildGroceryList(planJson: PlanOutput): PlanOutput["groceryList"] {
   const ingredientMap = new Map<string, Set<string>>();
   const categorize = (ingredient: string): string => {
