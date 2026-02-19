@@ -169,6 +169,7 @@ export async function registerRoutes(
       const profile = await storage.createUserProfile(req.session.userId!, parsed.data);
       return res.json(profile);
     } catch (err) {
+      console.error("Profile creation error:", err);
       return res.status(500).json({ message: "Failed to create profile" });
     }
   });
