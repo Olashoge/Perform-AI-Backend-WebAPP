@@ -12,10 +12,43 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Target, Plus, Trash2, Loader2, UtensilsCrossed, Dumbbell,
   Flame, Zap, Heart, Trophy, CalendarDays, Link2, Unlink,
-  ArrowUpDown,
+  ArrowUpDown, Clock, CalendarCheck, Activity, CheckCircle2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays } from "date-fns";
+
+type GoalLifecycleStatus = "draft" | "scheduled" | "active" | "completed";
+
+function deriveGoalStatus(startDate: string | null | undefined): GoalLifecycleStatus {
+  if (!startDate) return "draft";
+  const start = new Date(startDate + "T00:00:00");
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  if (today < start) return "scheduled";
+  if (today < end) return "active";
+  return "completed";
+}
+
+const GOAL_STATUS_CONFIG: Record<GoalLifecycleStatus, { label: string; className: string; icon: typeof Clock }> = {
+  draft: { label: "Draft", className: "bg-muted text-muted-foreground", icon: Clock },
+  scheduled: { label: "Scheduled", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300", icon: CalendarCheck },
+  active: { label: "Active", className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300", icon: Activity },
+  completed: { label: "Completed", className: "bg-muted text-muted-foreground", icon: CheckCircle2 },
+};
+
+function GoalStatusBadge({ startDate }: { startDate: string | null | undefined }) {
+  const status = deriveGoalStatus(startDate);
+  const config = GOAL_STATUS_CONFIG[status];
+  const Icon = config.icon;
+  return (
+    <Badge size="sm" variant="secondary" className={`no-default-hover-elevate no-default-active-elevate ${config.className}`} data-testid={`badge-goal-status-${status}`}>
+      <Icon className="h-3 w-3 mr-1" />
+      {config.label}
+    </Badge>
+  );
+}
 
 const GOAL_OPTIONS = [
   { value: "weight_loss", label: "Weight Loss", icon: Flame },
@@ -244,6 +277,7 @@ export default function GoalPlans() {
                               {goalTitle}
                             </h3>
                             <Badge variant="secondary">{GOAL_LABELS[gp.goalType] || gp.goalType}</Badge>
+                            <GoalStatusBadge startDate={gp.startDate} />
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
                             <CalendarDays className="h-3 w-3" />
