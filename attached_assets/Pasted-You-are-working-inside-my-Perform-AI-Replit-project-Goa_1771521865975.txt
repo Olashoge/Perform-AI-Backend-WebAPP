@@ -1,0 +1,65 @@
+You are working inside my Perform AI Replit project. Goal: fix structural intelligence by making Profile the single source of truth and syncing all plan creation flows.
+
+PHASE 0 — Understand current code
+1) Identify where Profile is stored (DB table/model). If it doesn’t exist, create it.
+2) Identify where “Wellness Plan / Nutrition Plan / Workout Plan” creation forms are defined.
+3) Identify how plan generation currently builds its prompt/context.
+
+PHASE 1 — Data model changes (Prisma)
+A) Ensure there is a UserProfile model linked 1:1 to User, containing at minimum:
+- age, sex
+- height (store canonical metric in DB: cm), weight (store canonical metric in DB: kg), targetWeightKg
+- trainingExperience, activityLevel, trainingDaysPerWeek, sessionDurationMinutes
+- injuries (string array), mobilityLimitations (string array), chronicConditions (string array)
+- sleepHours, stressLevel
+- allergiesFreeText, foodsToAvoid (string array)
+- unitPreference (imperial/metric)
+
+B) Ensure there is a PlanSnapshot/Context saved on each plan (WellnessPlan, MealPlan, WorkoutPlan or a unified Plan table).
+- Add a JSON column such as planContext (or planSnapshot) that stores the resolved inputs used at generation time.
+
+PHASE 2 — Profile → Prefill everywhere
+For all plan creation flows:
+1) On load, fetch user profile.
+2) Prefill relevant form fields with profile values.
+3) If profile exists, remove/hide redundant “About You” section inputs (age/weight/target weight) in Wellness Setup.
+4) Show a compact “Using Profile” summary card with an “Edit Profile” link.
+5) If profile does NOT exist, require profile completion before allowing plan generation (block with CTA).
+
+PHASE 3 — Override logic + snapshot rules
+When user submits plan generation:
+1) Start with profile values as defaults.
+2) Apply any overrides from the current form.
+3) Save the final resolved object into the plan’s planContext JSON.
+4) Generate the plan using planContext, NOT directly from profile.
+5) Do NOT write overrides back to profile unless user is on Profile page and saves profile.
+
+PHASE 4 — Weekly Check-in score transparency
+1) Locate adherence score calculation.
+2) Add a breakdown field returned to UI:
+   - weights used (e.g. mealsWeight, workoutsWeight, energyWeight)
+   - computed points for each component
+   - total score
+3) Update the UI to display “How this score is calculated” under the score card.
+
+PHASE 5 — Safety guardrails
+Add validation at generation time:
+- If age is missing, block generation and prompt to complete profile.
+- If age < 13, block workout generation (and optionally all plans) with a safe message.
+This must apply both in UI AND backend route handler to prevent bypass.
+
+PHASE 6 — Tests + verification checklist
+1) Manual test checklist:
+- Create profile → create wellness plan → all relevant fields prefilled, no duplicate “About You”.
+- Override weight in plan flow → planContext stores override, profile remains unchanged.
+- Update profile weight → new plans use updated weight; old plans remain unchanged.
+- Weekly check-in score shows consistent breakdown.
+- Age missing blocks generation.
+- Age=1 blocks workouts.
+
+2) Add console logs temporarily if needed, then remove.
+3) Ensure migrations run cleanly and app builds.
+
+Deliverable:
+- Commit-ready code changes
+- Short summary of files touched and how to verify in UI
