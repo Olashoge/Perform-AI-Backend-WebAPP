@@ -100,7 +100,7 @@ export default function NewPlan() {
     if (profileFoods.length > 0) {
       form.setValue("foodsToAvoid", profileFoods);
     }
-    const profileAllergies = (profile.allergies as string[]) || [];
+    const profileAllergies = (profile.allergiesIntolerances as string[]) || [];
     if (profileAllergies.length > 0) {
       form.setValue("allergies", profileAllergies.join(", "));
     }
@@ -248,10 +248,10 @@ export default function NewPlan() {
                         <span className="font-medium">{profileDaysOfWeek.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({profileDaysOfWeek.length}/wk)</span>
                       </div>
                     )}
-                    {((profile.allergies as string[]) || []).length > 0 && (
+                    {((profile.allergiesIntolerances as string[]) || []).length > 0 && (
                       <div className="col-span-2 sm:col-span-3">
-                        <span className="text-muted-foreground">Allergies:</span>{" "}
-                        <span className="font-medium">{(profile.allergies as string[]).join(", ")}</span>
+                        <span className="text-muted-foreground">Allergies & intolerances:</span>{" "}
+                        <span className="font-medium">{(profile.allergiesIntolerances as string[]).join(", ")}</span>
                       </div>
                     )}
                     {((profile.foodsToAvoid as string[]) || []).length > 0 && (
@@ -441,7 +441,7 @@ export default function NewPlan() {
                       name="allergies"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Allergies (optional)</FormLabel>
+                          <FormLabel>Allergies & Intolerances (optional)</FormLabel>
                           <FormControl>
                             <Textarea
                               placeholder="List any allergies or additional foods to avoid..."

@@ -1,0 +1,50 @@
+TASK: Profile field consolidation + global autopopulation cleanup (Perform AI)
+
+GOAL:
+Make the app structurally intelligent by merging duplicate profile fields into canonical fields and ensuring ALL plan forms (Wellness wizard + Nutrition setup + Training setup + standalone meal/workout generation) auto-populate from the same canonical profile fields. No duplicated “similar” columns/inputs.
+
+1) MERGE Allergies + Intolerances
+- Replace separate profile fields with ONE canonical field:
+  - user_profiles.allergiesIntolerances (array of strings preferred)
+- Update UI label everywhere to: "Allergies & Intolerances"
+- Auto-populate this field into:
+  - Nutrition setup (currently “Allergies”)
+  - Wellness wizard nutrition step (currently “Allergies”)
+  - Any meal plan generation form fields
+- Migration:
+  - If existing columns are allergies + intolerances, combine both into allergiesIntolerances (dedupe, trim).
+  - Remove old UI fields, and stop writing to old DB columns (delete columns if safe).
+
+2) REMOVE Religious Restrictions
+- Remove "Religious Restrictions" from Profile UI.
+- Stop using any profile religious restriction field in prompts/constraints.
+- Foods to Avoid is the global mechanism instead.
+- If DB column exists, leave it unused or migrate values into foodsToAvoid once (optional).
+
+3) MERGE Injuries + Mobility Limitations + Chronic Conditions
+- Replace separate profile fields with ONE canonical field:
+  - user_profiles.healthConstraints (array of strings preferred)
+- Update UI label everywhere to: "Injuries, Limitations & Chronic Conditions"
+- Auto-populate this field into:
+  - Training setup field currently “Injuries or Limitations (optional)” (rename accordingly)
+  - Wellness wizard training step
+  - Standalone workout generation forms
+- Migration:
+  - Merge existing injuries + mobilityLimitations + chronicConditions into healthConstraints (dedupe, trim).
+  - Remove old UI fields and stop writing to old DB columns (delete columns if safe).
+
+4) Pace description copy rewrite (non-technical)
+Replace the current pace helper text everywhere with:
+- Gentle: “Easier week. More flexible. Great if you’re busy or getting back in rhythm.”
+- Steady: “Balanced week. Progress without feeling extreme.”
+- Aggressive: “Harder week. Faster progress, but requires strong consistency.”
+
+5) GLOBAL CONSISTENCY CHECK
+Search the codebase for any other duplicated user inputs representing the same concept (e.g., “Allergies” vs “Allergies & Intolerances”, “Injuries” vs “Limitations”, etc.) and consolidate to the canonical fields above.
+Ensure every form shows a “Your Profile” summary card with an Edit link, and the fields are prefilled from profile but can be overridden without changing the profile.
+
+DELIVERABLE:
+- Working UI changes
+- DB migration(s) + backfill
+- Verified autopopulation across Wellness + Nutrition + Training + standalone meal/workout creation
+- No duplicate storage fields for the merged concepts

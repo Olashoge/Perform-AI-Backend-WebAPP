@@ -5,14 +5,12 @@ export function evaluateNutritionRules(ctx: RuleContext): RuleResult {
   const specPatch: Partial<SafeSpec> = {};
 
   const profile = ctx.profile;
-  const allergies = (profile.allergies as string[]) || [];
-  const intolerances = (profile.intolerances as string[]) || [];
-  const religiousRestrictions = (profile.religiousRestrictions as string[]) || [];
+  const allergiesIntolerances = (profile.allergiesIntolerances as string[]) || [];
   const mealPrefs = ctx.mealPreferences;
   const foodsToAvoid = mealPrefs?.foodsToAvoid || [];
 
-  const bannedFoods = Array.from(new Set([...allergies, ...intolerances, ...foodsToAvoid]));
-  const bannedIngredients = Array.from(new Set(allergies));
+  const bannedFoods = Array.from(new Set([...allergiesIntolerances, ...foodsToAvoid]));
+  const bannedIngredients = Array.from(new Set(allergiesIntolerances));
 
   if (bannedFoods.length > 0) {
     violations.push({
@@ -20,38 +18,10 @@ export function evaluateNutritionRules(ctx: RuleContext): RuleResult {
       category: "NUTRITION",
       severity: "ADJUST",
       message: `The following foods/allergens are excluded from your plan: ${bannedFoods.join(", ")}.`,
-      metadata: { bannedFoods, allergies, intolerances, religiousRestrictions },
+      metadata: { bannedFoods, allergiesIntolerances },
     });
     specPatch.bannedFoods = bannedFoods;
     specPatch.bannedIngredients = bannedIngredients;
-  }
-
-  if (religiousRestrictions.length > 0) {
-    const religionFoodBans: Record<string, string[]> = {
-      halal: ["pork", "bacon", "ham", "lard", "gelatin (pork)", "alcohol"],
-      kosher: ["pork", "shellfish", "bacon", "ham", "mixing meat and dairy"],
-      hindu: ["beef", "cow meat"],
-      buddhist: ["beef", "pork"],
-      jain: ["meat", "fish", "eggs", "root vegetables"],
-      vegan: ["meat", "fish", "eggs", "dairy", "honey"],
-      vegetarian: ["meat", "fish", "poultry"],
-    };
-
-    for (const restriction of religiousRestrictions) {
-      const key = restriction.toLowerCase();
-      const foods = religionFoodBans[key];
-      if (foods) {
-        bannedFoods.push(...foods);
-        violations.push({
-          ruleKey: "NUTRITION_RELIGIOUS",
-          category: "NUTRITION",
-          severity: "ADJUST",
-          message: `Dietary restriction "${restriction}" applied: excluding ${foods.join(", ")}.`,
-          metadata: { restriction, excludedFoods: foods },
-        });
-      }
-    }
-    specPatch.bannedFoods = Array.from(new Set(bannedFoods));
   }
 
   const goal = profile.primaryGoal;

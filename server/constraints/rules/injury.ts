@@ -91,9 +91,8 @@ export function evaluateInjuryRules(ctx: RuleContext): RuleResult {
   const violations: RuleResult["violations"] = [];
   const specPatch: Partial<SafeSpec> = {};
 
-  const injuries = (ctx.profile.injuries as string[]) || [];
-  const mobilityLimitations = (ctx.profile.mobilityLimitations as string[]) || [];
-  const allConditions = [...injuries, ...mobilityLimitations].map(c => c.toLowerCase());
+  const healthConstraints = (ctx.profile.healthConstraints as string[]) || [];
+  const allConditions = healthConstraints.map(c => c.toLowerCase());
 
   if (allConditions.length === 0) return { violations, specPatch };
 

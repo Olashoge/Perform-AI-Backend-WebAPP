@@ -15,7 +15,7 @@ function buildSystemPrompt(prefs: Preferences): string {
 
 RULES:
 - Return ONLY valid JSON. No markdown, no commentary, no code fences.
-- Always respect foodsToAvoid and allergies — never include them as ingredients or feature them in meals.
+- Always respect foodsToAvoid and allergies/intolerances — never include them as ingredients or feature them in meals.
 - Keep ingredients realistic and accessible at US grocery stores.
 - When using culturally-specific ingredients (e.g., Nigerian, Indian, Thai), ensure they are available at most US grocery stores or suggest a common US substitution in parentheses.
 - Budget mode: reduce specialty ingredients, keep meals simple.
@@ -167,7 +167,7 @@ Cooking Time: ${prefs.cookingTime}
 Spice Level: ${prefs.spiceLevel || "medium"}
 Authenticity Mode: ${prefs.authenticityMode || "mixed"}
 Meals Per Day: ${prefs.mealsPerDay || 3} — ${mealsNote}
-Allergies: ${prefs.allergies || "None"}
+Allergies & Intolerances: ${prefs.allergies || "None"}
 ${buildPersonalizationBlock(prefs)}
 
 INGREDIENT GUIDELINES:
@@ -237,7 +237,7 @@ Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
 Spice Level: ${prefs.spiceLevel || "medium"}
 Authenticity Mode: ${prefs.authenticityMode || "mixed"}
-Allergies: ${prefs.allergies || "None"}
+Allergies & Intolerances: ${prefs.allergies || "None"}
 ${buildPersonalizationBlock(prefs)}
 
 INGREDIENT GUIDELINES:
@@ -273,7 +273,7 @@ Budget Mode: ${prefs.budgetMode}
 Cooking Time: ${prefs.cookingTime}
 Spice Level: ${prefs.spiceLevel || "medium"}
 Authenticity Mode: ${prefs.authenticityMode || "mixed"}
-Allergies: ${prefs.allergies || "None"}
+Allergies & Intolerances: ${prefs.allergies || "None"}
 ${buildPersonalizationBlock(prefs)}
 
 Return ONLY a JSON object:

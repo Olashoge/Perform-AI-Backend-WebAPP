@@ -121,12 +121,9 @@ export default function NewWorkout() {
       );
       form.setValue("sessionLength", closest);
     }
-    const injuries = (profile.injuries as string[]) || [];
-    const mobility = (profile.mobilityLimitations as string[]) || [];
-    const chronic = (profile.chronicConditions as string[]) || [];
-    const allLimitations = [...injuries, ...mobility, ...chronic].filter(Boolean);
-    if (allLimitations.length > 0) {
-      form.setValue("limitations", allLimitations.join(", "));
+    const healthConstraints = (profile.healthConstraints as string[]) || [];
+    if (healthConstraints.length > 0) {
+      form.setValue("limitations", healthConstraints.join(", "));
     }
   }, [profile, goalFromUrl, form]);
 
@@ -249,22 +246,10 @@ export default function NewWorkout() {
                         <span className="font-medium">{profileDaysOfWeek.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({profileDaysOfWeek.length}/wk)</span>
                       </div>
                     )}
-                    {((profile.injuries as string[]) || []).length > 0 && (
+                    {((profile.healthConstraints as string[]) || []).length > 0 && (
                       <div className="col-span-2 sm:col-span-3">
-                        <span className="text-muted-foreground">Injuries:</span>{" "}
-                        <span className="font-medium">{(profile.injuries as string[]).join(", ")}</span>
-                      </div>
-                    )}
-                    {((profile.mobilityLimitations as string[]) || []).length > 0 && (
-                      <div className="col-span-2 sm:col-span-3">
-                        <span className="text-muted-foreground">Mobility:</span>{" "}
-                        <span className="font-medium">{(profile.mobilityLimitations as string[]).join(", ")}</span>
-                      </div>
-                    )}
-                    {((profile.chronicConditions as string[]) || []).length > 0 && (
-                      <div className="col-span-2 sm:col-span-3">
-                        <span className="text-muted-foreground">Conditions:</span>{" "}
-                        <span className="font-medium">{(profile.chronicConditions as string[]).join(", ")}</span>
+                        <span className="text-muted-foreground">Health constraints:</span>{" "}
+                        <span className="font-medium">{(profile.healthConstraints as string[]).join(", ")}</span>
                       </div>
                     )}
                   </div>
@@ -517,7 +502,7 @@ export default function NewWorkout() {
                     name="limitations"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Injuries or Limitations (optional)</FormLabel>
+                        <FormLabel>Injuries, Limitations & Conditions (optional)</FormLabel>
                         <FormDescription>Any conditions the AI should account for</FormDescription>
                         <FormControl>
                           <Textarea

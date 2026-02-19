@@ -207,6 +207,7 @@ export default function ProfilePage() {
       injuries: [],
       mobilityLimitations: [],
       chronicConditions: [],
+      healthConstraints: [],
       sleepHours: null,
       stressLevel: null,
       activityLevel: null,
@@ -215,6 +216,7 @@ export default function ProfilePage() {
       allergies: [],
       intolerances: [],
       religiousRestrictions: [],
+      allergiesIntolerances: [],
       foodsToAvoid: [],
       foodsToAvoidNotes: null,
       appetiteLevel: null,
@@ -251,6 +253,7 @@ export default function ProfilePage() {
         injuries: (profile.injuries as string[]) || [],
         mobilityLimitations: (profile.mobilityLimitations as string[]) || [],
         chronicConditions: (profile.chronicConditions as string[]) || [],
+        healthConstraints: (profile.healthConstraints as string[]) || [],
         sleepHours: profile.sleepHours || null,
         stressLevel: (profile.stressLevel as "low" | "moderate" | "high") || null,
         activityLevel: (profile.activityLevel as "sedentary" | "moderate" | "active") || null,
@@ -259,6 +262,7 @@ export default function ProfilePage() {
         allergies: (profile.allergies as string[]) || [],
         intolerances: (profile.intolerances as string[]) || [],
         religiousRestrictions: (profile.religiousRestrictions as string[]) || [],
+        allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
         foodsToAvoid: (profile.foodsToAvoid as string[]) || [],
         foodsToAvoidNotes: profile.foodsToAvoidNotes || null,
         appetiteLevel: (profile.appetiteLevel as "low" | "normal" | "high") || null,
@@ -327,7 +331,16 @@ export default function ProfilePage() {
   });
 
   const onSubmit = (data: InsertUserProfile) => {
-    saveMutation.mutate(data);
+    const submissionData = {
+      ...data,
+      allergies: data.allergiesIntolerances || [],
+      intolerances: data.allergiesIntolerances || [],
+      religiousRestrictions: [],
+      injuries: data.healthConstraints || [],
+      mobilityLimitations: data.healthConstraints || [],
+      chronicConditions: data.healthConstraints || [],
+    };
+    saveMutation.mutate(submissionData);
   };
 
   useEffect(() => {
@@ -617,30 +630,12 @@ export default function ProfilePage() {
               </div>
               <div className="space-y-4">
                 <div>
-                  <Label className="mb-2 block">Injuries</Label>
+                  <Label className="mb-2 block">Injuries, Limitations & Chronic Conditions</Label>
                   <TagInput
-                    value={(form.watch("injuries") as string[]) || []}
-                    onChange={(v) => form.setValue("injuries", v)}
-                    placeholder="e.g. torn ACL, tennis elbow"
-                    testIdPrefix="injuries"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Mobility Limitations</Label>
-                  <TagInput
-                    value={(form.watch("mobilityLimitations") as string[]) || []}
-                    onChange={(v) => form.setValue("mobilityLimitations", v)}
-                    placeholder="e.g. limited shoulder ROM"
-                    testIdPrefix="mobility"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Chronic Conditions</Label>
-                  <TagInput
-                    value={(form.watch("chronicConditions") as string[]) || []}
-                    onChange={(v) => form.setValue("chronicConditions", v)}
-                    placeholder="e.g. asthma, diabetes"
-                    testIdPrefix="conditions"
+                    value={(form.watch("healthConstraints") as string[]) || []}
+                    onChange={(v) => form.setValue("healthConstraints", v)}
+                    placeholder="e.g. torn ACL, limited shoulder ROM, asthma, diabetes"
+                    testIdPrefix="health-constraints"
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -814,30 +809,12 @@ export default function ProfilePage() {
               </div>
               <div className="space-y-4">
                 <div>
-                  <Label className="mb-2 block">Allergies</Label>
+                  <Label className="mb-2 block">Allergies & Intolerances</Label>
                   <TagInput
-                    value={(form.watch("allergies") as string[]) || []}
-                    onChange={(v) => form.setValue("allergies", v)}
-                    placeholder="e.g. peanuts, shellfish"
-                    testIdPrefix="allergies"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Intolerances</Label>
-                  <TagInput
-                    value={(form.watch("intolerances") as string[]) || []}
-                    onChange={(v) => form.setValue("intolerances", v)}
-                    placeholder="e.g. lactose, gluten"
-                    testIdPrefix="intolerances"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Religious Restrictions</Label>
-                  <TagInput
-                    value={(form.watch("religiousRestrictions") as string[]) || []}
-                    onChange={(v) => form.setValue("religiousRestrictions", v)}
-                    placeholder="e.g. halal, kosher"
-                    testIdPrefix="restrictions"
+                    value={(form.watch("allergiesIntolerances") as string[]) || []}
+                    onChange={(v) => form.setValue("allergiesIntolerances", v)}
+                    placeholder="e.g. peanuts, shellfish, lactose, gluten"
+                    testIdPrefix="allergies-intolerances"
                   />
                 </div>
                 <div>

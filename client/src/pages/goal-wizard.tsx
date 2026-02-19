@@ -207,7 +207,7 @@ export default function GoalWizard() {
     if (profileFoods.length > 0) {
       mealForm.setValue("foodsToAvoid", profileFoods);
     }
-    const profileAllergies = (profileData.allergies as string[]) || [];
+    const profileAllergies = (profileData.allergiesIntolerances as string[]) || [];
     if (profileAllergies.length > 0) {
       mealForm.setValue("allergies", profileAllergies.join(", "));
     }
@@ -228,12 +228,9 @@ export default function GoalWizard() {
       );
       workoutForm.setValue("sessionLength", closest);
     }
-    const injuries = (profileData.injuries as string[]) || [];
-    const mobility = (profileData.mobilityLimitations as string[]) || [];
-    const chronic = (profileData.chronicConditions as string[]) || [];
-    const allLimitations = [...injuries, ...mobility, ...chronic].filter(Boolean);
-    if (allLimitations.length > 0) {
-      workoutForm.setValue("limitations", allLimitations.join(", "));
+    const healthConstraints = (profileData.healthConstraints as string[]) || [];
+    if (healthConstraints.length > 0) {
+      workoutForm.setValue("limitations", healthConstraints.join(", "));
     }
   }, [profileData, mealForm, workoutForm]);
 
@@ -465,20 +462,14 @@ export default function GoalWizard() {
                 {((profileData.trainingDaysOfWeek as string[]) || []).length > 0 && (
                   <div className="col-span-2"><span className="text-muted-foreground">Training:</span>{" "}<span className="font-medium">{((profileData.trainingDaysOfWeek as string[]) || []).map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({((profileData.trainingDaysOfWeek as string[]) || []).length}/wk)</span></div>
                 )}
-                {((profileData.allergies as string[]) || []).length > 0 && (
-                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Allergies:</span>{" "}<span className="font-medium">{(profileData.allergies as string[]).join(", ")}</span></div>
+                {((profileData.allergiesIntolerances as string[]) || []).length > 0 && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Allergies & intolerances:</span>{" "}<span className="font-medium">{(profileData.allergiesIntolerances as string[]).join(", ")}</span></div>
                 )}
                 {((profileData.foodsToAvoid as string[]) || []).length > 0 && (
                   <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Foods to avoid:</span>{" "}<span className="font-medium">{(profileData.foodsToAvoid as string[]).join(", ")}</span></div>
                 )}
-                {((profileData.injuries as string[]) || []).length > 0 && (
-                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Injuries:</span>{" "}<span className="font-medium">{(profileData.injuries as string[]).join(", ")}</span></div>
-                )}
-                {((profileData.mobilityLimitations as string[]) || []).length > 0 && (
-                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Mobility:</span>{" "}<span className="font-medium">{(profileData.mobilityLimitations as string[]).join(", ")}</span></div>
-                )}
-                {((profileData.chronicConditions as string[]) || []).length > 0 && (
-                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Conditions:</span>{" "}<span className="font-medium">{(profileData.chronicConditions as string[]).join(", ")}</span></div>
+                {((profileData.healthConstraints as string[]) || []).length > 0 && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Health constraints:</span>{" "}<span className="font-medium">{(profileData.healthConstraints as string[]).join(", ")}</span></div>
                 )}
               </div>
             </CardContent>
@@ -562,7 +553,7 @@ export default function GoalWizard() {
 
                 <div className="border-t pt-6">
                   <label className="text-sm font-medium mb-2 block">Pace (optional)</label>
-                  <p className="text-xs text-muted-foreground mb-3">Gentle = easier adherence · Steady = balanced default · Aggressive = faster change, harder adherence</p>
+                  <p className="text-xs text-muted-foreground mb-3">Gentle — small, sustainable changes you can stick with long-term. Steady — a balanced approach that keeps you progressing without burning out. Aggressive — pushes harder for faster results; best if you have experience and strong habits.</p>
                   <div className="flex gap-2 flex-wrap">
                     {PACE_OPTIONS.map(opt => (
                       <Button
@@ -718,7 +709,7 @@ export default function GoalWizard() {
                       name="allergies"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Allergies (optional)</FormLabel>
+                          <FormLabel>Allergies & Intolerances (optional)</FormLabel>
                           <FormControl>
                             <Textarea
                               placeholder="List any allergies or additional foods to avoid..."
@@ -1231,7 +1222,7 @@ export default function GoalWizard() {
                       name="limitations"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Injuries or Limitations (optional)</FormLabel>
+                          <FormLabel>Injuries, Limitations & Conditions (optional)</FormLabel>
                           <FormDescription>Any conditions the AI should account for</FormDescription>
                           <FormControl>
                             <Textarea
