@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -28,10 +28,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Ruler, Weight, Target, Activity, Heart, Brain,
+  Ruler, Activity, Heart, Brain,
   Moon, Dumbbell, Clock, Flame, UtensilsCrossed,
-  AlertTriangle, X, Plus, Save, Check,
+  X, Plus, Save, Check,
 } from "lucide-react";
+
+const LBS_PER_KG = 2.2046226218;
+const CM_PER_INCH = 2.54;
+
+function kgToLbs(kg: number): number {
+  return Math.round(kg * LBS_PER_KG * 10) / 10;
+}
+function lbsToKg(lbs: number): number {
+  return Math.round((lbs / LBS_PER_KG) * 10) / 10;
+}
+function cmToFtIn(cm: number): { feet: number; inches: number } {
+  const totalInches = cm / CM_PER_INCH;
+  let feet = Math.floor(totalInches / 12);
+  let inches = Math.round(totalInches % 12);
+  if (inches === 12) {
+    inches = 0;
+    feet += 1;
+  }
+  return { feet, inches };
+}
+function ftInToCm(feet: number, inches: number): number {
+  return Math.round((feet * 12 + inches) * CM_PER_INCH);
+}
 
 const GOAL_OPTIONS = [
   { value: "weight_loss", label: "Weight Loss" },
@@ -145,10 +168,18 @@ function TagInput({
   );
 }
 
+type UnitSystem = "imperial" | "metric";
+
 export default function ProfilePage() {
   const { user, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>("imperial");
+  const [heightFeet, setHeightFeet] = useState<number | "">("");
+  const [heightInches, setHeightInches] = useState<number | "">("");
+  const [weightLbs, setWeightLbs] = useState<number | "">("");
+  const [targetWeightLbs, setTargetWeightLbs] = useState<number | "">("");
 
   const { data: profile, isLoading: profileLoading } = useQuery<UserProfile | null>({
     queryKey: ["/api/profile"],
@@ -160,6 +191,7 @@ export default function ProfilePage() {
   const form = useForm<InsertUserProfile>({
     resolver: zodResolver(insertUserProfileSchema),
     defaultValues: {
+      unitSystem: "imperial",
       age: 25,
       sex: null,
       heightCm: null,
@@ -183,9 +215,25 @@ export default function ProfilePage() {
     },
   });
 
+  const syncImperialFromMetric = useCallback((weightKg: number | null, targetWeightKg: number | null, heightCm: number | null) => {
+    setWeightLbs(weightKg ? kgToLbs(weightKg) : "");
+    setTargetWeightLbs(targetWeightKg ? kgToLbs(targetWeightKg) : "");
+    if (heightCm) {
+      const { feet, inches } = cmToFtIn(heightCm);
+      setHeightFeet(feet);
+      setHeightInches(inches);
+    } else {
+      setHeightFeet("");
+      setHeightInches("");
+    }
+  }, []);
+
   useEffect(() => {
     if (profile) {
+      const savedUnit = (profile.unitSystem as UnitSystem) || "imperial";
+      setUnitSystem(savedUnit);
       form.reset({
+        unitSystem: savedUnit,
         age: profile.age,
         sex: profile.sex || null,
         heightCm: profile.heightCm || null,
@@ -207,8 +255,45 @@ export default function ProfilePage() {
         appetiteLevel: (profile.appetiteLevel as "low" | "normal" | "high") || null,
         spicePreference: (profile.spicePreference as "mild" | "medium" | "spicy") || null,
       });
+      syncImperialFromMetric(profile.weightKg, profile.targetWeightKg, profile.heightCm);
     }
-  }, [profile, form]);
+  }, [profile, form, syncImperialFromMetric]);
+
+  const handleUnitToggle = (newUnit: UnitSystem) => {
+    if (newUnit === unitSystem) return;
+    setUnitSystem(newUnit);
+    form.setValue("unitSystem", newUnit);
+
+    const currentWeightKg = form.getValues("weightKg");
+    const currentTargetKg = form.getValues("targetWeightKg");
+    const currentHeightCm = form.getValues("heightCm");
+
+    if (newUnit === "imperial") {
+      syncImperialFromMetric(currentWeightKg, currentTargetKg ?? null, currentHeightCm ?? null);
+    }
+  };
+
+  const handleImperialWeightChange = (lbs: number | "") => {
+    setWeightLbs(lbs);
+    form.setValue("weightKg", lbs === "" ? 0 : lbsToKg(lbs as number));
+  };
+
+  const handleImperialTargetWeightChange = (lbs: number | "") => {
+    setTargetWeightLbs(lbs);
+    form.setValue("targetWeightKg", lbs === "" ? null : lbsToKg(lbs as number));
+  };
+
+  const handleImperialHeightChange = (feet: number | "", inches: number | "") => {
+    setHeightFeet(feet);
+    setHeightInches(inches);
+    const f = typeof feet === "number" ? feet : 0;
+    const i = typeof inches === "number" ? inches : 0;
+    if (f === 0 && i === 0 && feet === "" && inches === "") {
+      form.setValue("heightCm", null);
+    } else {
+      form.setValue("heightCm", ftInToCm(f, i));
+    }
+  };
 
   const saveMutation = useMutation({
     mutationFn: async (data: InsertUserProfile) => {
@@ -248,6 +333,8 @@ export default function ProfilePage() {
     );
   }
 
+  const isImperial = unitSystem === "imperial";
+
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
       <div className="mb-8">
@@ -266,9 +353,37 @@ export default function ProfilePage() {
 
           <Card>
             <CardContent className="p-5 sm:p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <Ruler className="h-5 w-5 text-muted-foreground" />
-                <h2 className="font-semibold text-base">Physical Stats & Goals</h2>
+              <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <Ruler className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="font-semibold text-base">Physical Stats & Goals</h2>
+                </div>
+                <div className="flex rounded-md border overflow-visible" data-testid="unit-toggle">
+                  <button
+                    type="button"
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors rounded-l-md ${
+                      isImperial
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground"
+                    }`}
+                    onClick={() => handleUnitToggle("imperial")}
+                    data-testid="button-unit-imperial"
+                  >
+                    Imperial
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors rounded-r-md ${
+                      !isImperial
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground"
+                    }`}
+                    onClick={() => handleUnitToggle("metric")}
+                    data-testid="button-unit-metric"
+                  >
+                    Metric
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
@@ -312,65 +427,131 @@ export default function ProfilePage() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="heightCm"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Height (cm)</FormLabel>
-                      <FormControl>
+
+                {isImperial ? (
+                  <div className="space-y-2">
+                    <Label>Height (ft / in)</Label>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
                         <Input
                           type="number"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                          data-testid="input-height"
+                          min={0}
+                          max={9}
+                          placeholder="ft"
+                          value={heightFeet === "" ? "" : heightFeet}
+                          onChange={(e) => {
+                            const v = e.target.value === "" ? "" : Number(e.target.value);
+                            handleImperialHeightChange(v as number | "", heightInches);
+                          }}
+                          data-testid="input-height-feet"
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="weightKg"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Weight (kg)</FormLabel>
-                      <FormControl>
+                      </div>
+                      <div className="flex-1">
                         <Input
                           type="number"
-                          step="0.1"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value === "" ? "" : Number(e.target.value))}
-                          data-testid="input-weight"
+                          min={0}
+                          max={11}
+                          placeholder="in"
+                          value={heightInches === "" ? "" : heightInches}
+                          onChange={(e) => {
+                            const v = e.target.value === "" ? "" : Math.min(11, Math.max(0, Number(e.target.value)));
+                            handleImperialHeightChange(heightFeet, v as number | "");
+                          }}
+                          data-testid="input-height-inches"
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="targetWeightKg"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Target Weight (kg)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                          data-testid="input-target-weight"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="heightCm"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Height (cm)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                            data-testid="input-height-cm"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {isImperial ? (
+                  <div className="space-y-2">
+                    <Label>Weight (lb)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={weightLbs === "" ? "" : weightLbs}
+                      onChange={(e) => handleImperialWeightChange(e.target.value === "" ? "" : Number(e.target.value))}
+                      data-testid="input-weight-lbs"
+                    />
+                  </div>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="weightKg"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Weight (kg)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? "" : Number(e.target.value))}
+                            data-testid="input-weight-kg"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {isImperial ? (
+                  <div className="space-y-2">
+                    <Label>Target Weight (lb)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={targetWeightLbs === "" ? "" : targetWeightLbs}
+                      onChange={(e) => handleImperialTargetWeightChange(e.target.value === "" ? "" : Number(e.target.value))}
+                      data-testid="input-target-weight-lbs"
+                    />
+                  </div>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="targetWeightKg"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Target Weight (kg)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                            data-testid="input-target-weight-kg"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 <FormField
                   control={form.control}
                   name="primaryGoal"
@@ -397,7 +578,7 @@ export default function ProfilePage() {
                   control={form.control}
                   name="trainingExperience"
                   render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
+                    <FormItem>
                       <FormLabel>Training Experience</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>

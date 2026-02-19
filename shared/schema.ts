@@ -506,6 +506,7 @@ export const planBehaviorSummaries = pgTable("plan_behavior_summaries", {
 export const userProfiles = pgTable("user_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  unitSystem: varchar("unit_system", { length: 10 }).default("imperial").notNull(),
   age: integer("age").notNull(),
   sex: varchar("sex", { length: 20 }),
   heightCm: integer("height_cm"),
@@ -536,7 +537,8 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
-  age: z.coerce.number().int().min(18, "You must be 18 or older"),
+  unitSystem: z.enum(["imperial", "metric"]).default("imperial"),
+  age: z.coerce.number().int().min(13, "You must be at least 13 years old"),
   weightKg: z.coerce.number().positive("Weight is required"),
   primaryGoal: z.string().min(1, "Primary goal is required"),
   trainingExperience: z.enum(["beginner", "intermediate", "advanced"]),

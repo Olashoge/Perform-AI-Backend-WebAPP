@@ -1,0 +1,141 @@
+REPLIT AGENT — PROFILE V1 UNITS (IMPERIAL + METRIC) — IMPLEMENT NOW
+
+Goal:
+Update Profile V1 (“Performance Blueprint”) so users can choose Imperial or Metric units. Default to Imperial for US users. Display inputs in the selected units, but ALWAYS store values internally in metric (cm/kg) in the database. This must feel premium and frictionless.
+
+Why:
+We target US users. Imperial must be default. But we still support metric. We store metric internally for consistency.
+
+============================================================
+REQUIREMENTS
+============================================================
+
+1) Add Unit System preference
+- Add a new field on the user profile (or user table if that’s where profile settings live):
+  - unitSystem: enum('imperial','metric')
+  - default: 'imperial' for US users, otherwise 'metric'
+- If we cannot reliably detect region, default to 'imperial' but allow user to switch.
+
+2) UI: Unit Toggle (Premium UX)
+- At the top of “Physical Stats & Goals” section (or top of page), add a segmented control:
+  - [ Imperial ] [ Metric ]
+- Changing the toggle:
+  - instantly re-renders the height/weight inputs
+  - converts any already-entered values live (no reset, no confusion)
+  - does NOT require refresh
+
+3) Inputs by Unit Mode
+A) Imperial mode (US default)
+- Height: separate inputs (Feet + Inches)
+- Weight: lbs
+- Target Weight: lbs
+
+B) Metric mode
+- Height: cm
+- Weight: kg
+- Target Weight: kg
+
+4) Database storage rules (ALWAYS metric)
+- Store:
+  - heightCm (number)
+  - weightKg (number)
+  - targetWeightKg (number)
+- If our current schema uses heightCm/weightKg already, keep those.
+- If schema currently uses height/weight generic:
+  - migrate/rename to explicit heightCm/weightKg/targetWeightKg OR add these fields and map.
+- Never store feet/inches/lbs in DB (only in UI state).
+
+5) Conversions (must be correct)
+- lbs -> kg: kg = lbs / 2.2046226218
+- kg -> lbs: lbs = kg * 2.2046226218
+- inches -> cm: cm = inches * 2.54
+- cm -> inches: inches = cm / 2.54
+- heightCm from ft/in:
+  - totalInches = (feet * 12) + inches
+  - heightCm = totalInches * 2.54
+- ft/in from heightCm:
+  - totalInches = heightCm / 2.54
+  - feet = floor(totalInches / 12)
+  - inches = round(totalInches % 12)  // handle 11.6 -> 12 edge by carry into feet
+
+Edge cases:
+- rounding should not create 12 inches; if inches === 12 then set inches=0 and feet += 1
+- allow decimals for weight (e.g., 180.5 lbs)
+- height inches input should be 0–11
+
+6) Loading existing profiles
+- When page loads:
+  - Read stored metric values (heightCm, weightKg, targetWeightKg)
+  - Display in selected unit system:
+    - if imperial: convert to ft/in and lbs
+    - if metric: show cm/kg directly
+- Unit toggle should not corrupt data. Conversions must preserve values.
+
+7) API / server behavior
+- Ensure any API routes that update profile accept payloads in metric fields only:
+  - heightCm, weightKg, targetWeightKg, unitSystem
+- If there are already endpoints that accept “height” and “weight”, refactor to explicit metric fields.
+- Validate:
+  - age must be within reasonable bounds (IMPORTANT SAFETY): if age < 13, we must prevent creating workout plans and show a “guardian required / not supported” message (at least block generation for infants like 1-year-old).
+  - weight/height must be > 0 if provided.
+
+8) UI copy
+- Update labels dynamically:
+  - “Height (ft/in)” vs “Height (cm)”
+  - “Weight (lb)” vs “Weight (kg)”
+  - “Target Weight (lb)” vs “Target Weight (kg)”
+- Keep the layout clean and aligned with existing design system.
+
+============================================================
+IMPLEMENTATION STEPS (DO THESE IN ORDER)
+============================================================
+
+Step 1: Locate current Profile V1 page/component
+- Identify where “Performance Blueprint” form is implemented.
+- Identify how profile is stored (DB schema + API routes).
+
+Step 2: Update database schema
+- Add unitSystem enum with default logic.
+- Ensure metric fields exist (heightCm, weightKg, targetWeightKg).
+- Run migrations.
+
+Step 3: Update server/API
+- Update profile GET/PUT to include unitSystem + metric fields.
+- Validate and sanitize payload.
+
+Step 4: Update UI form state
+- Create local UI state for:
+  - unitSystem
+  - if imperial: heightFeet, heightInches, weightLbs, targetWeightLbs
+  - always keep a derived metric object:
+    - heightCm, weightKg, targetWeightKg
+- On save:
+  - send metric fields only + unitSystem
+
+Step 5: Add Unit Toggle
+- Segmented control component.
+- On toggle:
+  - convert existing inputs to the other unit system and update UI state.
+
+Step 6: QA checklist
+- Create profile in Imperial, save, refresh, confirm values persist.
+- Toggle to Metric, confirm correct conversions.
+- Edit in Metric, save, refresh, confirm values persist.
+- Toggle back to Imperial, confirm consistent.
+- Ensure no NaN/blank conversions.
+- Confirm inches never displays as 12.
+- Confirm US default is imperial.
+
+============================================================
+DELIVERABLE
+============================================================
+
+When done, reply with:
+- files changed list
+- schema changes summary
+- before/after screenshots of the Profile V1 section
+- confirmation that DB stores metric only and UI displays per unitSystem
+- confirmation that US default is imperial
+
+IMPORTANT:
+Do not change the design theme or overall layout beyond adding the unit toggle and swapping the inputs. Keep everything premium and consistent.
