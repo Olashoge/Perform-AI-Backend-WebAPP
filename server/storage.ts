@@ -7,7 +7,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(email: string, passwordHash: string): Promise<User>;
   createMealPlan(userId: string, preferencesJson: any, planJson: any): Promise<MealPlan>;
-  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string): Promise<MealPlan>;
+  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any): Promise<MealPlan>;
   getMealPlan(id: string): Promise<MealPlan | undefined>;
   getMealPlansByUser(userId: string): Promise<MealPlan[]>;
   findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined>;
@@ -33,7 +33,7 @@ export interface IStorage {
   updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined>;
   getScheduledPlans(userId: string): Promise<MealPlan[]>;
   softDeletePlan(id: string): Promise<MealPlan | undefined>;
-  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string): Promise<WorkoutPlan>;
+  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any): Promise<WorkoutPlan>;
   getWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
   getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]>;
   updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined>;
@@ -117,7 +117,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string): Promise<MealPlan> {
+  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any): Promise<MealPlan> {
     const [plan] = await db.insert(mealPlans).values({
       userId,
       idempotencyKey,
@@ -126,6 +126,7 @@ export class DatabaseStorage implements IStorage {
       status: "generating",
       startedAt: new Date(),
       planStartDate: startDate || null,
+      profileSnapshot: profileSnapshot || null,
     }).returning();
     return plan;
   }
@@ -409,7 +410,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string): Promise<WorkoutPlan> {
+  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any): Promise<WorkoutPlan> {
     const [plan] = await db.insert(workoutPlans).values({
       userId,
       idempotencyKey,
@@ -418,6 +419,7 @@ export class DatabaseStorage implements IStorage {
       status: "generating",
       startedAt: new Date(),
       planStartDate: startDate || null,
+      profileSnapshot: profileSnapshot || null,
     }).returning();
     return plan;
   }

@@ -205,7 +205,7 @@ export default function ProfilePage() {
       sleepHours: null,
       stressLevel: null,
       activityLevel: null,
-      availableTrainingDays: null,
+      trainingDaysOfWeek: [],
       sessionDurationMinutes: null,
       allergies: [],
       intolerances: [],
@@ -247,7 +247,7 @@ export default function ProfilePage() {
         sleepHours: profile.sleepHours || null,
         stressLevel: (profile.stressLevel as "low" | "moderate" | "high") || null,
         activityLevel: (profile.activityLevel as "sedentary" | "moderate" | "active") || null,
-        availableTrainingDays: profile.availableTrainingDays || null,
+        trainingDaysOfWeek: (profile.trainingDaysOfWeek as string[]) || [],
         sessionDurationMinutes: profile.sessionDurationMinutes || null,
         allergies: (profile.allergies as string[]) || [],
         intolerances: (profile.intolerances as string[]) || [],
@@ -728,29 +728,44 @@ export default function ProfilePage() {
                 />
                 <FormField
                   control={form.control}
-                  name="availableTrainingDays"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        <span className="flex items-center gap-1.5">
-                          <Flame className="h-3.5 w-3.5" />
-                          Training Days/Week
-                        </span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={7}
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                          data-testid="input-training-days"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  name="trainingDaysOfWeek"
+                  render={({ field }) => {
+                    const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+                    const dayLabels: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+                    const selected = (field.value as string[]) || [];
+                    const toggle = (day: string) => {
+                      const next = selected.includes(day) ? selected.filter((d) => d !== day) : [...selected, day];
+                      field.onChange(next);
+                    };
+                    return (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel>
+                          <span className="flex items-center gap-1.5">
+                            <Flame className="h-3.5 w-3.5" />
+                            Training Days ({selected.length}/week)
+                          </span>
+                        </FormLabel>
+                        <FormControl>
+                          <div className="flex flex-wrap gap-1.5" data-testid="input-training-days">
+                            {days.map((day) => (
+                              <Button
+                                key={day}
+                                type="button"
+                                size="sm"
+                                variant={selected.includes(day) ? "default" : "outline"}
+                                className={`toggle-elevate ${selected.includes(day) ? "toggle-elevated" : ""}`}
+                                onClick={() => toggle(day)}
+                                data-testid={`toggle-day-${day}`}
+                              >
+                                {dayLabels[day]}
+                              </Button>
+                            ))}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
                 <FormField
                   control={form.control}

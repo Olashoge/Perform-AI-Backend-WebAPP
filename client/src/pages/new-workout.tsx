@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { workoutPreferencesSchema, type WorkoutPreferences } from "@shared/schema";
+import { workoutPreferencesSchema, type WorkoutPreferences, type UserProfile } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, Sparkles, CalendarDays, Target, Clock, Crosshair, AlertTriangle } from "lucide-react";
+import { Loader2, Sparkles, CalendarDays, Target, Clock, Crosshair, AlertTriangle, User, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const GOAL_OPTIONS = [
@@ -72,6 +73,11 @@ export default function NewWorkout() {
   const submittedRef = useRef(false);
   const [planStartDate, setPlanStartDate] = useState(startDateFromUrl || "");
 
+  const { data: profile, isLoading: profileLoading } = useQuery<UserProfile>({
+    queryKey: ["/api/profile"],
+    enabled: !!user,
+  });
+
   const form = useForm<WorkoutPreferences>({
     resolver: zodResolver(workoutPreferencesSchema),
     defaultValues: {
@@ -122,7 +128,7 @@ export default function NewWorkout() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || profileLoading) {
     return (
       <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -131,6 +137,26 @@ export default function NewWorkout() {
   }
 
   if (!user) return null;
+
+  if (!profile) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+        <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
+        <h2 className="text-xl font-semibold">Profile Required</h2>
+        <p className="text-muted-foreground">Complete your Performance Blueprint before creating a workout plan. This lets us tailor exercises to your experience, goals, and any limitations.</p>
+        <Button onClick={() => navigate("/profile")} data-testid="button-go-to-profile">
+          <ExternalLink className="h-4 w-4 mr-2" />
+          Set Up Profile
+        </Button>
+      </div>
+    );
+  }
+
+  const profileDaysOfWeek = (profile.trainingDaysOfWeek as string[]) || [];
+  const LBS_PER_KG = 2.2046226218;
+  const profileWeightDisplay = profile.unitSystem === "metric"
+    ? `${profile.weightKg} kg`
+    : `${Math.round(profile.weightKg * LBS_PER_KG)} lbs`;
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
@@ -148,6 +174,53 @@ export default function NewWorkout() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+
+            <section>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Your Profile</h2>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/profile")} data-testid="link-edit-profile">
+                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                  Edit
+                </Button>
+              </div>
+              <Card>
+                <CardContent className="p-5 sm:p-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm" data-testid="profile-summary-workout">
+                    <div>
+                      <span className="text-muted-foreground">Age:</span>{" "}
+                      <span className="font-medium">{profile.age}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Weight:</span>{" "}
+                      <span className="font-medium">{profileWeightDisplay}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Goal:</span>{" "}
+                      <span className="font-medium capitalize">{profile.primaryGoal.replace(/_/g, " ")}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Experience:</span>{" "}
+                      <span className="font-medium capitalize">{profile.trainingExperience}</span>
+                    </div>
+                    {profileDaysOfWeek.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Training:</span>{" "}
+                        <span className="font-medium">{profileDaysOfWeek.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({profileDaysOfWeek.length}/wk)</span>
+                      </div>
+                    )}
+                    {((profile.injuries as string[]) || []).length > 0 && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Injuries:</span>{" "}
+                        <span className="font-medium">{(profile.injuries as string[]).join(", ")}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
 
             <section>
               <div className="flex items-center gap-2 mb-4">

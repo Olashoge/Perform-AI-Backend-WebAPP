@@ -36,6 +36,7 @@ const MOMENTUM_CONFIG: Record<string, { label: string; icon: typeof Activity; cl
 };
 
 function PerformanceSummaryCard({ summary }: { summary: PerformanceSummary }) {
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const momentum = MOMENTUM_CONFIG[summary.momentumState] || MOMENTUM_CONFIG.maintaining;
   const MomentumIcon = momentum.icon;
   const insights = (summary.insights || []) as string[];
@@ -104,6 +105,60 @@ function PerformanceSummaryCard({ summary }: { summary: PerformanceSummary }) {
                     <span className="tabular-nums">{Math.round(summary.energyAvg)}/100</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors pt-1"
+              onClick={() => setShowBreakdown(!showBreakdown)}
+              data-testid="button-score-breakdown"
+            >
+              {showBreakdown ? "Hide" : "How is this score calculated?"}
+            </button>
+
+            {showBreakdown && (
+              <div className="text-xs text-muted-foreground space-y-2 pt-2 border-t" data-testid="score-breakdown">
+                <p className="font-medium text-foreground/80">Score Breakdown</p>
+                <p>Your adherence score is a weighted average:</p>
+                <ul className="space-y-1 ml-3">
+                  {summary.mealAdherencePct != null && summary.workoutAdherencePct != null ? (
+                    <>
+                      <li>Meal compliance: <span className="font-medium tabular-nums">{Math.round(summary.mealAdherencePct)}%</span> x 40%{" "}
+                        = <span className="font-medium tabular-nums">{Math.round(summary.mealAdherencePct * 0.4)}</span>
+                      </li>
+                      <li>Workout compliance: <span className="font-medium tabular-nums">{Math.round(summary.workoutAdherencePct)}%</span> x 40%{" "}
+                        = <span className="font-medium tabular-nums">{Math.round(summary.workoutAdherencePct * 0.4)}</span>
+                      </li>
+                      <li>Energy level: <span className="font-medium tabular-nums">{Math.round(summary.energyAvg ?? 60)}</span> x 20%{" "}
+                        = <span className="font-medium tabular-nums">{Math.round((summary.energyAvg ?? 60) * 0.2)}</span>
+                      </li>
+                    </>
+                  ) : summary.mealAdherencePct != null ? (
+                    <>
+                      <li>Meal compliance: <span className="font-medium tabular-nums">{Math.round(summary.mealAdherencePct)}%</span> x 67%{" "}
+                        = <span className="font-medium tabular-nums">{Math.round(summary.mealAdherencePct * 0.67)}</span>
+                      </li>
+                      <li>Energy level: <span className="font-medium tabular-nums">{Math.round(summary.energyAvg ?? 60)}</span> x 33%{" "}
+                        = <span className="font-medium tabular-nums">{Math.round((summary.energyAvg ?? 60) * 0.33)}</span>
+                      </li>
+                    </>
+                  ) : summary.workoutAdherencePct != null ? (
+                    <>
+                      <li>Workout compliance: <span className="font-medium tabular-nums">{Math.round(summary.workoutAdherencePct)}%</span> x 67%{" "}
+                        = <span className="font-medium tabular-nums">{Math.round(summary.workoutAdherencePct * 0.67)}</span>
+                      </li>
+                      <li>Energy level: <span className="font-medium tabular-nums">{Math.round(summary.energyAvg ?? 60)}</span> x 33%{" "}
+                        = <span className="font-medium tabular-nums">{Math.round((summary.energyAvg ?? 60) * 0.33)}</span>
+                      </li>
+                    </>
+                  ) : (
+                    <li>Energy level: <span className="font-medium tabular-nums">{Math.round(summary.energyAvg ?? 60)}</span> x 100%{" "}
+                      = <span className="font-medium tabular-nums">{Math.round(summary.energyAvg ?? 60)}</span>
+                    </li>
+                  )}
+                </ul>
+                <p className="text-muted-foreground/70">Total = <span className="font-medium">{summary.adherenceScore}/100</span></p>
               </div>
             )}
           </div>

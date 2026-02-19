@@ -25,6 +25,7 @@ export const mealPlans = pgTable("meal_plans", {
   swapCount: integer("swap_count").default(0).notNull(),
   regenDayCount: integer("regen_day_count").default(0).notNull(),
   groceryPricingJson: jsonb("grocery_pricing_json"),
+  profileSnapshot: jsonb("profile_snapshot"),
   planStartDate: varchar("plan_start_date", { length: 10 }),
   deletedAt: timestamp("deleted_at"),
 });
@@ -75,6 +76,7 @@ export const workoutPlans = pgTable("workout_plans", {
   errorMessage: text("error_message"),
   preferencesJson: jsonb("preferences_json").notNull(),
   planJson: jsonb("plan_json"),
+  profileSnapshot: jsonb("profile_snapshot"),
   planStartDate: varchar("plan_start_date", { length: 10 }),
   deletedAt: timestamp("deleted_at"),
 });
@@ -520,7 +522,7 @@ export const userProfiles = pgTable("user_profiles", {
   sleepHours: real("sleep_hours"),
   stressLevel: varchar("stress_level", { length: 20 }),
   activityLevel: varchar("activity_level", { length: 20 }),
-  availableTrainingDays: integer("available_training_days"),
+  trainingDaysOfWeek: jsonb("training_days_of_week").default([]).notNull(),
   sessionDurationMinutes: integer("session_duration_minutes"),
   allergies: jsonb("allergies").default([]),
   intolerances: jsonb("intolerances").default([]),
@@ -549,7 +551,7 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
   sleepHours: z.coerce.number().min(0).max(24).nullable().optional(),
   stressLevel: z.enum(["low", "moderate", "high"]).nullable().optional(),
   activityLevel: z.enum(["sedentary", "moderate", "active"]).nullable().optional(),
-  availableTrainingDays: z.coerce.number().int().min(0).max(7).nullable().optional(),
+  trainingDaysOfWeek: z.array(z.enum(["mon", "tue", "wed", "thu", "fri", "sat", "sun"])).min(1, "Select at least 1 training day").default([]),
   sessionDurationMinutes: z.coerce.number().int().min(10).max(180).nullable().optional(),
   appetiteLevel: z.enum(["low", "normal", "high"]).nullable().optional(),
   spicePreference: z.enum(["mild", "medium", "spicy"]).nullable().optional(),

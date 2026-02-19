@@ -1,0 +1,97 @@
+You are the Replit Agent building Perform AI. Proceed with the Phase 0 plan exactly as you proposed (all 8 tasks). Do NOT ask me more questions—make reasonable product decisions consistent with an ultra-premium, performance-intelligence app.
+
+PRIMARY GOAL:
+Make the system structurally intelligent: Profile is the single source of truth, every plan flow is profile-aware, and all plan generation routes are safely gated.
+
+NON-NEGOTIABLE RULES:
+1) HARD PROFILE GATE:
+   - Users must have a completed profile before they can generate ANY plan (Wellness Plan, standalone Meal Plan, standalone Workout Plan).
+   - If profile missing or incomplete (per MVP required fields below), redirect to Profile and show a “Complete your Performance Blueprint to unlock plans” message.
+   - Browsing is allowed, but “Generate” actions are blocked until profile complete.
+
+2) PROFILE-AWARE PREFILL + OVERRIDES (intelligence):
+   - All plan creation UIs must fetch the user profile and prefill relevant fields.
+   - Profile values are defaults. Any user edits in the plan form are treated as overrides for THIS plan generation only.
+   - Overrides NEVER modify the user’s profile.
+   - The merged (profile + overrides) is stored as the plan’s snapshot and used for prompt generation + constraint checks.
+
+3) AGE SAFETY EVERYWHERE:
+   - Enforce age validation across ALL plan creation routes, not just goal wizard.
+   - If age is outside allowed range (set default minimum age = 13), block generation with clear message.
+   - Prevent absurd plans for infants/children. This is critical.
+
+4) SNAPSHOT EVERYWHERE:
+   - Add profileSnapshot (JSON) to meal_plans and workout_plans (or equivalent tables) so every plan records the exact profile used at generation time.
+   - Wellness/goal plans already save a snapshot—keep that behavior consistent.
+   - Store also any “overrideSnapshot” or store merged snapshot only—either is fine, but ensure we can audit what profile values were used.
+
+5) SCORE TRANSPARENCY:
+   - The adherence score breakdown (40/40/20 or whatever current weights are) must be shown on the Check-ins page:
+     - Meals contribution
+     - Workouts contribution
+     - Energy contribution
+     - Final score
+   - Display weights and the computed sub-scores. Keep it clean and premium.
+
+MEASUREMENT SYSTEM:
+- The user can choose Imperial/Metric in profile (or app setting).
+- Internally, normalize to a canonical format for calculations/prompts (choose Metric internally if easiest).
+- UI must always display using the user’s chosen unit system, converting automatically.
+- Ensure prompts never accidentally mix units (kg/cm appearing for an Imperial user).
+
+MVP “PROFILE COMPLETE” REQUIRED FIELDS (must be present to generate):
+- age
+- sex (optional only if already handled safely; otherwise require)
+- height (store with unit or normalized)
+- weight (store with unit or normalized)
+- primaryGoal
+- trainingExperience
+- trainingDaysPerWeek
+- sessionDurationMinutes
+- diet preferences OR at least “no preference” stored (so prompts have a value)
+
+IMPLEMENTATION TASKS (execute in this order):
+Task 1 — Data model:
+- Add profileSnapshot JSON column to meal plan table and workout plan table.
+- Update Prisma schema + migrations accordingly.
+- Update server create routes to populate profileSnapshot with merged profile+overrides.
+
+Task 2 — Backend safety + gate:
+- For /api/meal-plans/create and /api/workout-plans/create (or relevant endpoints), require profile exists and is “complete”.
+- Run constraint engine checks including age safety.
+- Return clear errors (401/403/422) with messages the UI can show.
+
+Task 3 — Meal plan form profile awareness:
+- Fetch profile on load.
+- Prefill About You fields (remove redundant inputs if possible).
+- Show a compact “Using Profile” card (age, height, weight, goal, experience) + “Edit Profile” link.
+- Keep optional overrides accessible via “Adjust for this plan” expand/collapse.
+
+Task 4 — Workout plan form profile awareness:
+- Same as meal plan form.
+
+Task 5 — Goal wizard cleanup:
+- Remove redundant “About You” section.
+- Replace with the “Using Profile” summary card + Edit Profile link.
+- Ensure wizard uses profile for generation automatically.
+
+Task 6 — Override merge logic:
+- Implement a mergeProfileWithOverrides(profile, overrides) helper shared by all plan routes.
+- Use merged data for prompts + constraint checks.
+- Save merged snapshot into plan record.
+
+Task 7 — Score transparency UI:
+- On Check-ins page, show final score plus breakdown (Meals, Workouts, Energy) and weights.
+- Keep premium design; do not clutter.
+
+Task 8 — Final review/testing:
+- Test flows:
+  a) New user without profile → blocked from generation everywhere, routed to profile.
+  b) Completed profile → plan forms prefilled and no redundant re-entry required.
+  c) Overrides apply only to plan snapshot, profile remains unchanged.
+  d) Age invalid → blocked on ALL generation routes.
+  e) Unit system: Imperial user never sees kg/cm in UI; conversions correct.
+
+DELIVERABLE:
+- Implement everything above, commit changes, and confirm each task is complete with brief notes on what files/routes were changed.
+Start now.

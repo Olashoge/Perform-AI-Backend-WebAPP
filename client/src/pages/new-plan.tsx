@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { preferencesSchema, type Preferences } from "@shared/schema";
+import { preferencesSchema, type Preferences, type UserProfile } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, Sparkles, X, Plus, CalendarDays, Target, ChefHat, User, Home } from "lucide-react";
+import { Loader2, Sparkles, X, Plus, CalendarDays, Target, ChefHat, User, Home, AlertTriangle, ExternalLink } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,6 +51,11 @@ export default function NewPlan() {
   const submittedRef = useRef(false);
   const [customStyleInput, setCustomStyleInput] = useState("");
   const [planStartDate, setPlanStartDate] = useState(startDateFromUrl || "");
+
+  const { data: profile, isLoading: profileLoading } = useQuery<UserProfile>({
+    queryKey: ["/api/profile"],
+    enabled: !!user,
+  });
 
   const form = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
@@ -126,13 +132,33 @@ export default function NewPlan() {
     }
   }
 
-  if (isLoading || !user) {
+  if (isLoading || !user || profileLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  if (!profile) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+        <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
+        <h2 className="text-xl font-semibold">Profile Required</h2>
+        <p className="text-muted-foreground">Complete your Performance Blueprint before creating a meal plan. This lets us personalize your nutrition around your body, goals, and training schedule.</p>
+        <Button onClick={() => navigate("/profile")} data-testid="button-go-to-profile">
+          <ExternalLink className="h-4 w-4 mr-2" />
+          Set Up Profile
+        </Button>
+      </div>
+    );
+  }
+
+  const profileDaysOfWeek = (profile.trainingDaysOfWeek as string[]) || [];
+  const LBS_PER_KG = 2.2046226218;
+  const profileWeightDisplay = profile.unitSystem === "metric"
+    ? `${profile.weightKg} kg`
+    : `${Math.round(profile.weightKg * LBS_PER_KG)} lbs`;
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
@@ -434,160 +460,47 @@ export default function NewPlan() {
             </section>
 
             <section>
-              <div className="flex items-center gap-2 mb-4">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">About You</h2>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Your Profile</h2>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/profile")} data-testid="link-edit-profile">
+                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                  Edit
+                </Button>
               </div>
               <Card>
-                <CardContent className="p-5 sm:p-6 space-y-6">
-                  <FormField
-                    control={form.control}
-                    name="age"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Age (optional)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={120}
-                            placeholder="Your age"
-                            className="w-32"
-                            disabled={isPending}
-                            data-testid="input-age"
-                            value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="border-t pt-6 space-y-3">
-                    <FormLabel>Weight (optional)</FormLabel>
-                    <FormField
-                      control={form.control}
-                      name="weightUnit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex gap-1">
-                            <Button
-                              type="button"
-                              variant={field.value === "lb" ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => field.onChange("lb")}
-                              disabled={isPending}
-                              data-testid="button-unit-lb"
-                            >
-                              lb
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={field.value === "kg" ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => field.onChange("kg")}
-                              disabled={isPending}
-                              data-testid="button-unit-kg"
-                            >
-                              kg
-                            </Button>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex flex-wrap gap-4">
-                      <FormField
-                        control={form.control}
-                        name="currentWeight"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  max={1000}
-                                  placeholder="Current weight"
-                                  className="w-36"
-                                  disabled={isPending}
-                                  data-testid="input-current-weight"
-                                  value={field.value ?? ""}
-                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                                />
-                                <span className="text-sm text-muted-foreground">{form.watch("weightUnit")}</span>
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="targetWeight"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  max={1000}
-                                  placeholder="Target weight"
-                                  className="w-36"
-                                  disabled={isPending}
-                                  data-testid="input-target-weight"
-                                  value={field.value ?? ""}
-                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                                />
-                                <span className="text-sm text-muted-foreground">{form.watch("weightUnit")}</span>
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                <CardContent className="p-5 sm:p-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm" data-testid="profile-summary-meal">
+                    <div>
+                      <span className="text-muted-foreground">Age:</span>{" "}
+                      <span className="font-medium">{profile.age}</span>
                     </div>
-                  </div>
-
-                  <div className="border-t pt-6">
-                    <FormField
-                      control={form.control}
-                      name="workoutDays"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Workout Days (optional)</FormLabel>
-                          <FormDescription>Select the days you work out</FormDescription>
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const).map((day) => {
-                              const selected = (field.value || []).includes(day);
-                              return (
-                                <Button
-                                  key={day}
-                                  type="button"
-                                  variant={selected ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => {
-                                    const current = field.value || [];
-                                    if (selected) {
-                                      const next = current.filter((d: string) => d !== day);
-                                      field.onChange(next.length > 0 ? next : undefined);
-                                    } else {
-                                      field.onChange([...current, day]);
-                                    }
-                                  }}
-                                  disabled={isPending}
-                                  data-testid={`button-workout-${day.toLowerCase()}`}
-                                >
-                                  {day}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div>
+                      <span className="text-muted-foreground">Weight:</span>{" "}
+                      <span className="font-medium">{profileWeightDisplay}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Goal:</span>{" "}
+                      <span className="font-medium capitalize">{profile.primaryGoal.replace(/_/g, " ")}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Experience:</span>{" "}
+                      <span className="font-medium capitalize">{profile.trainingExperience}</span>
+                    </div>
+                    {profileDaysOfWeek.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Training:</span>{" "}
+                        <span className="font-medium">{profileDaysOfWeek.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} ({profileDaysOfWeek.length}/wk)</span>
+                      </div>
+                    )}
+                    {((profile.allergies as string[]) || []).length > 0 && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Allergies:</span>{" "}
+                        <span className="font-medium">{(profile.allergies as string[]).join(", ")}</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

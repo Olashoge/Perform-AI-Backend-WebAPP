@@ -222,31 +222,33 @@ export async function registerRoutes(
       }
 
       const userProfile = await storage.getUserProfile(userId);
-      let standaloneConstraintBlock = "";
-      if (userProfile) {
-        const scheduledDates = await storage.getScheduledMealPlanDates(userId);
-        const validSD = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
-        const ruleCtx: RuleContext = {
-          profile: userProfile,
-          planKind: "meal",
-          startDate: validSD,
-          mealPreferences: prefsBody,
-          existingScheduledMealDates: scheduledDates,
-          existingScheduledWorkoutDates: [],
-        };
-        const cResult = evaluateConstraints(ruleCtx);
-        if (cResult.blocked) {
-          return res.status(400).json({
-            message: cResult.violations.find(v => v.severity === "BLOCK")?.message || "Plan blocked by safety constraints.",
-            blocked: true,
-            violations: cResult.violations.map(v => ({ ruleKey: v.ruleKey, severity: v.severity, message: v.message, category: v.category })),
-          });
-        }
-        standaloneConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "meal", userProfile.nextWeekPlanBias);
+      if (!userProfile) {
+        return res.status(400).json({ message: "Please complete your Performance Blueprint (profile) before creating a meal plan.", profileRequired: true });
       }
 
+      let standaloneConstraintBlock = "";
+      const scheduledDates = await storage.getScheduledMealPlanDates(userId);
+      const validSD = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
+      const ruleCtx: RuleContext = {
+        profile: userProfile,
+        planKind: "meal",
+        startDate: validSD,
+        mealPreferences: prefsBody,
+        existingScheduledMealDates: scheduledDates,
+        existingScheduledWorkoutDates: [],
+      };
+      const cResult = evaluateConstraints(ruleCtx);
+      if (cResult.blocked) {
+        return res.status(400).json({
+          message: cResult.violations.find(v => v.severity === "BLOCK")?.message || "Plan blocked by safety constraints.",
+          blocked: true,
+          violations: cResult.violations.map(v => ({ ruleKey: v.ruleKey, severity: v.severity, message: v.message, category: v.category })),
+        });
+      }
+      standaloneConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "meal", userProfile.nextWeekPlanBias);
+
       const validStartDate = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
-      const pendingPlan = await storage.createPendingMealPlan(userId, idempotencyKey || null, parsed.data, validStartDate);
+      const pendingPlan = await storage.createPendingMealPlan(userId, idempotencyKey || null, parsed.data, validStartDate, userProfile);
 
       res.json(pendingPlan);
 
@@ -894,29 +896,31 @@ export async function registerRoutes(
       }
 
       const userProfile = await storage.getUserProfile(userId);
-      let workoutConstraintBlock = "";
-      if (userProfile) {
-        const scheduledDates = await storage.getScheduledWorkoutPlanDates(userId);
-        const ruleCtx: RuleContext = {
-          profile: userProfile,
-          planKind: "workout",
-          startDate: validStartDate,
-          workoutPreferences: req.body.preferences,
-          existingScheduledMealDates: [],
-          existingScheduledWorkoutDates: scheduledDates,
-        };
-        const cResult = evaluateConstraints(ruleCtx);
-        if (cResult.blocked) {
-          return res.status(400).json({
-            message: cResult.violations.find(v => v.severity === "BLOCK")?.message || "Plan blocked by safety constraints.",
-            blocked: true,
-            violations: cResult.violations.map(v => ({ ruleKey: v.ruleKey, severity: v.severity, message: v.message, category: v.category })),
-          });
-        }
-        workoutConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "workout", userProfile.nextWeekPlanBias);
+      if (!userProfile) {
+        return res.status(400).json({ message: "Please complete your Performance Blueprint (profile) before creating a workout plan.", profileRequired: true });
       }
 
-      const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs, validStartDate);
+      let workoutConstraintBlock = "";
+      const scheduledDates = await storage.getScheduledWorkoutPlanDates(userId);
+      const ruleCtx: RuleContext = {
+        profile: userProfile,
+        planKind: "workout",
+        startDate: validStartDate,
+        workoutPreferences: req.body.preferences,
+        existingScheduledMealDates: [],
+        existingScheduledWorkoutDates: scheduledDates,
+      };
+      const cResult = evaluateConstraints(ruleCtx);
+      if (cResult.blocked) {
+        return res.status(400).json({
+          message: cResult.violations.find(v => v.severity === "BLOCK")?.message || "Plan blocked by safety constraints.",
+          blocked: true,
+          violations: cResult.violations.map(v => ({ ruleKey: v.ruleKey, severity: v.severity, message: v.message, category: v.category })),
+        });
+      }
+      workoutConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "workout", userProfile.nextWeekPlanBias);
+
+      const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs, validStartDate, userProfile);
 
       (async () => {
         try {

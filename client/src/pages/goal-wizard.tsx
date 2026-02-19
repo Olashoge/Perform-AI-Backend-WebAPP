@@ -492,75 +492,25 @@ export default function GoalWizard() {
                   </div>
                 </div>
 
-                <div className="border-t pt-6">
-                  <label className="text-sm font-medium mb-3 block">About You (optional)</label>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm text-muted-foreground mb-1 block">Age</label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={120}
-                        placeholder="Your age"
-                        className="w-32"
-                        data-testid="input-age"
-                        value={mealForm.watch("age") ?? ""}
-                        onChange={(e) => mealForm.setValue("age", e.target.value ? parseInt(e.target.value) : undefined)}
-                      />
+                {profileData && (
+                  <div className="border-t pt-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-sm font-medium block">Using Your Profile</label>
+                      <Button variant="ghost" size="sm" onClick={() => navigate("/profile")} type="button" data-testid="link-edit-profile-wizard">
+                        Edit Profile
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm text-muted-foreground mb-1 block">Weight</label>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant={mealForm.watch("weightUnit") === "lb" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => mealForm.setValue("weightUnit", "lb")}
-                          data-testid="button-unit-lb"
-                        >
-                          lb
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={mealForm.watch("weightUnit") === "kg" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => mealForm.setValue("weightUnit", "kg")}
-                          data-testid="button-unit-kg"
-                        >
-                          kg
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-4">
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={1000}
-                            placeholder="Current weight"
-                            className="w-36"
-                            data-testid="input-current-weight"
-                            value={mealForm.watch("currentWeight") ?? ""}
-                            onChange={(e) => mealForm.setValue("currentWeight", e.target.value ? parseFloat(e.target.value) : undefined)}
-                          />
-                          <span className="text-sm text-muted-foreground">{mealForm.watch("weightUnit")}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={1000}
-                            placeholder="Target weight"
-                            className="w-36"
-                            data-testid="input-target-weight"
-                            value={mealForm.watch("targetWeight") ?? ""}
-                            onChange={(e) => mealForm.setValue("targetWeight", e.target.value ? parseFloat(e.target.value) : undefined)}
-                          />
-                          <span className="text-sm text-muted-foreground">{mealForm.watch("weightUnit")}</span>
-                        </div>
-                      </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                      <div><span className="text-muted-foreground">Age:</span> <span className="font-medium">{profileData.age}</span></div>
+                      <div><span className="text-muted-foreground">Weight:</span> <span className="font-medium">{profileData.unitSystem === "metric" ? `${profileData.weightKg} kg` : `${Math.round(profileData.weightKg * 2.205)} lbs`}</span></div>
+                      <div><span className="text-muted-foreground">Goal:</span> <span className="font-medium capitalize">{profileData.primaryGoal.replace(/_/g, " ")}</span></div>
+                      <div><span className="text-muted-foreground">Experience:</span> <span className="font-medium capitalize">{profileData.trainingExperience}</span></div>
+                      {((profileData.trainingDaysOfWeek as string[]) || []).length > 0 && (
+                        <div className="col-span-2"><span className="text-muted-foreground">Training:</span> <span className="font-medium">{((profileData.trainingDaysOfWeek as string[]) || []).map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")}</span></div>
+                      )}
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </CardContent>
           </Card>
