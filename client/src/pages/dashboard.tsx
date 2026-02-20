@@ -2,37 +2,21 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import type { MealPlan, WorkoutPlan, GoalPlan, PlanOutput, WorkoutPlanOutput, Meal, WorkoutSession, WeeklyCheckIn } from "@shared/schema";
+import type { MealPlan, WorkoutPlan, PlanOutput, WorkoutPlanOutput, Meal, WorkoutSession, WeeklyCheckIn, PerformanceSummary } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   CalendarDays, ChevronLeft, ChevronRight,
-  Dumbbell, UtensilsCrossed, Target, Flame, Trophy, Heart, Zap,
+  Dumbbell, UtensilsCrossed,
   Sparkles, ClipboardCheck, ArrowRight, Plus,
+  TrendingUp, TrendingDown, Minus, Activity,
 } from "lucide-react";
 import { format, startOfWeek, addDays, isWithinInterval, isSameDay } from "date-fns";
 import { PlanThisDay } from "@/components/plan-this-day";
 import { CompletionCheckbox } from "@/components/completion-checkbox";
 import { useCompletions, useWeeklyAdherence } from "@/hooks/use-completions";
 
-const GOAL_LABELS: Record<string, string> = {
-  weight_loss: "Weight Loss",
-  muscle_gain: "Muscle Gain",
-  performance: "Performance",
-  maintenance: "Maintenance",
-  energy: "Energy & Focus",
-  general_fitness: "General Fitness",
-};
-
-const GOAL_ICONS: Record<string, typeof Flame> = {
-  weight_loss: Flame,
-  muscle_gain: Dumbbell,
-  performance: Trophy,
-  maintenance: Heart,
-  energy: Zap,
-  general_fitness: Target,
-};
 
 function isActivePlan(startDate: string | null | undefined, referenceDate: Date): boolean {
   if (!startDate) return false;
@@ -70,11 +54,6 @@ export default function Dashboard() {
 
   const { data: workoutPlans } = useQuery<WorkoutPlan[]>({
     queryKey: ["/api/workouts"],
-    enabled: !!user,
-  });
-
-  const { data: goalPlans } = useQuery<GoalPlan[]>({
-    queryKey: ["/api/goal-plans"],
     enabled: !!user,
   });
 
@@ -146,6 +125,11 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  const { data: perfSummaries } = useQuery<PerformanceSummary[]>({
+    queryKey: ["/api/performance"],
+    enabled: !!user,
+  });
+
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const stats = useMemo(() => {
@@ -154,8 +138,6 @@ export default function Dashboard() {
     return { activeMeals, activeWorkouts };
   }, [mealPlans, workoutPlans, now]);
 
-  const activeGoal = goalPlans?.find(g => !g.deletedAt);
-  const GoalIcon = activeGoal ? (GOAL_ICONS[activeGoal.goalType] || Target) : Target;
 
   const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
 
@@ -220,44 +202,113 @@ export default function Dashboard() {
         )}
       </div>
 
-      {activeGoal && (
-        <Card className="mb-6" data-testid="card-goal-progress">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center">
-                  <GoalIcon className="h-5 w-5 text-primary" />
+      {perfSummaries && perfSummaries.length > 0 && (() => {
+        const latest = perfSummaries[0];
+        const previous = perfSummaries.length > 1 ? perfSummaries[1] : null;
+        const scoreDelta = previous ? latest.adherenceScore - previous.adherenceScore : 0;
+        const mealPct = latest.mealAdherencePct != null ? Math.round(latest.mealAdherencePct) : null;
+        const workoutPct = latest.workoutAdherencePct != null ? Math.round(latest.workoutAdherencePct) : null;
+        const insights = (latest.insights || []) as string[];
+
+        const momentumConfig: Record<string, { label: string; color: string; bg: string; icon: typeof TrendingUp }> = {
+          building: { label: "Building", color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30", icon: TrendingUp },
+          maintaining: { label: "Steady", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30", icon: Minus },
+          fatigue_risk: { label: "Fatigue Risk", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30", icon: Activity },
+          slipping: { label: "Needs Attention", color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-900/30", icon: TrendingDown },
+        };
+        const momentum = momentumConfig[latest.momentumState] || momentumConfig.maintaining;
+        const MomentumIcon = momentum.icon;
+
+        const scoreColor = latest.adherenceScore >= 80 ? "text-emerald-600 dark:text-emerald-400" :
+          latest.adherenceScore >= 60 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400";
+        const ringColor = latest.adherenceScore >= 80 ? "stroke-emerald-500" :
+          latest.adherenceScore >= 60 ? "stroke-amber-500" : "stroke-red-500";
+        const circumference = 2 * Math.PI * 40;
+        const dashOffset = circumference - (latest.adherenceScore / 100) * circumference;
+
+        return (
+          <Card className="mb-6 overflow-hidden" data-testid="card-performance-scorecard">
+            <CardContent className="p-0">
+              <div className="flex flex-col sm:flex-row">
+                <div className="flex items-center justify-center p-6 sm:p-8 sm:border-r border-b sm:border-b-0">
+                  <div className="relative w-28 h-28 sm:w-32 sm:h-32">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" fill="none" className="stroke-muted" strokeWidth="6" />
+                      <circle
+                        cx="50" cy="50" r="40" fill="none"
+                        className={`${ringColor} transition-all duration-1000 ease-out`}
+                        strokeWidth="6" strokeLinecap="round"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={dashOffset}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className={`text-3xl sm:text-4xl font-bold tabular-nums ${scoreColor}`} data-testid="text-adherence-score">
+                        {latest.adherenceScore}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Score</span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-lg font-bold">{GOAL_LABELS[activeGoal.goalType] || activeGoal.goalType}</div>
-                  {activeGoal.startDate && (
-                    <div className="text-xs text-muted-foreground">
-                      Started {format(new Date(activeGoal.startDate), "MMMM d, yyyy")}
+
+                <div className="flex-1 p-5 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Weekly Performance</div>
+                      <div className="text-sm text-muted-foreground">
+                        {format(new Date(latest.weekStartDate + "T00:00:00"), "MMM d")} — {format(new Date(latest.weekEndDate + "T00:00:00"), "MMM d")}
+                      </div>
+                    </div>
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${momentum.bg}`}>
+                      <MomentumIcon className={`h-3.5 w-3.5 ${momentum.color}`} />
+                      <span className={`text-xs font-medium ${momentum.color}`}>{momentum.label}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="text-center p-2.5 rounded-lg bg-muted/50">
+                      <div className="text-xs text-muted-foreground mb-0.5">Meals</div>
+                      <div className="text-lg font-bold tabular-nums text-amber-600 dark:text-amber-400" data-testid="text-meal-adherence">
+                        {mealPct != null ? `${mealPct}%` : "—"}
+                      </div>
+                    </div>
+                    <div className="text-center p-2.5 rounded-lg bg-muted/50">
+                      <div className="text-xs text-muted-foreground mb-0.5">Workouts</div>
+                      <div className="text-lg font-bold tabular-nums text-teal-600 dark:text-teal-400" data-testid="text-workout-adherence">
+                        {workoutPct != null ? `${workoutPct}%` : "—"}
+                      </div>
+                    </div>
+                    <div className="text-center p-2.5 rounded-lg bg-muted/50">
+                      <div className="text-xs text-muted-foreground mb-0.5">Trend</div>
+                      <div className="text-lg font-bold tabular-nums flex items-center justify-center gap-1" data-testid="text-score-trend">
+                        {scoreDelta > 0 ? (
+                          <span className="text-emerald-600 dark:text-emerald-400">+{scoreDelta}</span>
+                        ) : scoreDelta < 0 ? (
+                          <span className="text-red-600 dark:text-red-400">{scoreDelta}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {insights.length > 0 && (
+                    <div className="text-xs text-muted-foreground leading-relaxed line-clamp-2" data-testid="text-performance-insight">
+                      {insights[0]}
+                    </div>
+                  )}
+
+                  {latest.adjustmentStatement && !insights.length && (
+                    <div className="text-xs text-muted-foreground leading-relaxed line-clamp-2" data-testid="text-adjustment-statement">
+                      {latest.adjustmentStatement}
                     </div>
                   )}
                 </div>
               </div>
-              {activeGoal.startDate && (
-                <div className="text-right">
-                  <div className="text-3xl font-bold" data-testid="text-days-remaining">
-                    {Math.max(0, Math.ceil((new Date(activeGoal.startDate).getTime() + 42 * 86400000 - now.getTime()) / 86400000))}
-                  </div>
-                  <div className="text-xs text-muted-foreground">days remaining</div>
-                </div>
-              )}
-            </div>
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
-                <span>Progress</span>
-                <span>0%</span>
-              </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all" style={{ width: "0%" }} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/calendar")} data-testid="quick-view-week">
