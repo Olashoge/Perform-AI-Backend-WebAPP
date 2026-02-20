@@ -1,0 +1,224 @@
+REPLIT AGENT — ADAPTIVE ENGINE v1 (Behavior → Next Plan) + ALWAYS USE PROFILE
+
+Objective:
+Implement Adaptive Engine v1: a deterministic backend layer that uses the user’s Profile + recent behavior (check-ins, adherence, energy, weight trend, plan changes) to automatically adjust future plan generation (Wellness, Meal, Workout, Nutrition, and Daily items if applicable). This must make the system feel “alive” and intelligent without adding new UI.
+
+NON-NEGOTIABLE:
+1) EVERY generation request MUST use Profile as baseline context (always).
+   - Meal Plan, Workout Plan, Nutrition Plan, Wellness Plan, Daily Meal, Daily Workout.
+   - If profile missing or incomplete → block generation with CTA to complete Profile.
+2) Adaptive Engine must be deterministic (rule-based), not LLM-based.
+3) Adaptive modifiers must be persisted and auditable (saved as JSON snapshot).
+4) Adaptive modifiers must be injected into prompts/spec so the AI output changes measurably.
+5) Plan snapshot must store:
+   - profileSnapshot (merged profile + overrides)
+   - adaptiveSnapshot (modifiers + reason codes)
+   - safeSpec snapshot (if you already store it)
+
+------------------------------------------------------------
+PHASE 0 — Locate current flows
+------------------------------------------------------------
+Find:
+- All server endpoints/actions that generate:
+  - Wellness plan
+  - Meal plan
+  - Workout plan
+  - Nutrition plan
+  - Daily meal/workout (if present)
+- The check-in table/model and performance_summary table/model (score & breakdown)
+- Any existing “nextWeekPlanBias” or micro-adjustment flag you already created
+
+------------------------------------------------------------
+PHASE 1 — Create Adaptive Engine module
+------------------------------------------------------------
+Create folder: server/adaptive/
+
+Files:
+1) server/adaptive/types.ts
+Define:
+- AdaptiveInputs: profile, latestPerformanceSummary, last2PerformanceSummaries, lastCheckIn, goal, pace, recentPlanChangeStats, currentSchedule
+- AdaptiveModifiers:
+  {
+    volumeMultiplier: number,        // default 1.0 (0.85–1.15)
+    intensityCapRPE: number,         // default 8, lower if fatigue
+    cardioBias: "lower"|"normal"|"higher",
+    recoveryBias: "normal"|"higher",
+    complexityLevel: "simple"|"standard"|"advanced",
+    nutritionCalorieDeltaKcal: number, // -300..+300 typical (bounded)
+    trainingDayCarbBias: "lower"|"normal"|"higher",
+    simplifyMeals: boolean,
+    deloadWeek: boolean
+  }
+- AdaptiveDecision: { code: string, severity: "info"|"adjust", message: string }
+- AdaptiveResult: { modifiers: AdaptiveModifiers, decisions: AdaptiveDecision[] }
+
+2) server/adaptive/computeAdaptiveModifiers.ts
+Deterministic rules (v1) using these signals:
+- mealAdherencePct, workoutAdherencePct
+- energyAvg (0–100)
+- adherenceScore
+- weightDeltaKg (if available)
+- pace setting (gentle/steady/aggressive)
+- recent regen/swap usage (plan-change volatility)
+
+RULES (START SIMPLE & SAFE):
+
+A) Base defaults:
+- volumeMultiplier = 1.0
+- intensityCapRPE = 8
+- cardioBias = "normal"
+- recoveryBias = "normal"
+- complexityLevel = "standard"
+- nutritionCalorieDeltaKcal = 0
+- trainingDayCarbBias = "normal"
+- simplifyMeals = false
+- deloadWeek = false
+
+B) Compliance rules (workouts):
+- If workoutAdherencePct exists AND < 60:
+    volumeMultiplier = 0.85
+    complexityLevel = "simple"
+    cardioBias = "lower"
+    decisions += ["LOW_WORKOUT_ADHERENCE_SIMPLIFY"]
+- If workoutAdherencePct 60–80:
+    keep default
+- If workoutAdherencePct > 85 AND energyAvg >= 80:
+    volumeMultiplier = 1.05
+    complexityLevel = min(currentLevel+1, "advanced") but only if experience is not beginner
+    decisions += ["HIGH_WORKOUT_ADHERENCE_PROGRESS"]
+- Cap volumeMultiplier within [0.85, 1.15]
+
+C) Meal adherence rules:
+- If mealAdherencePct exists AND < 60:
+    simplifyMeals = true
+    complexityLevel = "simple"
+    decisions += ["LOW_MEAL_ADHERENCE_SIMPLIFY_MEALS"]
+
+D) Energy / fatigue rules:
+- If energyAvg <= 40 AND adherenceScore >= 70:
+    recoveryBias = "higher"
+    intensityCapRPE = 7
+    deloadWeek = true
+    volumeMultiplier = min(volumeMultiplier, 0.9)
+    cardioBias = "lower"
+    decisions += ["FATIGUE_RISK_DELOAD"]
+- If energyAvg <= 40 AND adherenceScore < 70:
+    recoveryBias = "higher"
+    intensityCapRPE = 7
+    complexityLevel = "simple"
+    decisions += ["LOW_ENERGY_SIMPLIFY"]
+
+E) Weight trend rules (apply only if weight data exists and goal relevant):
+- If primaryGoal = "weight_loss":
+    If weightDeltaKg >= -0.05 for 2 consecutive weeks AND adherenceScore >= 70:
+        nutritionCalorieDeltaKcal = -150 (bounded by safety constraints)
+        cardioBias = "higher"
+        decisions += ["STALL_WEIGHT_LOSS_ADJUST"]
+- If primaryGoal = "muscle_gain":
+    If weightDeltaKg <= 0.05 for 2 consecutive weeks AND adherenceScore >= 70:
+        nutritionCalorieDeltaKcal = +150
+        decisions += ["STALL_MUSCLE_GAIN_ADJUST"]
+
+F) Pace modifier (gentle/steady/aggressive):
+- gentle: cap calorieDelta abs <= 100; cap volume change <= 1.05; prefer recoveryBias
+- steady: cap calorieDelta abs <= 200; cap volume change <= 1.10
+- aggressive: cap calorieDelta abs <= 300; cap volume change <= 1.15
+
+G) Volatility / too many regens/swaps (if tracked):
+- If regenUsedHigh OR swapUsedHigh:
+    complexityLevel = "simple"
+    decisions += ["HIGH_PLAN_VOLATILITY_SIMPLIFY"]
+
+Return AdaptiveResult with decisions.
+
+------------------------------------------------------------
+PHASE 2 — Persist Adaptive Snapshot
+------------------------------------------------------------
+Add storage:
+- In Wellness plan / Meal plan / Workout plan / Daily plan tables:
+  - adaptiveSnapshot JSON (if not already present)
+Store:
+{
+  modifiers,
+  decisions,
+  inputsMeta: { weekStartDateUsed, lastSummaryIdsUsed }
+}
+
+If adding columns is too heavy, store inside existing planContext JSON under a key: "adaptiveSnapshot".
+
+------------------------------------------------------------
+PHASE 3 — Always use Profile + Adaptive modifiers in ALL generation
+------------------------------------------------------------
+For every generation endpoint/action:
+1) Require completed profile
+2) Merge profile defaults + form overrides into profileSnapshot
+3) Load latest performance summaries/check-ins needed for AdaptiveInputs
+4) Compute AdaptiveResult
+5) Run Constraint Engine to produce SafeSpec (which must also include profile info)
+6) Generate using AI with:
+   - profileSnapshot (canonical)
+   - safeSpec constraints
+   - adaptive modifiers
+7) Post-validate output
+8) Save plan with:
+   - profileSnapshot
+   - safeSpec snapshot (if available)
+   - adaptiveSnapshot
+
+IMPORTANT:
+- Do not rely on form-only data.
+- Profile must be included in prompt context every time even if overrides exist.
+
+------------------------------------------------------------
+PHASE 4 — Prompt injection pattern (structured)
+------------------------------------------------------------
+Update the generator prompts to include a strict section:
+
+"ADAPTIVE MODIFIERS (apply exactly):"
+- volumeMultiplier
+- intensityCapRPE
+- recoveryBias
+- complexityLevel
+- nutritionCalorieDeltaKcal
+- trainingDayCarbBias
+- simplifyMeals
+- deloadWeek
+
+And "WHY" (decisions list) for explainability.
+
+Ensure the model is instructed:
+- if deloadWeek = true => reduce volume/intensity, focus technique/mobility
+- if simplifyMeals = true => fewer ingredients, shorter prep, repeat meals allowed
+- apply calorie delta within SafeSpec bounds
+
+------------------------------------------------------------
+PHASE 5 — Check-in page note (optional, minimal)
+------------------------------------------------------------
+No new UI required, but optionally add 1 line on check-in summary card:
+"Next week adjustment: {short statement}" derived from top decision code.
+Keep it subtle.
+
+------------------------------------------------------------
+PHASE 6 — Tests / Validation
+------------------------------------------------------------
+Add tests for computeAdaptiveModifiers:
+- workoutAdherence < 60 => volumeMultiplier 0.85 + simple
+- fatigue risk => deloadWeek true + RPE cap 7
+- high adherence + high energy => volumeMultiplier 1.05 (not for beginner -> keep standard)
+- weight loss stall => calorieDelta -150
+- pace caps are enforced
+
+Manual QA:
+- Create profile
+- Generate wellness plan
+- Do check-in with low adherence
+- Generate new plan and confirm:
+   - workout volume reduced in output
+   - meal complexity simpler if meal adherence low
+   - adaptiveSnapshot saved on plan
+
+DELIVERABLE:
+- Implement Adaptive Engine v1
+- Ensure ALL generation uses profile + adaptive modifiers
+- Save adaptiveSnapshot on every generated plan
+- Provide file list and how to verify behavior changes in outputs

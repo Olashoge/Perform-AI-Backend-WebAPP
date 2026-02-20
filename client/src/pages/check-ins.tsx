@@ -206,6 +206,11 @@ export default function CheckIns() {
     enabled: !!user,
   });
 
+  const { data: recentSummaries } = useQuery<PerformanceSummary[]>({
+    queryKey: ["/api/performance"],
+    enabled: !!user,
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const body: any = {
@@ -303,6 +308,46 @@ export default function CheckIns() {
         ) : latestSummary ? (
           <PerformanceSummaryCard summary={latestSummary} />
         ) : null}
+
+        {recentSummaries && recentSummaries.length > 1 && (
+          <Card className="mb-6" data-testid="recent-progress-section">
+            <CardContent className="p-5">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                Recent Progress
+              </h3>
+              <div className="space-y-2">
+                {recentSummaries.slice(0, 4).map((s, i) => {
+                  const m = MOMENTUM_CONFIG[s.momentumState] || MOMENTUM_CONFIG.maintaining;
+                  const MIcon = m.icon;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex items-center gap-3 p-2.5 rounded-lg text-sm ${i === 0 ? "bg-muted/50" : ""}`}
+                      data-testid={`recent-summary-${s.id}`}
+                    >
+                      <div className="text-xs text-muted-foreground w-20 shrink-0">
+                        {format(parseISO(s.weekStartDate), "MMM d")}
+                      </div>
+                      <div className="flex-1 flex items-center gap-2">
+                        <div className="font-medium">{s.adherenceScore}<span className="text-muted-foreground text-xs">/100</span></div>
+                        <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-5 gap-1 ${m.className}`}>
+                          <MIcon className="h-3 w-3" />
+                          {m.label}
+                        </Badge>
+                      </div>
+                      {s.adjustmentAction && s.adjustmentAction !== "maintain" && (
+                        <span className="text-xs text-muted-foreground capitalize">
+                          {s.adjustmentAction.replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {currentGoal && (
           <Card className="mb-6">

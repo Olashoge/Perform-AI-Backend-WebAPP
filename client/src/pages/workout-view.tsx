@@ -3,7 +3,7 @@ import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { WorkoutPlan, WorkoutPlanOutput, WorkoutSession, WorkoutExercise } from "@shared/schema";
+import type { WorkoutPlan, WorkoutPlanOutput, WorkoutSession, WorkoutExercise, AdaptiveSnapshot } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,10 +24,12 @@ import {
   CalendarPlus, CalendarMinus, CalendarClock,
   Zap, Activity, Timer, ChevronRight,
   ThumbsUp, ThumbsDown, ArrowLeft, Ban, Printer,
+  TrendingUp, Shield,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { AllowancePanel } from "@/components/allowance-panel";
+import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
 
 const INTENSITY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
@@ -558,14 +560,36 @@ export default function WorkoutView() {
             </DropdownMenu>
           </div>
         </div>
-        <h1 className="text-lg sm:text-xl font-semibold mt-2" data-testid="text-plan-title">
-          {planJson.title}
-        </h1>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <h1 className="text-lg sm:text-xl font-semibold" data-testid="text-plan-title">
+            {planJson.title}
+          </h1>
+          {(plan.adaptiveSnapshot as AdaptiveSnapshot | null)?.modifiers?.deloadWeek && (
+            <Badge variant="secondary" size="sm" data-testid="badge-deload">
+              <Shield className="h-3 w-3 mr-1" />
+              Recovery Week
+            </Badge>
+          )}
+          {(plan.adaptiveSnapshot as AdaptiveSnapshot | null)?.modifiers?.volumeMultiplier !== undefined &&
+           (plan.adaptiveSnapshot as AdaptiveSnapshot).modifiers.volumeMultiplier > 1.05 &&
+           !(plan.adaptiveSnapshot as AdaptiveSnapshot).modifiers.deloadWeek && (
+            <Badge variant="default" size="sm" data-testid="badge-progression">
+              <TrendingUp className="h-3 w-3 mr-1" />
+              Progression
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="mb-6">
         <AllowancePanel />
       </div>
+
+      {plan && (plan.adaptiveSnapshot as AdaptiveSnapshot | null) && (
+        <div className="mb-6">
+          <AdaptiveInsightsCard snapshot={plan.adaptiveSnapshot as AdaptiveSnapshot} planType="workout" />
+        </div>
+      )}
 
       <div className="space-y-4">
         <Card>

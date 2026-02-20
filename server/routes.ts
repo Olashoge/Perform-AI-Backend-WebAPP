@@ -13,6 +13,8 @@ import { evaluateConstraints, buildConstraintPromptBlock } from "./constraints/e
 import { postValidateMealPlan, postValidateWorkoutPlan } from "./constraints/post-validation";
 import type { RuleContext, PlanKind } from "./constraints/types";
 import { computeWeeklySummary } from "./performance/computeWeeklySummary";
+import { computeAdaptiveModifiers, buildAdaptivePromptBlock } from "./adaptive";
+import type { AdaptiveSnapshot, AdaptiveInputs } from "./adaptive";
 import connectPgSimple from "connect-pg-simple";
 
 const PgStore = connectPgSimple(session);
@@ -21,6 +23,35 @@ declare module "express-session" {
   interface SessionData {
     userId: string;
   }
+}
+
+async function computeAdaptiveForUser(userId: string, pace?: string | null): Promise<{ snapshot: AdaptiveSnapshot; promptBlock: string }> {
+  const profile = await storage.getUserProfile(userId);
+  const summaries = await storage.getRecentPerformanceSummaries(userId, 4);
+
+  const inputs: AdaptiveInputs = {
+    profile: {
+      primaryGoal: profile?.primaryGoal || null,
+      trainingExperience: profile?.trainingExperience || null,
+      activityLevel: profile?.activityLevel || null,
+    },
+    pace: pace || null,
+    latestSummary: summaries.length > 0 ? summaries[0] : null,
+    last2Summaries: summaries.slice(0, 2),
+  };
+
+  const result = computeAdaptiveModifiers(inputs);
+  const promptBlock = buildAdaptivePromptBlock(result.modifiers, result.decisions);
+  const snapshot: AdaptiveSnapshot = {
+    modifiers: result.modifiers,
+    decisions: result.decisions,
+    inputsMeta: {
+      summaryIdsUsed: summaries.map(s => s.id),
+      computedAt: new Date().toISOString(),
+    },
+  };
+
+  return { snapshot, promptBlock };
 }
 
 async function runGroceryPricing(planId: string, planJson: PlanOutput, prefs: Preferences): Promise<void> {
@@ -248,8 +279,11 @@ export async function registerRoutes(
       }
       standaloneConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "meal", userProfile.nextWeekPlanBias);
 
+      const adaptive = await computeAdaptiveForUser(userId);
+      standaloneConstraintBlock += adaptive.promptBlock;
+
       const validStartDate = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : undefined;
-      const pendingPlan = await storage.createPendingMealPlan(userId, idempotencyKey || null, parsed.data, validStartDate, userProfile);
+      const pendingPlan = await storage.createPendingMealPlan(userId, idempotencyKey || null, parsed.data, validStartDate, userProfile, adaptive.snapshot);
 
       res.json(pendingPlan);
 
@@ -921,7 +955,10 @@ export async function registerRoutes(
       }
       workoutConstraintBlock = buildConstraintPromptBlock(cResult.safeSpec, "workout", userProfile.nextWeekPlanBias);
 
-      const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs, validStartDate, userProfile);
+      const adaptive = await computeAdaptiveForUser(userId);
+      workoutConstraintBlock += adaptive.promptBlock;
+
+      const plan = await storage.createPendingWorkoutPlan(userId, idempotencyKey, prefs, validStartDate, userProfile, adaptive.snapshot);
 
       (async () => {
         try {
@@ -1286,7 +1323,10 @@ export async function registerRoutes(
         );
       }
 
-      const constraintPromptBlock = buildConstraintPromptBlock(constraintResult.safeSpec, planKind, userProfile.nextWeekPlanBias);
+      let constraintPromptBlock = buildConstraintPromptBlock(constraintResult.safeSpec, planKind, userProfile.nextWeekPlanBias);
+
+      const adaptive = await computeAdaptiveForUser(userId, pace);
+      constraintPromptBlock += adaptive.promptBlock;
 
       const goalPlan = await storage.createGoalPlanFull(userId, {
         goalType,
@@ -1305,6 +1345,7 @@ export async function registerRoutes(
         status: "generating",
         progress: initialProgress,
         profileSnapshot: userProfile || undefined,
+        adaptiveSnapshot: adaptive.snapshot,
       });
 
       (async () => {
@@ -1334,7 +1375,7 @@ export async function registerRoutes(
               throw new Error("Invalid workout preferences");
             }
             const wIdempotencyKey = crypto.randomUUID();
-            const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, validStartDate);
+            const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, validStartDate, userProfile, adaptive.snapshot);
             workoutPlanId = pendingWorkout.id;
             await storage.updateGoalPlan(goalPlan.id, { workoutPlanId });
 
@@ -1391,7 +1432,7 @@ export async function registerRoutes(
               throw new Error("Invalid meal preferences");
             }
             const mealIdempotencyKey = crypto.randomUUID();
-            const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, validStartDate);
+            const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, validStartDate, userProfile, adaptive.snapshot);
             mealPlanId = pendingMeal.id;
             await storage.updateGoalPlan(goalPlan.id, { mealPlanId });
 
@@ -1795,7 +1836,8 @@ export async function registerRoutes(
       }
 
       const profileSnapshot = { ...profile };
-      const record = await storage.createDailyMeal(userId, date, mealsPerDay, profileSnapshot);
+      const adaptive = await computeAdaptiveForUser(userId);
+      const record = await storage.createDailyMeal(userId, date, mealsPerDay, profileSnapshot, adaptive.snapshot);
 
       res.json({ id: record.id, status: "generating" });
 
@@ -1814,6 +1856,7 @@ export async function registerRoutes(
             currentWeight: profile.weight ? Number(profile.weight) : undefined,
             targetWeight: profile.targetWeight ? Number(profile.targetWeight) : undefined,
             weightUnit: profile.weightUnit || "lb",
+            constraintBlock: adaptive.promptBlock || undefined,
           }, prefCtx);
 
           const groceryItems: any[] = [];
@@ -1887,7 +1930,8 @@ export async function registerRoutes(
       }
 
       const profileSnapshot = { ...profile };
-      const record = await storage.createDailyWorkout(userId, date, profileSnapshot);
+      const adaptive = await computeAdaptiveForUser(userId);
+      const record = await storage.createDailyWorkout(userId, date, profileSnapshot, adaptive.snapshot);
 
       res.json({ id: record.id, status: "generating" });
 
@@ -1908,6 +1952,7 @@ export async function registerRoutes(
             sessionLength: profile.sessionDuration || 45,
             experienceLevel: profile.trainingExperience || "intermediate",
             healthConstraints: (profile.healthConstraints as string[]) || [],
+            constraintBlock: adaptive.promptBlock || undefined,
           }, exerciseContext);
 
           const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });

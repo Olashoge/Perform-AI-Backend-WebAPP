@@ -26,6 +26,7 @@ export const mealPlans = pgTable("meal_plans", {
   regenDayCount: integer("regen_day_count").default(0).notNull(),
   groceryPricingJson: jsonb("grocery_pricing_json"),
   profileSnapshot: jsonb("profile_snapshot"),
+  adaptiveSnapshot: jsonb("adaptive_snapshot"),
   planStartDate: varchar("plan_start_date", { length: 10 }),
   deletedAt: timestamp("deleted_at"),
 });
@@ -77,6 +78,7 @@ export const workoutPlans = pgTable("workout_plans", {
   preferencesJson: jsonb("preferences_json").notNull(),
   planJson: jsonb("plan_json"),
   profileSnapshot: jsonb("profile_snapshot"),
+  adaptiveSnapshot: jsonb("adaptive_snapshot"),
   planStartDate: varchar("plan_start_date", { length: 10 }),
   deletedAt: timestamp("deleted_at"),
 });
@@ -104,6 +106,7 @@ export const goalPlans = pgTable("goal_plans", {
   status: varchar("status", { length: 20 }).default("draft"),
   progress: jsonb("progress"),
   profileSnapshot: jsonb("profile_snapshot"),
+  adaptiveSnapshot: jsonb("adaptive_snapshot"),
   mealPlanId: varchar("meal_plan_id"),
   workoutPlanId: varchar("workout_plan_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -638,6 +641,7 @@ export const dailyMeals = pgTable("daily_meals", {
   planJson: jsonb("plan_json"),
   groceryJson: jsonb("grocery_json"),
   profileSnapshot: jsonb("profile_snapshot"),
+  adaptiveSnapshot: jsonb("adaptive_snapshot"),
   status: varchar("status", { length: 20 }).notNull().default("ready"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -652,6 +656,7 @@ export const dailyWorkouts = pgTable("daily_workouts", {
   generatedTitle: text("generated_title"),
   planJson: jsonb("plan_json"),
   profileSnapshot: jsonb("profile_snapshot"),
+  adaptiveSnapshot: jsonb("adaptive_snapshot"),
   status: varchar("status", { length: 20 }).notNull().default("ready"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -686,3 +691,30 @@ export type DailyMeal = typeof dailyMeals.$inferSelect;
 export type DailyWorkout = typeof dailyWorkouts.$inferSelect;
 export type InsertDailyMeal = z.infer<typeof insertDailyMealSchema>;
 export type InsertDailyWorkout = z.infer<typeof insertDailyWorkoutSchema>;
+
+export interface AdaptiveModifiers {
+  volumeMultiplier: number;
+  intensityCapRPE: number;
+  cardioBias: "lower" | "normal" | "higher";
+  recoveryBias: "normal" | "higher";
+  complexityLevel: "simple" | "standard" | "advanced";
+  nutritionCalorieDeltaKcal: number;
+  trainingDayCarbBias: "lower" | "normal" | "higher";
+  simplifyMeals: boolean;
+  deloadWeek: boolean;
+}
+
+export interface AdaptiveDecision {
+  code: string;
+  severity: "info" | "adjust";
+  message: string;
+}
+
+export interface AdaptiveSnapshot {
+  modifiers: AdaptiveModifiers;
+  decisions: AdaptiveDecision[];
+  inputsMeta: {
+    summaryIdsUsed: string[];
+    computedAt: string;
+  };
+}

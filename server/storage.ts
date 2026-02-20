@@ -7,7 +7,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(email: string, passwordHash: string): Promise<User>;
   createMealPlan(userId: string, preferencesJson: any, planJson: any): Promise<MealPlan>;
-  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any): Promise<MealPlan>;
+  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any): Promise<MealPlan>;
   getMealPlan(id: string): Promise<MealPlan | undefined>;
   getMealPlansByUser(userId: string): Promise<MealPlan[]>;
   findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined>;
@@ -33,7 +33,7 @@ export interface IStorage {
   updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined>;
   getScheduledPlans(userId: string): Promise<MealPlan[]>;
   softDeletePlan(id: string): Promise<MealPlan | undefined>;
-  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any): Promise<WorkoutPlan>;
+  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any): Promise<WorkoutPlan>;
   getWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
   getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]>;
   updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined>;
@@ -43,7 +43,7 @@ export interface IStorage {
   findByIdempotencyKeyWorkout(userId: string, idempotencyKey: string): Promise<WorkoutPlan | undefined>;
   findGeneratingWorkoutPlan(userId: string): Promise<WorkoutPlan | undefined>;
   createGoalPlan(userId: string, goalType: string, startDate?: string, mealPlanId?: string, workoutPlanId?: string): Promise<GoalPlan>;
-  createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any; profileSnapshot?: any }): Promise<GoalPlan>;
+  createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any; profileSnapshot?: any; adaptiveSnapshot?: any }): Promise<GoalPlan>;
   getGoalPlan(id: string): Promise<GoalPlan | undefined>;
   getGoalPlansByUser(userId: string): Promise<GoalPlan[]>;
   updateGoalPlan(id: string, updates: Partial<{ startDate: string | null; endDate: string | null; mealPlanId: string | null; workoutPlanId: string | null; status: string; progress: any; title: string | null; planType: string | null }>): Promise<GoalPlan | undefined>;
@@ -89,11 +89,11 @@ export interface IStorage {
   getLatestPerformanceSummary(userId: string): Promise<PerformanceSummary | undefined>;
   getRecentPerformanceSummaries(userId: string, limit?: number): Promise<PerformanceSummary[]>;
   getPerformanceSummariesByRange(userId: string, from: string, to: string): Promise<PerformanceSummary[]>;
-  createDailyMeal(userId: string, date: string, mealsPerDay: number, profileSnapshot: any): Promise<DailyMeal>;
+  createDailyMeal(userId: string, date: string, mealsPerDay: number, profileSnapshot: any, adaptiveSnapshot?: any): Promise<DailyMeal>;
   getDailyMealByDate(userId: string, date: string): Promise<DailyMeal | undefined>;
   getDailyMealsByDateRange(userId: string, startDate: string, endDate: string): Promise<DailyMeal[]>;
   updateDailyMealStatus(id: string, status: string, planJson?: any, groceryJson?: any, title?: string): Promise<DailyMeal | undefined>;
-  createDailyWorkout(userId: string, date: string, profileSnapshot: any): Promise<DailyWorkout>;
+  createDailyWorkout(userId: string, date: string, profileSnapshot: any, adaptiveSnapshot?: any): Promise<DailyWorkout>;
   getDailyWorkoutByDate(userId: string, date: string): Promise<DailyWorkout | undefined>;
   getDailyWorkoutsByDateRange(userId: string, startDate: string, endDate: string): Promise<DailyWorkout[]>;
   updateDailyWorkoutStatus(id: string, status: string, planJson?: any, title?: string): Promise<DailyWorkout | undefined>;
@@ -125,7 +125,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any): Promise<MealPlan> {
+  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any): Promise<MealPlan> {
     const [plan] = await db.insert(mealPlans).values({
       userId,
       idempotencyKey,
@@ -135,6 +135,7 @@ export class DatabaseStorage implements IStorage {
       startedAt: new Date(),
       planStartDate: startDate || null,
       profileSnapshot: profileSnapshot || null,
+      adaptiveSnapshot: adaptiveSnapshot || null,
     }).returning();
     return plan;
   }
@@ -418,7 +419,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any): Promise<WorkoutPlan> {
+  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any): Promise<WorkoutPlan> {
     const [plan] = await db.insert(workoutPlans).values({
       userId,
       idempotencyKey,
@@ -428,6 +429,7 @@ export class DatabaseStorage implements IStorage {
       startedAt: new Date(),
       planStartDate: startDate || null,
       profileSnapshot: profileSnapshot || null,
+      adaptiveSnapshot: adaptiveSnapshot || null,
     }).returning();
     return plan;
   }
@@ -497,7 +499,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any; profileSnapshot?: any }): Promise<GoalPlan> {
+  async createGoalPlanFull(userId: string, data: { goalType: string; planType?: string; startDate?: string; endDate?: string; pace?: string; title?: string; globalInputs?: any; nutritionInputs?: any; trainingInputs?: any; status?: string; progress?: any; profileSnapshot?: any; adaptiveSnapshot?: any }): Promise<GoalPlan> {
     const [plan] = await db.insert(goalPlans).values({
       userId,
       goalType: data.goalType,
@@ -512,6 +514,7 @@ export class DatabaseStorage implements IStorage {
       status: data.status || "draft",
       progress: data.progress || null,
       profileSnapshot: data.profileSnapshot || null,
+      adaptiveSnapshot: data.adaptiveSnapshot || null,
     }).returning();
     return plan;
   }
@@ -970,12 +973,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(performanceSummaries.weekStartDate));
   }
 
-  async createDailyMeal(userId: string, date: string, mealsPerDay: number, profileSnapshot: any): Promise<DailyMeal> {
+  async createDailyMeal(userId: string, date: string, mealsPerDay: number, profileSnapshot: any, adaptiveSnapshot?: any): Promise<DailyMeal> {
     const [meal] = await db.insert(dailyMeals).values({
       userId,
       date,
       mealsPerDay,
       profileSnapshot,
+      adaptiveSnapshot: adaptiveSnapshot || null,
       status: "generating",
     }).returning();
     return meal;
@@ -1006,11 +1010,12 @@ export class DatabaseStorage implements IStorage {
     return meal;
   }
 
-  async createDailyWorkout(userId: string, date: string, profileSnapshot: any): Promise<DailyWorkout> {
+  async createDailyWorkout(userId: string, date: string, profileSnapshot: any, adaptiveSnapshot?: any): Promise<DailyWorkout> {
     const [workout] = await db.insert(dailyWorkouts).values({
       userId,
       date,
       profileSnapshot,
+      adaptiveSnapshot: adaptiveSnapshot || null,
       status: "generating",
     }).returning();
     return workout;

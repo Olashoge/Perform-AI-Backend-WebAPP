@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { AdaptiveSnapshot } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import {
   ThumbsUp, ThumbsDown, RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
+import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
 
 interface DailyWorkoutData {
   id: string;
@@ -141,7 +143,21 @@ export default function DailyWorkoutView() {
             <Dumbbell className="h-5 w-5 text-teal-600 dark:text-teal-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold" data-testid="text-daily-workout-title">{workout.generatedTitle || `Daily Workout — ${params.date}`}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold" data-testid="text-daily-workout-title">{workout.generatedTitle || `Daily Workout — ${params.date}`}</h1>
+              {(workout.adaptiveSnapshot as AdaptiveSnapshot | null)?.modifiers?.deloadWeek && (
+                <Badge variant="secondary" size="sm" data-testid="badge-deload">
+                  Recovery
+                </Badge>
+              )}
+              {(workout.adaptiveSnapshot as AdaptiveSnapshot | null)?.modifiers?.volumeMultiplier !== undefined &&
+               (workout.adaptiveSnapshot as AdaptiveSnapshot).modifiers.volumeMultiplier > 1.05 &&
+               !(workout.adaptiveSnapshot as AdaptiveSnapshot).modifiers.deloadWeek && (
+                <Badge variant="default" size="sm" data-testid="badge-progression">
+                  Progression
+                </Badge>
+              )}
+            </div>
             {session?.focus && <p className="text-xs text-muted-foreground">{session.focus}</p>}
           </div>
         </div>
@@ -160,6 +176,12 @@ export default function DailyWorkoutView() {
           Regenerate
         </Button>
       </div>
+
+      {(workout.adaptiveSnapshot as AdaptiveSnapshot | null) && (
+        <div className="mb-4">
+          <AdaptiveInsightsCard snapshot={workout.adaptiveSnapshot as AdaptiveSnapshot} planType="workout" />
+        </div>
+      )}
 
       {session && (
         <>

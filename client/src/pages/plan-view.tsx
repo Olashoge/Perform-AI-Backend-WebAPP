@@ -3,7 +3,7 @@ import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { MealPlan, PlanOutput, Meal, Day } from "@shared/schema";
+import type { MealPlan, PlanOutput, Meal, Day, AdaptiveSnapshot } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { AllowancePanel } from "@/components/allowance-panel";
+import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
   weight_loss: Flame,
@@ -738,6 +739,11 @@ export default function PlanView() {
       {plan && params.id && (
         <div className="mb-6 print:hidden">
           <AllowancePanel planId={params.id} />
+        </div>
+      )}
+      {plan && (plan.adaptiveSnapshot as AdaptiveSnapshot | null) && (
+        <div className="mb-6 print:hidden">
+          <AdaptiveInsightsCard snapshot={plan.adaptiveSnapshot as AdaptiveSnapshot} planType="meal" />
         </div>
       )}
       <div className="flex items-center justify-between gap-2 mb-6 print:hidden flex-wrap">

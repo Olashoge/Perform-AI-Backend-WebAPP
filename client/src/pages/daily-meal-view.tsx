@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { AdaptiveSnapshot } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import {
   ThumbsUp, ThumbsDown, RefreshCw,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
 
 interface DailyMealData {
   id: string;
@@ -283,6 +285,12 @@ export default function DailyMealView() {
           Regenerate
         </Button>
       </div>
+
+      {(meal.adaptiveSnapshot as AdaptiveSnapshot | null) && (
+        <div className="mb-4">
+          <AdaptiveInsightsCard snapshot={meal.adaptiveSnapshot as AdaptiveSnapshot} planType="meal" />
+        </div>
+      )}
 
       {planJson?.nutritionSummary && (
         <Card className="mb-4">
