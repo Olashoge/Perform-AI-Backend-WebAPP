@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { PerformanceSummary } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dumbbell, UtensilsCrossed,
   TrendingUp, TrendingDown, Minus, Activity,
@@ -17,14 +18,35 @@ interface WeeklyScorecardProps {
 }
 
 export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, enabled = true }: WeeklyScorecardProps) {
-  const { data: weeklyAdherence } = useWeeklyAdherence(weekStartStr, weekEndStr, enabled);
+  const { data: weeklyAdherence, isLoading: adherenceLoading } = useWeeklyAdherence(weekStartStr, weekEndStr, enabled);
 
   const { data: perfSummaries } = useQuery<PerformanceSummary[]>({
     queryKey: ["/api/performance"],
     enabled,
   });
 
-  if (!weeklyAdherence || (weeklyAdherence.scheduledMeals === 0 && weeklyAdherence.scheduledWorkouts === 0)) {
+  if (adherenceLoading) {
+    return (
+      <Card className="mb-6 overflow-hidden" data-testid="card-performance-scorecard-loading">
+        <CardContent className="p-0">
+          <div className="flex flex-col sm:flex-row">
+            <div className="flex items-center justify-center p-6 sm:p-8 sm:border-r border-b sm:border-b-0">
+              <Skeleton className="w-28 h-28 sm:w-32 sm:h-32 rounded-full" />
+            </div>
+            <div className="flex-1 p-5 sm:p-6 space-y-3">
+              <Skeleton className="h-4 w-32" />
+              <div className="grid grid-cols-2 gap-3">
+                <Skeleton className="h-16 rounded-lg" />
+                <Skeleton className="h-16 rounded-lg" />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!weeklyAdherence) {
     return null;
   }
 
