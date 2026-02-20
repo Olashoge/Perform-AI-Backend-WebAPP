@@ -202,13 +202,13 @@ export default function Dashboard() {
         )}
       </div>
 
-      {perfSummaries && perfSummaries.length > 0 && (() => {
-        const latest = perfSummaries[0];
-        const previous = perfSummaries.length > 1 ? perfSummaries[1] : null;
-        const scoreDelta = previous ? latest.adherenceScore - previous.adherenceScore : 0;
-        const mealPct = latest.mealAdherencePct != null ? Math.round(latest.mealAdherencePct) : null;
-        const workoutPct = latest.workoutAdherencePct != null ? Math.round(latest.workoutAdherencePct) : null;
-        const insights = (latest.insights || []) as string[];
+      {weeklyAdherence && (weeklyAdherence.scheduledMeals > 0 || weeklyAdherence.scheduledWorkouts > 0) && (() => {
+        const score = weeklyAdherence.overallScore ?? 0;
+        const mealPct = weeklyAdherence.mealPct;
+        const workoutPct = weeklyAdherence.workoutPct;
+
+        const latestPerf = perfSummaries?.[0] ?? null;
+        const insights = (latestPerf?.insights || []) as string[];
 
         const momentumConfig: Record<string, { label: string; color: string; bg: string; icon: typeof TrendingUp }> = {
           building: { label: "Building", color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30", icon: TrendingUp },
@@ -216,15 +216,15 @@ export default function Dashboard() {
           fatigue_risk: { label: "Fatigue Risk", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30", icon: Activity },
           slipping: { label: "Needs Attention", color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-900/30", icon: TrendingDown },
         };
-        const momentum = momentumConfig[latest.momentumState] || momentumConfig.maintaining;
-        const MomentumIcon = momentum.icon;
+        const momentum = latestPerf ? (momentumConfig[latestPerf.momentumState] || momentumConfig.maintaining) : null;
+        const MomentumIcon = momentum?.icon ?? Activity;
 
-        const scoreColor = latest.adherenceScore >= 80 ? "text-emerald-600 dark:text-emerald-400" :
-          latest.adherenceScore >= 60 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400";
-        const ringColor = latest.adherenceScore >= 80 ? "stroke-emerald-500" :
-          latest.adherenceScore >= 60 ? "stroke-amber-500" : "stroke-red-500";
+        const scoreColor = score >= 80 ? "text-emerald-600 dark:text-emerald-400" :
+          score >= 60 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400";
+        const ringColor = score >= 80 ? "stroke-emerald-500" :
+          score >= 60 ? "stroke-amber-500" : "stroke-red-500";
         const circumference = 2 * Math.PI * 40;
-        const dashOffset = circumference - (latest.adherenceScore / 100) * circumference;
+        const dashOffset = circumference - (score / 100) * circumference;
 
         return (
           <Card className="mb-6 overflow-hidden" data-testid="card-performance-scorecard">
@@ -244,7 +244,7 @@ export default function Dashboard() {
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span className={`text-3xl sm:text-4xl font-bold tabular-nums ${scoreColor}`} data-testid="text-adherence-score">
-                        {latest.adherenceScore}
+                        {score}
                       </span>
                       <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Score</span>
                     </div>
@@ -254,40 +254,52 @@ export default function Dashboard() {
                 <div className="flex-1 p-5 sm:p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Weekly Performance</div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">This Week</div>
                       <div className="text-sm text-muted-foreground">
-                        {format(new Date(latest.weekStartDate + "T00:00:00"), "MMM d")} — {format(new Date(latest.weekEndDate + "T00:00:00"), "MMM d")}
+                        {format(weekStart, "MMM d")} — {format(weekEnd, "MMM d")}
                       </div>
                     </div>
-                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${momentum.bg}`}>
-                      <MomentumIcon className={`h-3.5 w-3.5 ${momentum.color}`} />
-                      <span className={`text-xs font-medium ${momentum.color}`}>{momentum.label}</span>
-                    </div>
+                    {momentum && (
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${momentum.bg}`} data-testid="badge-momentum">
+                        <MomentumIcon className={`h-3.5 w-3.5 ${momentum.color}`} />
+                        <span className={`text-xs font-medium ${momentum.color}`}>{momentum.label}</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className="text-center p-2.5 rounded-lg bg-muted/50">
-                      <div className="text-xs text-muted-foreground mb-0.5">Meals</div>
-                      <div className="text-lg font-bold tabular-nums text-amber-600 dark:text-amber-400" data-testid="text-meal-adherence">
-                        {mealPct != null ? `${mealPct}%` : "—"}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <UtensilsCrossed className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                          <span className="text-xs text-muted-foreground">Meals</span>
+                        </div>
+                        <span className="text-sm font-bold tabular-nums text-amber-600 dark:text-amber-400" data-testid="text-meal-adherence">
+                          {mealPct != null ? `${mealPct}%` : "—"}
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${mealPct ?? 0}%` }} />
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        {weeklyAdherence.completedMeals}/{weeklyAdherence.scheduledMeals} completed
                       </div>
                     </div>
-                    <div className="text-center p-2.5 rounded-lg bg-muted/50">
-                      <div className="text-xs text-muted-foreground mb-0.5">Workouts</div>
-                      <div className="text-lg font-bold tabular-nums text-teal-600 dark:text-teal-400" data-testid="text-workout-adherence">
-                        {workoutPct != null ? `${workoutPct}%` : "—"}
+                    <div className="p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Dumbbell className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                          <span className="text-xs text-muted-foreground">Workouts</span>
+                        </div>
+                        <span className="text-sm font-bold tabular-nums text-teal-600 dark:text-teal-400" data-testid="text-workout-adherence">
+                          {workoutPct != null ? `${workoutPct}%` : "—"}
+                        </span>
                       </div>
-                    </div>
-                    <div className="text-center p-2.5 rounded-lg bg-muted/50">
-                      <div className="text-xs text-muted-foreground mb-0.5">Trend</div>
-                      <div className="text-lg font-bold tabular-nums flex items-center justify-center gap-1" data-testid="text-score-trend">
-                        {scoreDelta > 0 ? (
-                          <span className="text-emerald-600 dark:text-emerald-400">+{scoreDelta}</span>
-                        ) : scoreDelta < 0 ? (
-                          <span className="text-red-600 dark:text-red-400">{scoreDelta}</span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-teal-500 rounded-full transition-all duration-500" style={{ width: `${workoutPct ?? 0}%` }} />
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        {weeklyAdherence.completedWorkouts}/{weeklyAdherence.scheduledWorkouts} completed
                       </div>
                     </div>
                   </div>
@@ -298,9 +310,9 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {latest.adjustmentStatement && !insights.length && (
+                  {!insights.length && latestPerf?.adjustmentStatement && (
                     <div className="text-xs text-muted-foreground leading-relaxed line-clamp-2" data-testid="text-adjustment-statement">
-                      {latest.adjustmentStatement}
+                      {latestPerf.adjustmentStatement}
                     </div>
                   )}
                 </div>
