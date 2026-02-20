@@ -1,0 +1,158 @@
+PERFORM AI — ADHERENCE VISIBILITY LAYER v1
+
+Objective:
+Expose granular completion data in a premium, minimal way.
+
+We are NOT adding a new tab.
+We are enhancing:
+- Dashboard (daily awareness)
+- Calendar day view
+- Check-In page (weekly overview + trend)
+
+Completion tracking table already exists and is functional.
+
+============================================================
+PART 1 — DAILY VIEW (Dashboard + Calendar)
+============================================================
+
+On any day view where meals/workouts are rendered:
+
+1) Compute:
+   scheduledMealsToday
+   completedMealsToday
+   scheduledWorkoutsToday
+   completedWorkoutsToday
+
+2) At top of day section, show compact summary:
+
+   If meals exist:
+      Meals: 2/3 completed
+
+   If workout exists:
+      Workout: Completed
+      OR
+      Workout: Not completed
+
+3) Keep styling subtle:
+   - small muted text
+   - no large bars
+   - no aggressive colors
+
+4) This must update live when a checkbox is toggled (optimistic UI).
+
+============================================================
+PART 2 — DASHBOARD HEADER CHIP (Optional but recommended)
+============================================================
+
+At top of Dashboard page, near greeting or date:
+
+Add small chip:
+
+   This week: 72
+
+Where 72 = overall adherence score for current week.
+
+Rules:
+- Small rounded pill
+- Neutral tone (not bright green)
+- Clicking it routes to Check-In page
+
+============================================================
+PART 3 — CHECK-IN PAGE — WEEKLY ADHERENCE SUMMARY
+============================================================
+
+At top of Check-In page, before energy/weight inputs:
+
+Add section:
+
+Title:
+   This Week’s Adherence
+
+Display:
+
+Meals: 9 / 14
+Workouts: 3 / 4
+Overall Score: 76
+
+Optional:
+Add subtle thin progress bars under Meals and Workouts.
+
+Remove any fields asking:
+   "How many workouts did you complete?"
+   "How many meals did you follow?"
+
+We now derive from completion data.
+
+============================================================
+PART 4 — RECENT PROGRESS EXTENSION
+============================================================
+
+Inside existing “Recent Progress” (last 4 weeks section):
+
+Extend each row to show:
+
+Week of Feb 10
+Score: 78
+Meals: 70%
+Workouts: 80%
+
+Keep layout compact.
+
+No charts.
+No graphs.
+
+============================================================
+PART 5 — CALCULATION RULES
+============================================================
+
+Adherence % is computed from completion table:
+
+Meal Adherence % =
+   completedMeals / scheduledMeals
+
+Workout Adherence % =
+   completedWorkouts / scheduledWorkouts
+
+Overall Score =
+   weighted combination (existing 40/40/20 or current logic)
+
+Scheduled items must match exactly what user sees in calendar expansion logic.
+
+============================================================
+PART 6 — EDGE CASES
+============================================================
+
+If no scheduled items this week:
+   Show:
+   "No plans scheduled this week."
+
+If week partially complete:
+   Only calculate for scheduled items so far.
+
+If plan deleted mid-week:
+   Scheduled count adjusts automatically.
+
+============================================================
+PART 7 — PERFORMANCE
+============================================================
+
+Avoid refetching entire week on every checkbox click.
+Instead:
+- Update local state
+- Adjust local counters
+- Persist async
+- Recompute weekly summary lazily or on page load
+
+============================================================
+PART 8 — DELIVERABLES
+============================================================
+
+Return:
+- Files modified
+- Where adherence summary logic lives
+- Confirmation of:
+   ✔ daily summary rendering
+   ✔ dashboard chip
+   ✔ check-in weekly overview
+   ✔ recent progress extension
+   ✔ no regression to adaptive engine

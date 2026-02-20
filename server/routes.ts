@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
 import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan, generateWorkoutSession, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
@@ -2115,6 +2115,134 @@ export async function registerRoutes(
       return res.json(coverage);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load coverage" });
+    }
+  });
+
+  // ── Activity Completions ──
+  app.get("/api/completions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const { start, end, sourceType, sourceId } = req.query;
+
+      if (sourceType && sourceId) {
+        const completions = await storage.getCompletionsBySource(userId, sourceType as string, sourceId as string);
+        return res.json(completions);
+      }
+
+      if (!start || !end) return res.status(400).json({ message: "start and end query params required" });
+      const completions = await storage.getCompletionsByDateRange(userId, start as string, end as string);
+      return res.json(completions);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load completions" });
+    }
+  });
+
+  app.post("/api/completions/toggle", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const parsed = toggleCompletionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
+      }
+      const { date, itemType, sourceType, sourceId, itemKey, completed } = parsed.data;
+
+      const completion = await storage.upsertActivityCompletion(userId, date, itemType, sourceType, sourceId, itemKey, completed);
+      return res.json(completion);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to toggle completion" });
+    }
+  });
+
+  app.get("/api/completions/adherence", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const { start, end } = req.query;
+      if (!start || !end) return res.status(400).json({ message: "start and end required" });
+
+      const startStr = start as string;
+      const endStr = end as string;
+
+      let scheduledMeals = 0;
+      let scheduledWorkouts = 0;
+
+      const mealPlans = await storage.getMealPlansByUser(userId);
+      for (const mp of mealPlans) {
+        if (!mp.planStartDate || mp.deletedAt) continue;
+        const plan = mp.planOutput as any;
+        if (!plan?.days) continue;
+        const mealsPerDay = plan.days[0] ? Object.keys(plan.days[0].meals || {}).length : 3;
+        for (let d = 0; d < (plan.days?.length || 7); d++) {
+          const dayDate = new Date(mp.planStartDate + "T00:00:00");
+          dayDate.setDate(dayDate.getDate() + d);
+          const ds = dayDate.toISOString().split("T")[0];
+          if (ds >= startStr && ds <= endStr) {
+            const dayMeals = plan.days[d]?.meals;
+            if (dayMeals) {
+              scheduledMeals += Object.keys(dayMeals).length;
+            }
+          }
+        }
+      }
+
+      const workoutPlans = await storage.getWorkoutPlansByUser(userId);
+      for (const wp of workoutPlans) {
+        if (!wp.planStartDate || wp.deletedAt) continue;
+        const plan = wp.planOutput as any;
+        if (!plan?.sessions) continue;
+        for (let d = 0; d < plan.sessions.length; d++) {
+          const session = plan.sessions[d];
+          if (!session || session.isRestDay) continue;
+          const dayDate = new Date(wp.planStartDate + "T00:00:00");
+          dayDate.setDate(dayDate.getDate() + d);
+          const ds = dayDate.toISOString().split("T")[0];
+          if (ds >= startStr && ds <= endStr) {
+            scheduledWorkouts++;
+          }
+        }
+      }
+
+      const dailyMeals = await storage.getDailyMealsByDateRange(userId, startStr, endStr);
+      for (const dm of dailyMeals) {
+        if (dm.status !== "ready" || !dm.planJson) continue;
+        const meals = (dm.planJson as any)?.meals;
+        if (meals) scheduledMeals += Object.keys(meals).length;
+      }
+
+      const dailyWorkouts = await storage.getDailyWorkoutsByDateRange(userId, startStr, endStr);
+      for (const dw of dailyWorkouts) {
+        if (dw.status !== "ready" || !dw.planJson) continue;
+        scheduledWorkouts++;
+      }
+
+      const completions = await storage.getCompletionsByDateRange(userId, startStr, endStr);
+      const completedMeals = completions.filter(c => c.itemType === "meal" && c.completed).length;
+      const completedWorkouts = completions.filter(c => c.itemType === "workout" && c.completed).length;
+
+      const mealPct = scheduledMeals > 0 ? Math.round((completedMeals / scheduledMeals) * 100) : null;
+      const workoutPct = scheduledWorkouts > 0 ? Math.round((completedWorkouts / scheduledWorkouts) * 100) : null;
+
+      let overallScore: number | null = null;
+      if (mealPct != null && workoutPct != null) {
+        overallScore = Math.round(mealPct * 0.5 + workoutPct * 0.5);
+      } else if (mealPct != null) {
+        overallScore = mealPct;
+      } else if (workoutPct != null) {
+        overallScore = workoutPct;
+      }
+
+      return res.json({
+        scheduledMeals,
+        completedMeals,
+        scheduledWorkouts,
+        completedWorkouts,
+        mealPct,
+        workoutPct,
+        overallScore,
+      });
+    } catch (err: any) {
+      log(`Adherence computation error: ${err?.message || err}`, "error");
+      console.error("Adherence error stack:", err);
+      return res.status(500).json({ message: "Failed to compute adherence" });
     }
   });
 

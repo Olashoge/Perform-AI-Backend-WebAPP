@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -19,7 +19,8 @@ import {
   Activity, Flame, Shield, AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format, startOfWeek, parseISO } from "date-fns";
+import { format, startOfWeek, addDays, parseISO } from "date-fns";
+import { useWeeklyAdherence } from "@/hooks/use-completions";
 
 function getMonday(date: Date): string {
   const d = startOfWeek(date, { weekStartsOn: 1 });
@@ -182,6 +183,7 @@ export default function CheckIns() {
   const [energyRating, setEnergyRating] = useState(3);
   const [complianceMeals, setComplianceMeals] = useState(80);
   const [complianceWorkouts, setComplianceWorkouts] = useState(80);
+  const [compliancePrefilled, setCompliancePrefilled] = useState(false);
   const [notes, setNotes] = useState("");
 
   const checkInUrl = goalPlanId ? `/api/check-ins?goalPlanId=${goalPlanId}` : "/api/check-ins";
@@ -210,6 +212,21 @@ export default function CheckIns() {
     queryKey: ["/api/performance"],
     enabled: !!user,
   });
+
+  const weekEndDate = format(addDays(parseISO(weekStartDate), 6), "yyyy-MM-dd");
+  const { data: checkInAdherence } = useWeeklyAdherence(weekStartDate, weekEndDate, !!user);
+
+  useEffect(() => {
+    setCompliancePrefilled(false);
+  }, [weekStartDate]);
+
+  useEffect(() => {
+    if (checkInAdherence && !compliancePrefilled) {
+      if (checkInAdherence.mealPct != null) setComplianceMeals(Math.round(checkInAdherence.mealPct));
+      if (checkInAdherence.workoutPct != null) setComplianceWorkouts(Math.round(checkInAdherence.workoutPct));
+      setCompliancePrefilled(true);
+    }
+  }, [checkInAdherence, compliancePrefilled]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -253,6 +270,7 @@ export default function CheckIns() {
     setEnergyRating(3);
     setComplianceMeals(80);
     setComplianceWorkouts(80);
+    setCompliancePrefilled(false);
     setNotes("");
   }
 
@@ -553,7 +571,12 @@ export default function CheckIns() {
             <div className="space-y-3 rounded-md border p-4">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Meal Compliance</Label>
-                <span className="text-xs font-medium text-primary tabular-nums">{complianceMeals}%</span>
+                <div className="flex items-center gap-2">
+                  {compliancePrefilled && checkInAdherence?.mealPct != null && (
+                    <span className="text-[10px] text-muted-foreground">auto-filled from tracking</span>
+                  )}
+                  <span className="text-xs font-medium text-primary tabular-nums">{complianceMeals}%</span>
+                </div>
               </div>
               <Slider
                 value={[complianceMeals]}
@@ -568,7 +591,12 @@ export default function CheckIns() {
             <div className="space-y-3 rounded-md border p-4">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Workout Compliance</Label>
-                <span className="text-xs font-medium text-primary tabular-nums">{complianceWorkouts}%</span>
+                <div className="flex items-center gap-2">
+                  {compliancePrefilled && checkInAdherence?.workoutPct != null && (
+                    <span className="text-[10px] text-muted-foreground">auto-filled from tracking</span>
+                  )}
+                  <span className="text-xs font-medium text-primary tabular-nums">{complianceWorkouts}%</span>
+                </div>
               </div>
               <Slider
                 value={[complianceWorkouts]}

@@ -3,11 +3,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useCompletions } from "@/hooks/use-completions";
 import type { AdaptiveSnapshot } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CompletionCheckbox } from "@/components/completion-checkbox";
 import {
   ArrowLeft, Dumbbell, Clock, Loader2, Zap, Timer,
   ThumbsUp, ThumbsDown, RefreshCw,
@@ -21,6 +23,7 @@ interface DailyWorkoutData {
   status: string;
   generatedTitle: string | null;
   planJson: any;
+  adaptiveSnapshot?: any;
 }
 
 export default function DailyWorkoutView() {
@@ -43,6 +46,8 @@ export default function DailyWorkoutView() {
       return false;
     },
   });
+
+  const { isCompleted, toggle } = useCompletions(params.date!, params.date!, !!workout);
 
   const [exerciseFeedback, setExerciseFeedback] = useState<Record<string, "like" | "dislike" | null>>({});
 
@@ -138,11 +143,11 @@ export default function DailyWorkoutView() {
       </Button>
 
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1">
           <div className="w-11 h-11 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
             <Dumbbell className="h-5 w-5 text-teal-600 dark:text-teal-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold" data-testid="text-daily-workout-title">{workout.generatedTitle || `Daily Workout — ${params.date}`}</h1>
               {(workout.adaptiveSnapshot as AdaptiveSnapshot | null)?.modifiers?.deloadWeek && (
@@ -161,20 +166,31 @@ export default function DailyWorkoutView() {
             {session?.focus && <p className="text-xs text-muted-foreground">{session.focus}</p>}
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => regenerateMutation.mutate()}
-          disabled={regenerateMutation.isPending}
-          data-testid="button-regenerate-daily-workout"
-        >
-          {regenerateMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-          ) : (
-            <RefreshCw className="h-4 w-4 mr-1.5" />
-          )}
-          Regenerate
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <CompletionCheckbox
+            date={params.date!}
+            itemType="workout"
+            sourceType="daily_workout"
+            sourceId={workout.id}
+            itemKey="workout"
+            completed={isCompleted(params.date!, "workout", "daily_workout", workout.id, "workout")}
+            onToggle={toggle}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => regenerateMutation.mutate()}
+            disabled={regenerateMutation.isPending}
+            data-testid="button-regenerate-daily-workout"
+          >
+            {regenerateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-1.5" />
+            )}
+            Regenerate
+          </Button>
+        </div>
       </div>
 
       {(workout.adaptiveSnapshot as AdaptiveSnapshot | null) && (
@@ -184,7 +200,7 @@ export default function DailyWorkoutView() {
       )}
 
       {session && (
-        <>
+        <div className={isCompleted(params.date!, "workout", "daily_workout", workout.id, "workout") ? "opacity-60" : ""}>
           <div className="flex gap-3 mb-4 flex-wrap">
             {session.mode && (
               <Badge variant="secondary" className="text-xs capitalize">
@@ -310,7 +326,7 @@ export default function DailyWorkoutView() {
               </CardContent>
             </Card>
           )}
-        </>
+        </div>
       )}
     </div>
   );

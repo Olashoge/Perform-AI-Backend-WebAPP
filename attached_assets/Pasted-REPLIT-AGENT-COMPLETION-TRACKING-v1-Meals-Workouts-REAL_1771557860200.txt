@@ -1,0 +1,194 @@
+REPLIT AGENT — COMPLETION TRACKING v1 (Meals + Workouts) + REAL ADHERENCE
+
+Objective:
+Add per-item completion checkboxes for every meal and workout (across Wellness Plans, Meal Plans, Workout Plans, Daily Meals, Daily Workouts). Persist completion status, power adherence scoring from real completions (not estimates), and feed Adaptive Engine + Check-In summaries with accurate data.
+
+NON-NEGOTIABLE:
+1) Completion tracking must be normalized in its own table (NOT stored inside plan JSON).
+2) Checkboxes must persist across refresh and work with optimistic UI.
+3) Completion tracking must work for:
+   - items coming from multi-day plans (wellness/meal/workout plans expanded by date)
+   - items coming from daily entities (Daily Meal / Daily Workout)
+4) Adherence calculations must use completion data as the primary source.
+5) Do NOT break existing plan rendering. Add this cleanly.
+
+============================================================
+PHASE 0 — Locate where items are rendered and where adherence is computed
+============================================================
+Find:
+- Day view rendering for meals/workouts (dashboard, calendar day detail, plan pages)
+- Current data model for plans and daily items
+- Current adherence % computation for performance summaries / check-ins / adaptive engine
+
+============================================================
+PHASE 1 — DB Schema (Prisma) — activity_completions table
+============================================================
+Create a new model/table: activity_completions
+
+Fields:
+- id (uuid pk)
+- userId (fk)
+- date (date-only; normalize to day)
+- itemType (enum: "meal" | "workout")
+- sourceType (enum: "wellness" | "meal_plan" | "workout_plan" | "daily_meal" | "daily_workout")
+- sourceId (string/uuid)  // planId or dailyId (the parent container)
+- itemKey (string)        // stable key identifying the specific item within the source for that date
+- completed (boolean, default false)
+- completedAt (timestamp nullable)
+- createdAt, updatedAt
+
+Unique constraint:
+- unique(userId, date, itemType, sourceType, sourceId, itemKey)
+
+Important:
+- itemKey must be deterministic and stable across refresh:
+  For meals:
+    "breakfast" | "lunch" | "dinner"
+    (or if 2 meals: use the actual selected slots)
+  For workouts:
+    "workout" (single)
+  If a plan has multiple workouts in a day (future), itemKey can become "workout_1", etc.
+
+Run migration safely.
+
+============================================================
+PHASE 2 — Server Utilities
+============================================================
+Create shared helpers:
+- normalizeDay(date) => "YYYY-MM-DD"
+- buildCompletionKey({itemType, sourceType, sourceId, date, itemKey}) => unique tuple
+
+Add functions:
+1) getCompletionsForRange(userId, startDate, endDate)
+   returns map keyed by (date + itemType + sourceType + sourceId + itemKey) -> completion record
+
+2) upsertCompletion(userId, date, itemType, sourceType, sourceId, itemKey, completed)
+   sets completedAt when toggled true; clears completedAt when toggled false
+
+============================================================
+PHASE 3 — API Endpoints
+============================================================
+Add:
+1) GET /api/completions?start=YYYY-MM-DD&end=YYYY-MM-DD
+   - requires auth
+   - returns all completions for the range
+
+2) POST /api/completions/toggle
+   body:
+   {
+     date: "YYYY-MM-DD",
+     itemType: "meal"|"workout",
+     sourceType: "...",
+     sourceId: "...",
+     itemKey: "breakfast"|"lunch"|"dinner"|"workout",
+     completed: true|false
+   }
+   - requires auth
+   - validates ownership (user must own the source)
+   - upserts completion
+   - returns updated completion record
+
+============================================================
+PHASE 4 — Frontend Integration (Checkboxes everywhere)
+============================================================
+A) Data loading:
+- Wherever you render a day view or a list of scheduled items, also fetch completions for the visible date range (week/month).
+- Store completions in client state keyed by the unique tuple.
+
+B) UI:
+For each meal row and workout row shown on any day view:
+- Add a small checkbox/toggle on the right.
+- Label is optional; checkbox alone is fine.
+- When toggled:
+  - optimistic update local state immediately
+  - call POST /api/completions/toggle
+  - if error: revert and toast "Couldn’t save. Try again."
+
+C) Where to show checkboxes:
+- Dashboard day schedule list
+- Calendar week view list
+- Calendar month view day popover/list
+- Plan pages (when showing meals/workouts by day)
+- Daily meal page (single day) and Daily workout page (single day)
+
+D) Premium UX:
+- Keep it subtle.
+- On completion true, optionally show a faint “Completed” state style.
+- No gamification.
+
+============================================================
+PHASE 5 — Adherence Calculations (Refactor to real data)
+============================================================
+Update adherence computations used by:
+- performance_summary generation
+- check-in summary
+- adaptive engine inputs
+
+New source of truth:
+For a given week range:
+- scheduled meals count = count of meal items that exist on schedule for those days
+- completed meals count = count of corresponding completion records completed=true
+Meal adherence % = completed/scheduled * 100
+
+Same for workouts.
+
+IMPORTANT:
+You must compute “scheduled items” consistently across:
+- Wellness plans expanded by date
+- Meal plans expanded by date
+- Workout plans expanded by date
+- Daily meals/workouts for each date
+
+Use the same coverage/expansion logic you already built for the calendar.
+Do NOT double-count if multiple sources exist:
+- If your system prevents multiple meal coverages per day, fine.
+- If multiple could exist (edge cases), choose a deterministic priority:
+  Wellness > MealPlan > DailyMeal (or simply count all items displayed to user). Use “items displayed” as scheduled items to avoid confusion.
+
+Store in performance_summary:
+- mealAdherencePct and workoutAdherencePct derived from completions.
+
+============================================================
+PHASE 6 — Check-In Form Simplification
+============================================================
+If the check-in form currently asks “how many workouts/meals completed”:
+- remove those questions or make them read-only summaries.
+- show:
+  "This week: Meals completed X/Y, Workouts completed A/B"
+- keep check-in focused on energy, weight, notes, recovery.
+
+============================================================
+PHASE 7 — Adaptive Engine Wiring
+============================================================
+Modify AdaptiveInputs to use real adherence % from completions-driven performance summaries.
+This strengthens decisions like simplify/deload/progress.
+
+============================================================
+PHASE 8 — Testing Checklist
+============================================================
+Manual tests:
+1) Create wellness plan for a week.
+2) Open a day: check breakfast complete -> refresh -> still complete.
+3) Toggle off -> refresh -> undone.
+4) Complete multiple meals + workout across week.
+5) Check-in: adherence % matches completed counts.
+6) Create Daily Meal on a day: checkbox works.
+7) Switch to calendar month view: completions render correctly.
+8) Deleting a plan:
+   - completions should not crash UI.
+   - optional: keep completion records even if source deleted, or cascade delete; choose safest approach (keep but ignore if source missing).
+9) Auth: user cannot toggle someone else’s completions.
+
+Automated tests (if you have test setup):
+- API toggle endpoint upsert behavior
+- unique constraint prevents duplicates
+- adherence function returns correct % in mixed scenarios
+
+DELIVERABLES:
+- Prisma migration + new model
+- New API endpoints
+- UI checkboxes integrated
+- Adherence refactor completed
+- Check-in shows X/Y summaries
+- Adaptive engine uses updated adherence signals
+- Provide file list and how to verify in UI

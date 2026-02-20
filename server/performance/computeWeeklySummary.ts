@@ -141,6 +141,74 @@ function computeEconomyDelta(
   return { regenBonus: 0, swapBonus: 0 };
 }
 
+async function computeRealAdherence(
+  userId: string,
+  weekStartDate: string,
+  weekEndDate: string,
+): Promise<{ mealPct: number | null; workoutPct: number | null }> {
+  try {
+    let scheduledMeals = 0;
+    let scheduledWorkouts = 0;
+
+    const mealPlans = await storage.getMealPlansByUser(userId);
+    for (const mp of mealPlans) {
+      if (!mp.planStartDate || mp.deletedAt) continue;
+      const plan = mp.planOutput as any;
+      if (!plan?.days) continue;
+      for (let d = 0; d < (plan.days?.length || 7); d++) {
+        const dayDate = new Date(mp.planStartDate + "T00:00:00");
+        dayDate.setDate(dayDate.getDate() + d);
+        const ds = dayDate.toISOString().split("T")[0];
+        if (ds >= weekStartDate && ds <= weekEndDate) {
+          const dayMeals = plan.days[d]?.meals;
+          if (dayMeals) scheduledMeals += Object.keys(dayMeals).length;
+        }
+      }
+    }
+
+    const workoutPlans = await storage.getWorkoutPlansByUser(userId);
+    for (const wp of workoutPlans) {
+      if (!wp.planStartDate || wp.deletedAt) continue;
+      const plan = wp.planOutput as any;
+      if (!plan?.sessions) continue;
+      for (let d = 0; d < plan.sessions.length; d++) {
+        const session = plan.sessions[d];
+        if (!session || session.isRestDay) continue;
+        const dayDate = new Date(wp.planStartDate + "T00:00:00");
+        dayDate.setDate(dayDate.getDate() + d);
+        const ds = dayDate.toISOString().split("T")[0];
+        if (ds >= weekStartDate && ds <= weekEndDate) scheduledWorkouts++;
+      }
+    }
+
+    const dailyMeals = await storage.getDailyMealsByDateRange(userId, weekStartDate, weekEndDate);
+    for (const dm of dailyMeals) {
+      if (dm.status !== "ready" || !dm.planJson) continue;
+      const meals = (dm.planJson as any)?.meals;
+      if (meals) scheduledMeals += Object.keys(meals).length;
+    }
+
+    const dailyWorkouts = await storage.getDailyWorkoutsByDateRange(userId, weekStartDate, weekEndDate);
+    for (const dw of dailyWorkouts) {
+      if (dw.status !== "ready" || !dw.planJson) continue;
+      scheduledWorkouts++;
+    }
+
+    if (scheduledMeals === 0 && scheduledWorkouts === 0) return { mealPct: null, workoutPct: null };
+
+    const completions = await storage.getCompletionsByDateRange(userId, weekStartDate, weekEndDate);
+    const completedMeals = completions.filter(c => c.itemType === "meal" && c.completed).length;
+    const completedWorkouts = completions.filter(c => c.itemType === "workout" && c.completed).length;
+
+    const mealPct = scheduledMeals > 0 ? Math.round((completedMeals / scheduledMeals) * 100) : null;
+    const workoutPct = scheduledWorkouts > 0 ? Math.round((completedWorkouts / scheduledWorkouts) * 100) : null;
+
+    return { mealPct, workoutPct };
+  } catch {
+    return { mealPct: null, workoutPct: null };
+  }
+}
+
 export async function computeWeeklySummary(
   userId: string,
   weekStartDate: string,
@@ -150,8 +218,10 @@ export async function computeWeeklySummary(
   const checkIns = await storage.getWeeklyCheckIns(userId);
   const weekCheckIn = checkIns.find(ci => ci.weekStartDate === weekStartDate);
 
-  const mealAdh = weekCheckIn?.complianceMeals ?? null;
-  const workoutAdh = weekCheckIn?.complianceWorkouts ?? null;
+  const realAdherence = await computeRealAdherence(userId, weekStartDate, weekEndDate);
+
+  const mealAdh = realAdherence.mealPct ?? weekCheckIn?.complianceMeals ?? null;
+  const workoutAdh = realAdherence.workoutPct ?? weekCheckIn?.complianceWorkouts ?? null;
 
   let energyAvg: number | null = null;
   if (weekCheckIn?.energyRating != null) {

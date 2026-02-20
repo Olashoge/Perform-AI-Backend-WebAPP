@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, uniqueIndex, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, uniqueIndex, real, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -691,6 +691,41 @@ export type DailyMeal = typeof dailyMeals.$inferSelect;
 export type DailyWorkout = typeof dailyWorkouts.$inferSelect;
 export type InsertDailyMeal = z.infer<typeof insertDailyMealSchema>;
 export type InsertDailyWorkout = z.infer<typeof insertDailyWorkoutSchema>;
+
+export const activityCompletions = pgTable("activity_completions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  date: varchar("date", { length: 10 }).notNull(),
+  itemType: varchar("item_type", { length: 10 }).notNull(),
+  sourceType: varchar("source_type", { length: 20 }).notNull(),
+  sourceId: varchar("source_id").notNull(),
+  itemKey: varchar("item_key", { length: 30 }).notNull(),
+  completed: boolean("completed").notNull().default(false),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("activity_comp_unique_idx").on(table.userId, table.date, table.itemType, table.sourceType, table.sourceId, table.itemKey),
+]);
+
+export const insertActivityCompletionSchema = createInsertSchema(activityCompletions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const toggleCompletionSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  itemType: z.enum(["meal", "workout"]),
+  sourceType: z.enum(["meal_plan", "workout_plan", "daily_meal", "daily_workout"]),
+  sourceId: z.string().min(1),
+  itemKey: z.string().min(1),
+  completed: z.boolean(),
+});
+
+export type ActivityCompletion = typeof activityCompletions.$inferSelect;
+export type InsertActivityCompletion = z.infer<typeof insertActivityCompletionSchema>;
+export type ToggleCompletionInput = z.infer<typeof toggleCompletionSchema>;
 
 export interface AdaptiveModifiers {
   volumeMultiplier: number;

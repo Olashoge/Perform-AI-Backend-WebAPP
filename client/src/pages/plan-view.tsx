@@ -33,6 +33,8 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { AllowancePanel } from "@/components/allowance-panel";
 import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
+import { CompletionCheckbox } from "@/components/completion-checkbox";
+import { useCompletions } from "@/hooks/use-completions";
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
   weight_loss: Flame,
@@ -58,7 +60,7 @@ function generateMealFingerprint(mealName: string, cuisineTag: string, ingredien
   return `${namePart}|${cuisinePart}|${proteinPart}`;
 }
 
-function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, onFeedback }: {
+function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, onFeedback, dateStr, isCompleted, onToggleCompletion }: {
   meal: Meal;
   dayIndex: number;
   mealType: string;
@@ -66,6 +68,9 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
   swapCount: number;
   feedbackState?: "like" | "dislike" | null;
   onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
+  dateStr: string | null;
+  isCompleted: boolean;
+  onToggleCompletion: (() => void) | null;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
@@ -103,10 +108,23 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className="overflow-visible">
+      <Card className={`overflow-visible ${isCompleted ? "opacity-60" : ""}`}>
         <CollapsibleTrigger asChild>
           <CardHeader className="cursor-pointer hover-elevate p-4 sm:p-5">
             <div className="flex items-start justify-between gap-2">
+              {dateStr && onToggleCompletion && (
+                <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <CompletionCheckbox
+                    date={dateStr}
+                    itemType="meal"
+                    sourceType="meal_plan"
+                    sourceId={planId}
+                    itemKey={mealType}
+                    completed={isCompleted}
+                    onToggle={() => onToggleCompletion()}
+                  />
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 flex-wrap">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${mealTypeColors[mealType] || ""}`}>
@@ -217,7 +235,7 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
   );
 }
 
-function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedback, planStartDate }: {
+function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedback, planStartDate, checkCompleted, onToggle }: {
   day: Day;
   planId: string;
   swapCount: number;
@@ -225,6 +243,8 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
   feedbackMap: Record<string, "like" | "dislike" | null>;
   onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
   planStartDate?: string | null;
+  checkCompleted: (date: string, itemType: string, sourceType: string, sourceId: string, itemKey: string) => boolean;
+  onToggle: (input: { date: string; itemType: "meal" | "workout"; sourceType: "meal_plan" | "workout_plan" | "daily_meal" | "daily_workout"; sourceId: string; itemKey: string; completed: boolean }) => void;
 }) {
   const { toast } = useToast();
 
@@ -288,6 +308,8 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
           const meal = day.meals[mealType];
           if (!meal) return null;
           const fp = generateMealFingerprint(meal.name, meal.cuisineTag, meal.ingredients);
+          const dayDateStr = actualDate ? format(actualDate, "yyyy-MM-dd") : null;
+          const completed = dayDateStr ? checkCompleted(dayDateStr, "meal", "meal_plan", planId, mealType) : false;
           return (
             <MealCard
               key={mealType}
@@ -298,6 +320,9 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
               swapCount={swapCount}
               feedbackState={feedbackMap[fp] || null}
               onFeedback={onFeedback}
+              dateStr={dayDateStr}
+              isCompleted={completed}
+              onToggleCompletion={dayDateStr ? () => onToggle({ date: dayDateStr, itemType: "meal", sourceType: "meal_plan", sourceId: planId, itemKey: mealType, completed: !completed }) : null}
             />
           );
         })}
@@ -551,6 +576,24 @@ export default function PlanView() {
     queryKey: ["/api/feedback/plan", params.id],
     enabled: !!user && !!params.id,
   });
+
+  const completionDateRange = useMemo(() => {
+    const psd = data?.planStartDate;
+    if (!psd) return { start: "", end: "" };
+    const startD = new Date(psd + "T00:00:00");
+    const endD = new Date(startD);
+    endD.setDate(endD.getDate() + 6);
+    return {
+      start: format(startD, "yyyy-MM-dd"),
+      end: format(endD, "yyyy-MM-dd"),
+    };
+  }, [data?.planStartDate]);
+
+  const { isCompleted, toggle: toggleCompletion } = useCompletions(
+    completionDateRange.start,
+    completionDateRange.end,
+    !!data?.planStartDate && !!user,
+  );
 
   const [optimisticFeedback, setOptimisticFeedback] = useState<Record<string, "like" | "dislike" | null>>({});
   const mergedFeedback = useMemo(() => {
@@ -1040,6 +1083,8 @@ export default function PlanView() {
                     feedbackMap={mergedFeedback}
                     onFeedback={handleFeedback}
                     planStartDate={data?.planStartDate}
+                    checkCompleted={isCompleted}
+                    onToggle={toggleCompletion}
                   />
                 ))}
               </TabsContent>

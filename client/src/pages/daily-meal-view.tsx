@@ -3,12 +3,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useCompletions } from "@/hooks/use-completions";
 import type { AdaptiveSnapshot } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { CompletionCheckbox } from "@/components/completion-checkbox";
 import {
   ArrowLeft, UtensilsCrossed, Clock, ChevronDown, Loader2, ShoppingCart,
   ThumbsUp, ThumbsDown, RefreshCw,
@@ -24,6 +26,7 @@ interface DailyMealData {
   generatedTitle: string | null;
   planJson: any;
   groceryJson: any;
+  adaptiveSnapshot: any;
 }
 
 function generateMealFingerprint(mealName: string, cuisineTag: string, ingredients?: string[]): string {
@@ -41,11 +44,15 @@ function generateMealFingerprint(mealName: string, cuisineTag: string, ingredien
   return `${namePart}|${cuisinePart}|${proteinPart}`;
 }
 
-function MealCard({ slot, meal, feedbackState, onFeedback }: {
+function MealCard({ slot, meal, feedbackState, onFeedback, mealId, date, completed, onToggleCompletion }: {
   slot: string;
   meal: any;
   feedbackState?: "like" | "dislike" | null;
   onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
+  mealId: string;
+  date: string;
+  completed: boolean;
+  onToggleCompletion: (input: any) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const fingerprint = generateMealFingerprint(meal.name, meal.cuisineTag || "", meal.ingredients);
@@ -53,7 +60,7 @@ function MealCard({ slot, meal, feedbackState, onFeedback }: {
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger asChild>
-        <div className="border rounded-xl p-4 cursor-pointer hover:bg-muted/30 transition-colors" data-testid={`daily-meal-card-${slot}`}>
+        <div className={`border rounded-xl p-4 cursor-pointer hover:bg-muted/30 transition-colors ${completed ? "opacity-60" : ""}`} data-testid={`daily-meal-card-${slot}`}>
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
               <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5 capitalize">{slot}</div>
@@ -68,7 +75,16 @@ function MealCard({ slot, meal, feedbackState, onFeedback }: {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
+              <CompletionCheckbox
+                date={date}
+                itemType="meal"
+                sourceType="daily_meal"
+                sourceId={mealId}
+                itemKey={slot}
+                completed={completed}
+                onToggle={onToggleCompletion}
+              />
               <Button
                 variant="ghost"
                 size="icon"
@@ -162,6 +178,8 @@ export default function DailyMealView() {
       return false;
     },
   });
+
+  const { isCompleted, toggle } = useCompletions(params.date!, params.date!, !!meal);
 
   const [optimisticFeedback, setOptimisticFeedback] = useState<Record<string, "like" | "dislike" | null>>({});
 
@@ -326,6 +344,10 @@ export default function DailyMealView() {
             meal={meals[slot]}
             feedbackState={optimisticFeedback[generateMealFingerprint(meals[slot].name, meals[slot].cuisineTag || "", meals[slot].ingredients)]}
             onFeedback={handleFeedback}
+            mealId={meal.id}
+            date={params.date!}
+            completed={isCompleted(params.date!, "meal", "daily_meal", meal.id, slot)}
+            onToggleCompletion={toggle}
           />
         ))}
       </div>

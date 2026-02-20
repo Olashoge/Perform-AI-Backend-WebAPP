@@ -1,0 +1,123 @@
+PERFORM AI — ADAPTIVE TRANSPARENCY v1
+
+Objective:
+Make adaptive intelligence visible and trusted without adding new tabs or complex dashboards.
+
+We are NOT adding new features.
+We are exposing intelligence that already exists (Adaptive Engine v1 + performance summaries).
+
+============================================================
+PART 1 — “Why This Plan Looks Like This”
+============================================================
+
+On every generated plan page (Wellness, Meal Plan, Workout Plan, Daily Meal, Daily Workout):
+
+1. If adaptiveSnapshot exists on the plan:
+   - Display a subtle section titled:
+       "Why this plan looks like this"
+   - This section must appear below the plan title and above the content.
+   - It must be collapsible (default: expanded).
+
+2. Render 2–4 human-readable bullets derived from adaptiveSnapshot.decisions.
+   Use deterministic mapping from decision codes to plain English.
+
+   Example mapping:
+   LOW_WORKOUT_ADHERENCE_SIMPLIFY →
+       "Your recent workout consistency was lower, so we simplified this week."
+   FATIGUE_RISK_DELOAD →
+       "Energy levels were low, so this week emphasizes recovery."
+   STALL_WEIGHT_LOSS_ADJUST →
+       "Weight progress slowed, so calories and conditioning were adjusted."
+   HIGH_WORKOUT_ADHERENCE_PROGRESS →
+       "Strong consistency allowed a small progression this week."
+
+3. Do NOT show technical variables.
+   Do NOT show percentages.
+   Do NOT show multipliers.
+   This is trust-building, not a debug panel.
+
+4. If no adaptiveSnapshot exists (first week ever):
+   Show:
+       "This plan is based on your profile and goals."
+
+============================================================
+PART 2 — Weekly Trend Visibility (Inside Check-In Tab)
+============================================================
+
+Enhance the Check-In page:
+
+1. Below the current week score card, add a compact section:
+
+   Title: "Recent Progress"
+
+2. Show last 4 performance summaries (if available):
+   - Week label (e.g., "Week of Feb 10")
+   - Adherence score (number)
+   - Momentum state badge (Building / Maintaining / Fatigue Risk / Slipping)
+   - Small arrow indicator:
+       ↑ if score > previous week
+       ↓ if score < previous week
+       → if stable (±5 points)
+
+3. Keep it minimal:
+   - No charts
+   - No heavy graphs
+   - Clean, premium, aligned with existing design tokens
+
+============================================================
+PART 3 — Progression Indicator in Workouts
+============================================================
+
+If adaptiveSnapshot.modifiers.volumeMultiplier > 1.0:
+   - Add small label near workout title:
+       "Progressed from last week"
+
+If adaptiveSnapshot.modifiers.deloadWeek = true:
+   - Add small label:
+       "Recovery-focused week"
+
+Keep styling subtle.
+
+============================================================
+PART 4 — Messaging Consistency
+============================================================
+
+Create a centralized utility:
+   mapAdaptiveDecisionToMessage(decisionCode)
+
+All plan pages must use this function.
+No duplicated mapping logic in multiple files.
+
+============================================================
+PART 5 — Do NOT Add:
+============================================================
+
+- No new tabs
+- No new navigation items
+- No analytics dashboard
+- No charts
+- No additional DB tables
+- No breaking existing flows
+
+============================================================
+PART 6 — Validation
+============================================================
+
+Test scenarios:
+
+1. Generate plan without prior history:
+   - Should show baseline message.
+
+2. Generate plan after low compliance week:
+   - Should show simplified explanation.
+
+3. Generate plan after fatigue risk:
+   - Should show recovery explanation.
+
+4. Check-in page should display up to last 4 weeks.
+
+Deliver:
+- Files modified
+- Components added
+- Screenshots showing new UI sections
+- Confirmation no performance regressions

@@ -27,9 +27,11 @@ import {
   TrendingUp, Shield,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import { AllowancePanel } from "@/components/allowance-panel";
 import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
+import { CompletionCheckbox } from "@/components/completion-checkbox";
+import { useCompletions } from "@/hooks/use-completions";
 
 const INTENSITY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
@@ -130,7 +132,7 @@ function ExerciseRow({ exercise, index, exercisePrefStatus, onExercisePref }: {
   );
 }
 
-function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, exercisePrefMap, onExercisePref, planStartDate, onRegenerate, isRegenerating }: {
+function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, exercisePrefMap, onExercisePref, planStartDate, onRegenerate, isRegenerating, completionCompleted, completionDateStr, completionSourceId, onCompletionToggle }: {
   session: WorkoutSession;
   dayName: string;
   dayIndex: number;
@@ -141,6 +143,10 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, ex
   planStartDate?: string | null;
   onRegenerate?: (dayIndex: number) => void;
   isRegenerating?: boolean;
+  completionCompleted?: boolean;
+  completionDateStr?: string | null;
+  completionSourceId?: string;
+  onCompletionToggle?: (input: any) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const ModeIcon = MODE_ICONS[session.mode] || Dumbbell;
@@ -155,13 +161,29 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, ex
       })()
     : null;
 
+  const showCheckbox = !!completionDateStr && !!completionSourceId && !!onCompletionToggle;
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className="overflow-visible">
+      <Card className={`overflow-visible ${completionCompleted ? "opacity-60" : ""}`}>
         <CollapsibleTrigger asChild>
           <CardHeader className="cursor-pointer hover-elevate p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                {showCheckbox && (
+                  <div className="mt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <CompletionCheckbox
+                      date={completionDateStr!}
+                      itemType="workout"
+                      sourceType="workout_plan"
+                      sourceId={completionSourceId!}
+                      itemKey="workout"
+                      completed={!!completionCompleted}
+                      onToggle={onCompletionToggle!}
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">{dayName}</span>
                   {actualDate && (
@@ -186,6 +208,7 @@ function SessionCard({ session, dayName, dayIndex, feedbackState, onFeedback, ex
                   <span className="text-xs text-muted-foreground">
                     {session.main.length} exercises
                   </span>
+                </div>
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
@@ -328,6 +351,18 @@ export default function WorkoutView() {
     queryKey: ["/api/workout", id],
     enabled: !!user && !!id,
   });
+
+  const completionStartDate = plan?.planStartDate || "2000-01-01";
+  const completionEndDate = useMemo(() => {
+    if (!plan?.planStartDate) return "2000-01-07";
+    return format(addDays(new Date(plan.planStartDate + "T00:00:00"), 6), "yyyy-MM-dd");
+  }, [plan?.planStartDate]);
+
+  const { isCompleted, toggle: completionToggle } = useCompletions(
+    completionStartDate,
+    completionEndDate,
+    !!user && !!plan?.planStartDate,
+  );
 
   const scheduleMutation = useMutation({
     mutationFn: async (startDate: string | null) => {
@@ -665,6 +700,9 @@ export default function WorkoutView() {
             }
 
             const sKey = `day${day.dayIndex}_${day.session.focus.toLowerCase().replace(/\s+/g, "_")}`;
+            const dayDateStr = plan.planStartDate
+              ? format(addDays(new Date(plan.planStartDate + "T00:00:00"), day.dayIndex - 1), "yyyy-MM-dd")
+              : null;
             return (
               <SessionCard
                 key={day.dayIndex}
@@ -678,6 +716,10 @@ export default function WorkoutView() {
                 planStartDate={plan.planStartDate}
                 onRegenerate={handleRegenSession}
                 isRegenerating={regeneratingDay === day.dayIndex}
+                completionDateStr={dayDateStr}
+                completionSourceId={String(plan.id)}
+                completionCompleted={dayDateStr ? isCompleted(dayDateStr, "workout", "workout_plan", String(plan.id), "workout") : false}
+                onCompletionToggle={completionToggle}
               />
             );
           })}

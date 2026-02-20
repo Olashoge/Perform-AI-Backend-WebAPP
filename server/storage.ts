@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull, lt, lte } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -97,6 +97,9 @@ export interface IStorage {
   getDailyWorkoutByDate(userId: string, date: string): Promise<DailyWorkout | undefined>;
   getDailyWorkoutsByDateRange(userId: string, startDate: string, endDate: string): Promise<DailyWorkout[]>;
   updateDailyWorkoutStatus(id: string, status: string, planJson?: any, title?: string): Promise<DailyWorkout | undefined>;
+  upsertActivityCompletion(userId: string, date: string, itemType: string, sourceType: string, sourceId: string, itemKey: string, completed: boolean): Promise<ActivityCompletion>;
+  getCompletionsByDateRange(userId: string, startDate: string, endDate: string): Promise<ActivityCompletion[]>;
+  getCompletionsBySource(userId: string, sourceType: string, sourceId: string): Promise<ActivityCompletion[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1043,6 +1046,61 @@ export class DatabaseStorage implements IStorage {
     if (title !== undefined) updates.generatedTitle = title;
     const [workout] = await db.update(dailyWorkouts).set(updates).where(eq(dailyWorkouts.id, id)).returning();
     return workout;
+  }
+
+  async upsertActivityCompletion(userId: string, date: string, itemType: string, sourceType: string, sourceId: string, itemKey: string, completed: boolean): Promise<ActivityCompletion> {
+    const existing = await db.select().from(activityCompletions)
+      .where(and(
+        eq(activityCompletions.userId, userId),
+        eq(activityCompletions.date, date),
+        eq(activityCompletions.itemType, itemType),
+        eq(activityCompletions.sourceType, sourceType),
+        eq(activityCompletions.sourceId, sourceId),
+        eq(activityCompletions.itemKey, itemKey),
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const [updated] = await db.update(activityCompletions)
+        .set({
+          completed,
+          completedAt: completed ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(activityCompletions.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db.insert(activityCompletions).values({
+      userId,
+      date,
+      itemType,
+      sourceType,
+      sourceId,
+      itemKey,
+      completed,
+      completedAt: completed ? new Date() : null,
+    }).returning();
+    return created;
+  }
+
+  async getCompletionsByDateRange(userId: string, startDate: string, endDate: string): Promise<ActivityCompletion[]> {
+    return db.select().from(activityCompletions)
+      .where(and(
+        eq(activityCompletions.userId, userId),
+        gte(activityCompletions.date, startDate),
+        lte(activityCompletions.date, endDate),
+      ));
+  }
+
+  async getCompletionsBySource(userId: string, sourceType: string, sourceId: string): Promise<ActivityCompletion[]> {
+    return db.select().from(activityCompletions)
+      .where(and(
+        eq(activityCompletions.userId, userId),
+        eq(activityCompletions.sourceType, sourceType),
+        eq(activityCompletions.sourceId, sourceId),
+      ));
   }
 }
 

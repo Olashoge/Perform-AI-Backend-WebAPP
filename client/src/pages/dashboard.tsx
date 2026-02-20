@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { format, startOfWeek, addDays, isWithinInterval, isSameDay } from "date-fns";
 import { PlanThisDay } from "@/components/plan-this-day";
+import { CompletionCheckbox } from "@/components/completion-checkbox";
+import { useCompletions, useWeeklyAdherence } from "@/hooks/use-completions";
 
 const GOAL_LABELS: Record<string, string> = {
   weight_loss: "Weight Loss",
@@ -111,6 +113,9 @@ export default function Dashboard() {
   const weekStartStr = format(weekStart, "yyyy-MM-dd");
   const weekEndStr = format(weekEnd, "yyyy-MM-dd");
 
+  const { isCompleted, toggle } = useCompletions(weekStartStr, weekEndStr, !!user);
+  const { data: weeklyAdherence } = useWeeklyAdherence(weekStartStr, weekEndStr, !!user);
+
   const { data: dailyCoverage } = useQuery<Record<string, { meal: boolean; workout: boolean }>>({
     queryKey: ["/api/daily-coverage", weekStartStr, weekEndStr],
     queryFn: async () => {
@@ -198,9 +203,21 @@ export default function Dashboard() {
 
   return (
     <div className="px-4 sm:px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-dashboard-title">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">{format(now, "EEEE, MMMM d")}</p>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-dashboard-title">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">{format(now, "EEEE, MMMM d")}</p>
+        </div>
+        {weeklyAdherence?.overallScore != null && (
+          <button
+            onClick={() => navigate("/check-ins")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 transition-colors"
+            data-testid="chip-weekly-adherence"
+          >
+            <span className="text-xs text-muted-foreground">This week:</span>
+            <span className="text-sm font-semibold tabular-nums">{weeklyAdherence.overallScore}%</span>
+          </button>
+        )}
       </div>
 
       {activeGoal && (
@@ -377,10 +394,11 @@ export default function Dashboard() {
                     const meal = dayMeals.meals[slot];
                     if (!meal) return null;
                     const planId = dayMeals.planIds?.[0];
+                    const mealCompleted = planId ? isCompleted(selectedDateStr, "meal", "meal_plan", planId, slot) : false;
                     return (
                       <div
                         key={slot}
-                        className="border-t pt-4 first:border-t-0 first:pt-0 cursor-pointer rounded-md hover-elevate p-2 -mx-2"
+                        className={`border-t pt-4 first:border-t-0 first:pt-0 cursor-pointer rounded-md hover-elevate p-2 -mx-2 ${mealCompleted ? "opacity-60" : ""}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (planId) {
@@ -396,7 +414,20 @@ export default function Dashboard() {
                         }}
                         data-testid={`meal-slot-${slot}`}
                       >
-                        <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1 capitalize">{slot}</div>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-xs text-muted-foreground uppercase tracking-wider capitalize">{slot}</div>
+                          {planId && (
+                            <CompletionCheckbox
+                              date={selectedDateStr}
+                              itemType="meal"
+                              sourceType="meal_plan"
+                              sourceId={planId}
+                              itemKey={slot}
+                              completed={mealCompleted}
+                              onToggle={toggle}
+                            />
+                          )}
+                        </div>
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1">
                             <div className="font-semibold text-sm">{meal.name}</div>
@@ -421,7 +452,7 @@ export default function Dashboard() {
           )}
 
           {dayWorkout && dayWorkout.session && (
-            <Card className="mb-4 hover-elevate cursor-pointer" onClick={() => navigate(`/workout/${dayWorkout.workoutPlanId}`)} data-testid="card-day-workout">
+            <Card className={`mb-4 hover-elevate cursor-pointer ${isCompleted(selectedDateStr, "workout", "workout_plan", dayWorkout.workoutPlanId, "workout") ? "opacity-60" : ""}`} onClick={() => navigate(`/workout/${dayWorkout.workoutPlanId}`)} data-testid="card-day-workout">
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
@@ -433,6 +464,15 @@ export default function Dashboard() {
                       {dayWorkout.session.focus || "Strength"} · {dayWorkout.session.duration || "60 min"}
                     </div>
                   </div>
+                  <CompletionCheckbox
+                    date={selectedDateStr}
+                    itemType="workout"
+                    sourceType="workout_plan"
+                    sourceId={dayWorkout.workoutPlanId}
+                    itemKey="workout"
+                    completed={isCompleted(selectedDateStr, "workout", "workout_plan", dayWorkout.workoutPlanId, "workout")}
+                    onToggle={toggle}
+                  />
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </div>
 
@@ -472,9 +512,21 @@ export default function Dashboard() {
                   {["breakfast", "lunch", "dinner"].map(slot => {
                     const meal = selectedDailyMeal.planJson?.meals?.[slot];
                     if (!meal) return null;
+                    const dmCompleted = isCompleted(selectedDateStr, "meal", "daily_meal", selectedDailyMeal.id, slot);
                     return (
-                      <div key={slot} className="border-t pt-4 first:border-t-0 first:pt-0" data-testid={`daily-meal-slot-${slot}`}>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1 capitalize">{slot}</div>
+                      <div key={slot} className={`border-t pt-4 first:border-t-0 first:pt-0 ${dmCompleted ? "opacity-60" : ""}`} data-testid={`daily-meal-slot-${slot}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-xs text-muted-foreground uppercase tracking-wider capitalize">{slot}</div>
+                          <CompletionCheckbox
+                            date={selectedDateStr}
+                            itemType="meal"
+                            sourceType="daily_meal"
+                            sourceId={selectedDailyMeal.id}
+                            itemKey={slot}
+                            completed={dmCompleted}
+                            onToggle={toggle}
+                          />
+                        </div>
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1">
                             <div className="font-semibold text-sm">{meal.name}</div>
@@ -498,7 +550,7 @@ export default function Dashboard() {
           )}
 
           {selectedDailyWorkout && selectedDailyWorkout.planJson && (
-            <Card className="mb-4 hover-elevate cursor-pointer" onClick={() => navigate(`/daily-workout/${selectedDateStr}`)} data-testid="card-daily-workout">
+            <Card className={`mb-4 hover-elevate cursor-pointer ${isCompleted(selectedDateStr, "workout", "daily_workout", selectedDailyWorkout.id, "workout") ? "opacity-60" : ""}`} onClick={() => navigate(`/daily-workout/${selectedDateStr}`)} data-testid="card-daily-workout">
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
@@ -510,6 +562,15 @@ export default function Dashboard() {
                       Daily plan{selectedDailyWorkout.planJson.focus ? ` · ${selectedDailyWorkout.planJson.focus}` : ""}{selectedDailyWorkout.planJson.durationMinutes ? ` · ${selectedDailyWorkout.planJson.durationMinutes} min` : ""}
                     </div>
                   </div>
+                  <CompletionCheckbox
+                    date={selectedDateStr}
+                    itemType="workout"
+                    sourceType="daily_workout"
+                    sourceId={selectedDailyWorkout.id}
+                    itemKey="workout"
+                    completed={isCompleted(selectedDateStr, "workout", "daily_workout", selectedDailyWorkout.id, "workout")}
+                    onToggle={toggle}
+                  />
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </div>
                 <div className="space-y-3">
