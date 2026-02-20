@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, isSameMonth, eachDayOfInterval, isBefore, startOfDay } from "date-fns";
 import { PlanThisDay } from "@/components/plan-this-day";
+import { WeeklyScorecard } from "@/components/weekly-scorecard";
 
 const SLOT_ORDER: Record<string, number> = { breakfast: 1, lunch: 2, dinner: 3, snack: 4 };
 
@@ -146,6 +147,8 @@ function WeekView({
   }, [currentWeekStart]);
 
   const weekEnd = weekDates[6];
+  const weekStartStr = format(currentWeekStart, "yyyy-MM-dd");
+  const weekEndStr = format(weekEnd, "yyyy-MM-dd");
   const slots = sortSlots(calendarData.mealSlots);
 
   return (
@@ -161,6 +164,13 @@ function WeekView({
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
+
+      <WeeklyScorecard
+        weekStart={currentWeekStart}
+        weekEnd={weekEnd}
+        weekStartStr={weekStartStr}
+        weekEndStr={weekEndStr}
+      />
 
       <div className="space-y-2">
         {weekDates.map((date) => {
