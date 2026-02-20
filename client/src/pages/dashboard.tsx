@@ -185,16 +185,6 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-dashboard-title">Dashboard</h1>
           <p className="text-sm text-muted-foreground">{format(now, "EEEE, MMMM d")}</p>
         </div>
-        {weeklyAdherence?.overallScore != null && (
-          <button
-            onClick={() => navigate("/check-ins")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 transition-colors"
-            data-testid="chip-weekly-adherence"
-          >
-            <span className="text-xs text-muted-foreground">This week:</span>
-            <span className="text-sm font-semibold tabular-nums">{weeklyAdherence.overallScore}%</span>
-          </button>
-        )}
       </div>
 
       <WeeklyScorecard
