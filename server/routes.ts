@@ -2175,9 +2175,8 @@ export async function registerRoutes(
       const mealPlans = await storage.getMealPlansByUser(userId);
       for (const mp of mealPlans) {
         if (!mp.planStartDate || mp.deletedAt) continue;
-        const plan = mp.planOutput as any;
+        const plan = mp.planJson as any;
         if (!plan?.days) continue;
-        const mealsPerDay = plan.days[0] ? Object.keys(plan.days[0].meals || {}).length : 3;
         for (let d = 0; d < (plan.days?.length || 7); d++) {
           const dayDate = new Date(mp.planStartDate + "T00:00:00");
           dayDate.setDate(dayDate.getDate() + d);
@@ -2194,11 +2193,11 @@ export async function registerRoutes(
       const workoutPlans = await storage.getWorkoutPlansByUser(userId);
       for (const wp of workoutPlans) {
         if (!wp.planStartDate || wp.deletedAt) continue;
-        const plan = wp.planOutput as any;
-        if (!plan?.sessions) continue;
-        for (let d = 0; d < plan.sessions.length; d++) {
-          const session = plan.sessions[d];
-          if (!session || session.isRestDay) continue;
+        const plan = wp.planJson as any;
+        if (!plan?.days) continue;
+        for (let d = 0; d < plan.days.length; d++) {
+          const day = plan.days[d];
+          if (!day || day.isWorkoutDay === false) continue;
           const dayDate = new Date(wp.planStartDate + "T00:00:00");
           dayDate.setDate(dayDate.getDate() + d);
           const ds = dayDate.toISOString().split("T")[0];
