@@ -130,6 +130,11 @@ const GYM_PRESELECT = [
   "Yoga mat", "Foam roller",
 ];
 
+const HOME_PRESELECT = [
+  "Dumbbells", "Resistance bands", "Yoga mat", "Foam roller",
+  "Jump rope", "Kettlebells", "Pull-up bar",
+];
+
 const OUTDOORS_PRESELECT = ["Track access", "Hills/stairs", "Field", "Jump rope"];
 
 function TagInput({
@@ -248,7 +253,7 @@ export default function ProfilePage() {
       appetiteLevel: null,
       spicePreference: null,
       bodyContext: "",
-      workoutLocationDefault: "gym",
+      workoutLocationDefault: null,
       equipmentAvailable: [],
       equipmentOtherNotes: "",
     },
@@ -298,7 +303,7 @@ export default function ProfilePage() {
         appetiteLevel: (profile.appetiteLevel as "low" | "normal" | "high") || null,
         spicePreference: (profile.spicePreference as "mild" | "medium" | "spicy") || null,
         bodyContext: profile.bodyContext || "",
-        workoutLocationDefault: (profile.workoutLocationDefault as "gym" | "home" | "outdoors") || "gym",
+        workoutLocationDefault: (profile.workoutLocationDefault as "gym" | "home" | "outdoors") || null,
         equipmentAvailable: (profile.equipmentAvailable as string[]) || [],
         equipmentOtherNotes: profile.equipmentOtherNotes || "",
       });
@@ -872,13 +877,12 @@ export default function ProfilePage() {
                       <Select
                         onValueChange={(val) => {
                           field.onChange(val);
-                          const current = (form.getValues("equipmentAvailable") as string[]) || [];
-                          if (current.length === 0) {
-                            if (val === "gym") form.setValue("equipmentAvailable", [...GYM_PRESELECT]);
-                            else if (val === "outdoors") form.setValue("equipmentAvailable", [...OUTDOORS_PRESELECT]);
-                          }
+                          if (val === "gym") form.setValue("equipmentAvailable", [...GYM_PRESELECT]);
+                          else if (val === "home") form.setValue("equipmentAvailable", [...HOME_PRESELECT]);
+                          else if (val === "outdoors") form.setValue("equipmentAvailable", [...OUTDOORS_PRESELECT]);
+                          else form.setValue("equipmentAvailable", []);
                         }}
-                        value={field.value ?? "gym"}
+                        value={field.value ?? undefined}
                       >
                         <FormControl>
                           <SelectTrigger data-testid="select-workout-location">

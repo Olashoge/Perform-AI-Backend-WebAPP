@@ -577,7 +577,7 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
   foodsToAvoid: z.array(z.string()).default([]),
   foodsToAvoidNotes: z.string().nullable().optional(),
   bodyContext: z.string().default(""),
-  workoutLocationDefault: z.enum(["gym", "home", "outdoors"]).default("gym"),
+  workoutLocationDefault: z.enum(["gym", "home", "outdoors"]).nullable().optional(),
   equipmentAvailable: z.array(z.string()).default([]),
   equipmentOtherNotes: z.string().default(""),
 });
