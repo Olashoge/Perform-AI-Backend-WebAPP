@@ -14,8 +14,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, Sparkles, CalendarDays, Target, Clock, Crosshair, AlertTriangle, User, ExternalLink } from "lucide-react";
+import { Loader2, Sparkles, CalendarDays, Target, Clock, Crosshair, AlertTriangle, User, ExternalLink, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { EQUIPMENT_CATEGORIES, mapProfileLocationToFormLocation, getPreselectForFormLocation } from "@/lib/equipment-constants";
+import { Label } from "@/components/ui/label";
 
 const GOAL_OPTIONS = [
   { value: "weight_loss", label: "Weight Loss" },
@@ -99,6 +101,7 @@ export default function NewWorkout() {
       sessionLength: 45,
       experienceLevel: "intermediate",
       limitations: "",
+      equipmentAvailable: [],
     },
   });
 
@@ -124,6 +127,16 @@ export default function NewWorkout() {
     const healthConstraints = (profile.healthConstraints as string[]) || [];
     if (healthConstraints.length > 0) {
       form.setValue("limitations", healthConstraints.join(", "));
+    }
+    const mappedLoc = mapProfileLocationToFormLocation(profile.workoutLocationDefault as string);
+    if (mappedLoc) {
+      form.setValue("location", mappedLoc);
+    }
+    const profileEquip = (profile.equipmentAvailable as string[]) || [];
+    if (profileEquip.length > 0) {
+      form.setValue("equipmentAvailable", profileEquip);
+    } else if (mappedLoc) {
+      form.setValue("equipmentAvailable", getPreselectForFormLocation(mappedLoc));
     }
   }, [profile, goalFromUrl, form]);
 
@@ -296,7 +309,13 @@ export default function NewWorkout() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Workout Location</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={(val) => {
+                              field.onChange(val);
+                              form.setValue("equipmentAvailable", getPreselectForFormLocation(val));
+                            }}
+                            value={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger data-testid="select-location">
                                 <SelectValue placeholder="Select location" />
@@ -314,6 +333,34 @@ export default function NewWorkout() {
                         </FormItem>
                       )}
                     />
+
+                    <div className="mt-4">
+                      <Label className="mb-2 block">Equipment Available</Label>
+                      {EQUIPMENT_CATEGORIES.map((cat) => (
+                        <div key={cat.category} className="mb-3">
+                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">{cat.category}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {cat.items.map((item) => {
+                              const selected = ((form.watch("equipmentAvailable") as string[]) || []).includes(item);
+                              return (
+                                <Badge
+                                  key={item}
+                                  variant={selected ? "default" : "outline"}
+                                  className="cursor-pointer select-none text-xs"
+                                  onClick={() => {
+                                    const current = (form.getValues("equipmentAvailable") as string[]) || [];
+                                    form.setValue("equipmentAvailable", selected ? current.filter(e => e !== item) : [...current, item]);
+                                  }}
+                                  data-testid={`chip-equip-${item.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
+                                >
+                                  {item}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="border-t pt-6">

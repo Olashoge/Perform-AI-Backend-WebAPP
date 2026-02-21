@@ -33,6 +33,7 @@ import {
   Moon, Dumbbell, Clock, Flame, UtensilsCrossed,
   X, Plus, Save, Check, MapPin,
 } from "lucide-react";
+import { EQUIPMENT_CATEGORIES, GYM_PRESELECT, HOME_PRESELECT, OUTDOORS_PRESELECT } from "@/lib/equipment-constants";
 
 const LBS_PER_KG = 2.2046226218;
 const CM_PER_INCH = 2.54;
@@ -112,30 +113,6 @@ const WORKOUT_LOCATION_OPTIONS = [
   { value: "home", label: "Home" },
   { value: "outdoors", label: "Outdoors" },
 ];
-
-const EQUIPMENT_CATEGORIES: { category: string; items: string[] }[] = [
-  { category: "Cardio", items: ["Treadmill", "Stationary bike", "Spin bike", "Rowing machine", "Elliptical", "Stair climber", "Ski erg", "Assault/air bike", "Jump rope"] },
-  { category: "Free weights", items: ["Dumbbells", "Adjustable dumbbells", "Barbells", "EZ bar", "Kettlebells", "Weight plates", "Bench (flat)", "Bench (adjustable)"] },
-  { category: "Racks & accessories", items: ["Squat rack", "Power rack", "Smith machine", "Pull-up bar", "Dip station", "Resistance bands", "Cable attachments"] },
-  { category: "Machines", items: ["Cable machine / functional trainer", "Leg press", "Hack squat", "Leg extension", "Leg curl", "Lat pulldown", "Seated row", "Chest press machine", "Pec deck", "Shoulder press machine", "Calf raise machine", "Hip thrust machine", "Glute bridge machine", "Ab machine"] },
-  { category: "Home / bodyweight / mobility", items: ["Yoga mat", "Foam roller", "Medicine ball", "Slam ball", "Stability ball", "TRX / suspension trainer", "Plyo box", "Step platform"] },
-  { category: "Outdoors", items: ["Track access", "Hills/stairs", "Field", "Pool access"] },
-];
-
-const GYM_PRESELECT = [
-  "Treadmill", "Stationary bike", "Rowing machine", "Elliptical",
-  "Dumbbells", "Barbells", "EZ bar", "Kettlebells", "Weight plates", "Bench (flat)", "Bench (adjustable)",
-  "Squat rack", "Power rack", "Smith machine", "Pull-up bar", "Dip station", "Resistance bands", "Cable attachments",
-  "Cable machine / functional trainer", "Leg press", "Leg extension", "Leg curl", "Lat pulldown", "Seated row", "Chest press machine", "Pec deck", "Shoulder press machine", "Calf raise machine",
-  "Yoga mat", "Foam roller",
-];
-
-const HOME_PRESELECT = [
-  "Dumbbells", "Resistance bands", "Yoga mat", "Foam roller",
-  "Jump rope", "Kettlebells", "Pull-up bar",
-];
-
-const OUTDOORS_PRESELECT = ["Track access", "Hills/stairs", "Field", "Jump rope"];
 
 function TagInput({
   value,

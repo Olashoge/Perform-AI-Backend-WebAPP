@@ -14,8 +14,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, Sparkles, X, Plus, ChefHat, User, Home, Target, Clock, Crosshair, AlertTriangle, ArrowLeft, ArrowRight, Check, ExternalLink } from "lucide-react";
+import { Loader2, Sparkles, X, Plus, ChefHat, User, Home, Target, Clock, Crosshair, AlertTriangle, ArrowLeft, ArrowRight, Check, ExternalLink, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { EQUIPMENT_CATEGORIES, mapProfileLocationToFormLocation, getPreselectForFormLocation } from "@/lib/equipment-constants";
+import { Label } from "@/components/ui/label";
 
 const COMMON_FOODS_TO_AVOID = [
   "Pork", "Shellfish", "Dairy", "Gluten", "Soy", "Eggs", "Nuts", "Red Meat", "Fish", "Mushrooms",
@@ -193,6 +195,7 @@ export default function GoalWizard() {
       sessionLength: 45,
       experienceLevel: "intermediate",
       limitations: "",
+      equipmentAvailable: [],
     },
   });
 
@@ -231,6 +234,16 @@ export default function GoalWizard() {
     const healthConstraints = (profileData.healthConstraints as string[]) || [];
     if (healthConstraints.length > 0) {
       workoutForm.setValue("limitations", healthConstraints.join(", "));
+    }
+    const mappedLoc = mapProfileLocationToFormLocation(profileData.workoutLocationDefault as string);
+    if (mappedLoc) {
+      workoutForm.setValue("location", mappedLoc);
+    }
+    const profileEquip = (profileData.equipmentAvailable as string[]) || [];
+    if (profileEquip.length > 0) {
+      workoutForm.setValue("equipmentAvailable", profileEquip);
+    } else if (mappedLoc) {
+      workoutForm.setValue("equipmentAvailable", getPreselectForFormLocation(mappedLoc));
     }
   }, [profileData, mealForm, workoutForm]);
 
@@ -1020,7 +1033,13 @@ export default function GoalWizard() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Workout Location</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select
+                          onValueChange={(val) => {
+                            field.onChange(val);
+                            workoutForm.setValue("equipmentAvailable", getPreselectForFormLocation(val));
+                          }}
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-location">
                               <SelectValue placeholder="Select location" />
@@ -1038,6 +1057,34 @@ export default function GoalWizard() {
                       </FormItem>
                     )}
                   />
+
+                  <div className="mt-4">
+                    <Label className="mb-2 block">Equipment Available</Label>
+                    {EQUIPMENT_CATEGORIES.map((cat) => (
+                      <div key={cat.category} className="mb-3">
+                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">{cat.category}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {cat.items.map((item) => {
+                            const selected = ((workoutForm.watch("equipmentAvailable") as string[]) || []).includes(item);
+                            return (
+                              <Badge
+                                key={item}
+                                variant={selected ? "default" : "outline"}
+                                className="cursor-pointer select-none text-xs"
+                                onClick={() => {
+                                  const current = (workoutForm.getValues("equipmentAvailable") as string[]) || [];
+                                  workoutForm.setValue("equipmentAvailable", selected ? current.filter(e => e !== item) : [...current, item]);
+                                }}
+                                data-testid={`chip-equip-${item.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
+                              >
+                                {item}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
                   <div className="border-t pt-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

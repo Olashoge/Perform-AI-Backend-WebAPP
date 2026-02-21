@@ -292,6 +292,7 @@ export const workoutPreferencesSchema = z.object({
   sessionLength: z.union([z.literal(20), z.literal(30), z.literal(45), z.literal(60)]),
   experienceLevel: z.enum(["beginner", "intermediate", "advanced"]),
   limitations: z.string().optional(),
+  equipmentAvailable: z.array(z.string()).optional(),
 });
 
 export const workoutExerciseSchema = z.object({
