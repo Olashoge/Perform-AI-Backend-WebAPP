@@ -477,11 +477,9 @@ RULES:
 
 function buildWorkoutPlanPrompt(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }): string {
   const locationLabels: Record<string, string> = {
-    home_none: "Home (no equipment — bodyweight only)",
-    home_equipment: "Home (dumbbells and/or resistance bands)",
-    gym: "Gym (full equipment: machines, barbells, dumbbells, cables)",
-    outdoor: "Outdoor (running, walking, bodyweight, hills)",
-    mixed: "Mixed (combination of home, gym, and outdoor)",
+    gym: "Gym",
+    home: "Home",
+    outdoors: "Outdoors",
   };
 
   const dayMap: Record<string, number> = { Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6, Sat: 7 };
@@ -490,7 +488,7 @@ function buildWorkoutPlanPrompt(prefs: WorkoutPreferences, exerciseContext?: { a
   return `Generate a complete 7-day workout plan based on these preferences:
 
 Goal: ${prefs.goal.replace("_", " ")}
-Location: ${locationLabels[prefs.location] || prefs.location}
+Location: ${locationLabels[prefs.location] || prefs.location || "Not specified"}
 Training Mode: ${prefs.trainingMode}
 Focus Areas: ${prefs.focusAreas.join(", ")}
 Workout Days: ${prefs.daysOfWeek.join(", ")} (Day indices: ${workoutDayIndices.join(", ")})
@@ -508,11 +506,9 @@ TRAINING MODE RULES:
 - If trainingMode = "both": alternate or mix strength and cardio intelligently through the week.
 
 LOCATION/EQUIPMENT RULES:
-- "home_none": ONLY bodyweight exercises. No dumbbells, no bands, no machines.
-- "home_equipment": Bodyweight + dumbbell + resistance band exercises. No machines, no barbells.
 - "gym": Full equipment including barbells, machines, cables, dumbbells.
-- "outdoor": Running, walking, sprints, hills, bodyweight exercises. No indoor equipment.
-- "mixed": Combine freely based on what makes sense per session.
+- "home": Use only equipment available at home (bodyweight, dumbbells, bands, etc. based on equipment list).
+- "outdoors": Running, walking, sprints, hills, bodyweight exercises. No indoor equipment.
 
 DAY ASSIGNMENT:
 - Days ${workoutDayIndices.join(", ")} are workout days: isWorkoutDay=true and session must be provided.
@@ -613,11 +609,9 @@ export async function generateWorkoutSession(
   const systemPrompt = buildWorkoutSystemPrompt();
 
   const locationLabels: Record<string, string> = {
-    home_none: "Home (no equipment — bodyweight only)",
-    home_equipment: "Home (dumbbells and/or resistance bands)",
-    gym: "Gym (full equipment: machines, barbells, dumbbells, cables)",
-    outdoor: "Outdoor (running, walking, bodyweight, hills)",
-    mixed: "Mixed (combination of home, gym, and outdoor)",
+    gym: "Gym",
+    home: "Home",
+    outdoors: "Outdoors",
   };
 
   const userPrompt = `Regenerate a SINGLE workout session for Day ${dayIndex} of a 7-day workout plan.
@@ -800,11 +794,9 @@ export async function generateSingleDayWorkout(input: DailyWorkoutInput, exercis
   }
 
   const locationLabels: Record<string, string> = {
-    home_none: "Home (no equipment — bodyweight only)",
-    home_equipment: "Home (dumbbells and/or resistance bands)",
-    gym: "Gym (full equipment: machines, barbells, dumbbells, cables)",
-    outdoor: "Outdoor (running, walking, bodyweight, hills)",
-    mixed: "Mixed (combination of home, gym, and outdoor)",
+    gym: "Gym",
+    home: "Home",
+    outdoors: "Outdoors",
   };
 
   const dateLabel = new Date(input.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });

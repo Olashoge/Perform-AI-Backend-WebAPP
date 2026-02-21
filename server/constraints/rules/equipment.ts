@@ -29,23 +29,7 @@ export function evaluateEquipmentRules(ctx: RuleContext): RuleResult {
 
   const location = workoutPrefs.location || "gym";
 
-  if (location === "home_none") {
-    specPatch.equipmentRestriction = "home_bodyweight";
-    specPatch.allowedEquipment = [];
-    specPatch.bannedExerciseTags = ["barbell", "cable", "machine"];
-    specPatch.bannedExercisesExact = [
-      "barbell back squat", "barbell bench press", "barbell deadlift",
-      "lat pulldown", "cable fly", "leg press", "smith machine squat",
-      "hack squat", "cable row",
-    ];
-    violations.push({
-      ruleKey: "EQUIPMENT_HOME_BODYWEIGHT",
-      category: "EQUIPMENT",
-      severity: "ADJUST",
-      message: "Plan restricted to bodyweight-only exercises (no equipment at home).",
-      metadata: { location, allowedExerciseTypes: HOME_BODYWEIGHT_EXERCISES },
-    });
-  } else if (location === "home_equipment") {
+  if (location === "home") {
     specPatch.equipmentRestriction = "home_equipment";
     specPatch.allowedEquipment = HOME_EQUIPMENT_ALLOWED;
     specPatch.bannedExerciseTags = ["barbell", "cable", "machine"];
@@ -61,7 +45,7 @@ export function evaluateEquipmentRules(ctx: RuleContext): RuleResult {
       message: "Plan restricted to home equipment (dumbbells, bands, kettlebells, etc.).",
       metadata: { location, allowedEquipment: HOME_EQUIPMENT_ALLOWED },
     });
-  } else if (location === "outdoor") {
+  } else if (location === "outdoors") {
     specPatch.equipmentRestriction = "outdoor";
     specPatch.allowedEquipment = [];
     specPatch.bannedExerciseTags = ["barbell", "cable", "machine"];
@@ -73,7 +57,7 @@ export function evaluateEquipmentRules(ctx: RuleContext): RuleResult {
       metadata: { location },
     });
   } else {
-    specPatch.equipmentRestriction = location === "mixed" ? "any" : "gym";
+    specPatch.equipmentRestriction = "gym";
     specPatch.allowedEquipment = GYM_EQUIPMENT;
   }
 

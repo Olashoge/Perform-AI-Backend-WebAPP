@@ -19,7 +19,7 @@ export interface SafeSpec {
   bannedExerciseTags: string[];
   bannedExercisesExact: string[];
   allowedEquipment: string[];
-  equipmentRestriction: "home_bodyweight" | "home_equipment" | "gym" | "outdoor" | "any";
+  equipmentRestriction: "home_equipment" | "gym" | "outdoor" | "any";
   nutritionBounds: {
     calorieDeficitMaxPercent: number;
     calorieDeficitMaxKcal: number;

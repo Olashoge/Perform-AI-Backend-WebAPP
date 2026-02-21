@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Loader2, Sparkles, CalendarDays, Target, Clock, Crosshair, AlertTriangle, User, ExternalLink, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { EQUIPMENT_CATEGORIES, mapProfileLocationToFormLocation, getPreselectForFormLocation } from "@/lib/equipment-constants";
+import { EQUIPMENT_CATEGORIES, getPreselectForLocation } from "@/lib/equipment-constants";
 import { Label } from "@/components/ui/label";
 
 const GOAL_OPTIONS = [
@@ -27,11 +27,9 @@ const GOAL_OPTIONS = [
 ];
 
 const LOCATION_OPTIONS = [
-  { value: "home_none", label: "Home (No Equipment)" },
-  { value: "home_equipment", label: "Home (Dumbbells/Bands)" },
   { value: "gym", label: "Gym" },
-  { value: "outdoor", label: "Outdoor" },
-  { value: "mixed", label: "Mixed" },
+  { value: "home", label: "Home" },
+  { value: "outdoors", label: "Outdoors" },
 ];
 
 const TRAINING_MODE_OPTIONS = [
@@ -94,7 +92,7 @@ export default function NewWorkout() {
     resolver: zodResolver(workoutPreferencesSchema),
     defaultValues: {
       goal: goalFromUrl || "maintenance",
-      location: "gym",
+      location: "",
       trainingMode: "both",
       focusAreas: ["Full Body"],
       daysOfWeek: ["Mon", "Wed", "Fri"],
@@ -128,15 +126,15 @@ export default function NewWorkout() {
     if (healthConstraints.length > 0) {
       form.setValue("limitations", healthConstraints.join(", "));
     }
-    const mappedLoc = mapProfileLocationToFormLocation(profile.workoutLocationDefault as string);
-    if (mappedLoc) {
-      form.setValue("location", mappedLoc);
+    const profileLoc = profile.workoutLocationDefault as "" | "gym" | "home" | "outdoors";
+    if (profileLoc) {
+      form.setValue("location", profileLoc);
     }
     const profileEquip = (profile.equipmentAvailable as string[]) || [];
     if (profileEquip.length > 0) {
       form.setValue("equipmentAvailable", profileEquip);
-    } else if (mappedLoc) {
-      form.setValue("equipmentAvailable", getPreselectForFormLocation(mappedLoc));
+    } else if (profileLoc) {
+      form.setValue("equipmentAvailable", getPreselectForLocation(profileLoc));
     }
   }, [profile, goalFromUrl, form]);
 
@@ -312,7 +310,7 @@ export default function NewWorkout() {
                           <Select
                             onValueChange={(val) => {
                               field.onChange(val);
-                              form.setValue("equipmentAvailable", getPreselectForFormLocation(val));
+                              form.setValue("equipmentAvailable", getPreselectForLocation(val));
                             }}
                             value={field.value}
                           >

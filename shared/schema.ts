@@ -285,7 +285,7 @@ export const groceryPricingSchema = z.object({
 
 export const workoutPreferencesSchema = z.object({
   goal: z.enum(["weight_loss", "muscle_gain", "performance", "maintenance"]),
-  location: z.enum(["home_none", "home_equipment", "gym", "outdoor", "mixed"]),
+  location: z.enum(["gym", "home", "outdoors"]).or(z.literal("")),
   trainingMode: z.enum(["strength", "cardio", "both"]),
   focusAreas: z.array(z.string()).min(1, "Select at least one focus area"),
   daysOfWeek: z.array(z.enum(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"])).min(1, "Select at least one day"),

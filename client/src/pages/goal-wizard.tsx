@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Loader2, Sparkles, X, Plus, ChefHat, User, Home, Target, Clock, Crosshair, AlertTriangle, ArrowLeft, ArrowRight, Check, ExternalLink, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { EQUIPMENT_CATEGORIES, mapProfileLocationToFormLocation, getPreselectForFormLocation } from "@/lib/equipment-constants";
+import { EQUIPMENT_CATEGORIES, getPreselectForLocation } from "@/lib/equipment-constants";
 import { Label } from "@/components/ui/label";
 
 const COMMON_FOODS_TO_AVOID = [
@@ -53,11 +53,9 @@ const PACE_OPTIONS = [
 ];
 
 const LOCATION_OPTIONS = [
-  { value: "home_none", label: "Home (No Equipment)" },
-  { value: "home_equipment", label: "Home (Dumbbells/Bands)" },
   { value: "gym", label: "Gym" },
-  { value: "outdoor", label: "Outdoor" },
-  { value: "mixed", label: "Mixed" },
+  { value: "home", label: "Home" },
+  { value: "outdoors", label: "Outdoors" },
 ];
 
 const TRAINING_MODE_OPTIONS = [
@@ -188,7 +186,7 @@ export default function GoalWizard() {
     resolver: zodResolver(workoutPreferencesSchema),
     defaultValues: {
       goal: "maintenance",
-      location: "gym",
+      location: "",
       trainingMode: "both",
       focusAreas: ["Full Body"],
       daysOfWeek: ["Mon", "Wed", "Fri"],
@@ -235,15 +233,15 @@ export default function GoalWizard() {
     if (healthConstraints.length > 0) {
       workoutForm.setValue("limitations", healthConstraints.join(", "));
     }
-    const mappedLoc = mapProfileLocationToFormLocation(profileData.workoutLocationDefault as string);
-    if (mappedLoc) {
-      workoutForm.setValue("location", mappedLoc);
+    const profileLoc = profileData.workoutLocationDefault as "" | "gym" | "home" | "outdoors";
+    if (profileLoc) {
+      workoutForm.setValue("location", profileLoc);
     }
     const profileEquip = (profileData.equipmentAvailable as string[]) || [];
     if (profileEquip.length > 0) {
       workoutForm.setValue("equipmentAvailable", profileEquip);
-    } else if (mappedLoc) {
-      workoutForm.setValue("equipmentAvailable", getPreselectForFormLocation(mappedLoc));
+    } else if (profileLoc) {
+      workoutForm.setValue("equipmentAvailable", getPreselectForLocation(profileLoc));
     }
   }, [profileData, mealForm, workoutForm]);
 
@@ -1036,7 +1034,7 @@ export default function GoalWizard() {
                         <Select
                           onValueChange={(val) => {
                             field.onChange(val);
-                            workoutForm.setValue("equipmentAvailable", getPreselectForFormLocation(val));
+                            workoutForm.setValue("equipmentAvailable", getPreselectForLocation(val));
                           }}
                           value={field.value}
                         >
