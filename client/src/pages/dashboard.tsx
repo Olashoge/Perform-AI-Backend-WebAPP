@@ -195,57 +195,6 @@ export default function Dashboard() {
         enabled={!!user}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/calendar")} data-testid="quick-view-week">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div className="text-sm font-semibold">View Week</div>
-            <div className="text-xs text-muted-foreground">See your schedule</div>
-          </CardContent>
-        </Card>
-        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/nutrition")} data-testid="quick-meal-plan">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div className="text-sm font-semibold">Meal Plan</div>
-            <div className="text-xs text-muted-foreground">Adjust nutrition</div>
-          </CardContent>
-        </Card>
-        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/training")} data-testid="quick-workouts">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
-                <Dumbbell className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-              </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div className="text-sm font-semibold">Workouts</div>
-            <div className="text-xs text-muted-foreground">View training</div>
-          </CardContent>
-        </Card>
-        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/check-ins")} data-testid="quick-checkin">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
-                <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div className="text-sm font-semibold">Check-in</div>
-            <div className="text-xs text-muted-foreground">Log progress</div>
-          </CardContent>
-        </Card>
-      </div>
-
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 min-w-0">
           <Card className="mb-6" data-testid="card-week-strip">
@@ -624,6 +573,57 @@ export default function Dashboard() {
           )}
 
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/calendar")} data-testid="quick-view-week">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <div className="text-sm font-semibold">View Week</div>
+            <div className="text-xs text-muted-foreground">See your schedule</div>
+          </CardContent>
+        </Card>
+        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/nutrition")} data-testid="quick-meal-plan">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <div className="text-sm font-semibold">Meal Plan</div>
+            <div className="text-xs text-muted-foreground">Adjust nutrition</div>
+          </CardContent>
+        </Card>
+        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/training")} data-testid="quick-workouts">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+                <Dumbbell className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <div className="text-sm font-semibold">Workouts</div>
+            <div className="text-xs text-muted-foreground">View training</div>
+          </CardContent>
+        </Card>
+        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/check-ins")} data-testid="quick-checkin">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+                <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <div className="text-sm font-semibold">Check-in</div>
+            <div className="text-xs text-muted-foreground">Log progress</div>
+          </CardContent>
+        </Card>
       </div>
 
       <PlanThisDay
