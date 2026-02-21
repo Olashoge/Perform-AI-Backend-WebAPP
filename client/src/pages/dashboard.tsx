@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   CalendarDays, ChevronLeft, ChevronRight,
   Dumbbell, UtensilsCrossed,
-  Sparkles, ClipboardCheck, ArrowRight, Plus,
+  ClipboardCheck, ArrowRight, Plus,
 } from "lucide-react";
 import { format, startOfWeek, addDays, isWithinInterval, isSameDay } from "date-fns";
 import { PlanThisDay } from "@/components/plan-this-day";
@@ -623,16 +623,6 @@ export default function Dashboard() {
             </Card>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate("/new-plan")} data-testid="button-new-meal">
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-              New Meal
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/workouts/new")} data-testid="button-new-workout">
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-              New Workout
-            </Button>
-          </div>
         </div>
       </div>
 
