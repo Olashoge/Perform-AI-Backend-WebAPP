@@ -136,17 +136,21 @@ export default function PlansList() {
 
 function MealPlanList({ plans, isLoading, sortAsc }: { plans?: MealPlan[]; isLoading: boolean; sortAsc: boolean }) {
   const { toast } = useToast();
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      setDeletingId(id);
       await apiRequest("DELETE", `/api/plans/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       toast({ title: "Plan deleted" });
+      setDeletingId(null);
     },
     onError: () => {
       toast({ title: "Failed to delete plan", variant: "destructive" });
+      setDeletingId(null);
     },
   });
 
@@ -255,7 +259,7 @@ function MealPlanList({ plans, isLoading, sortAsc }: { plans?: MealPlan[]; isLoa
                     disabled={deleteMutation.isPending}
                     data-testid={`button-delete-plan-${mp.id}`}
                   >
-                    {deleteMutation.isPending ? (
+                    {deletingId === mp.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Trash2 className="h-4 w-4" />
@@ -274,17 +278,21 @@ function MealPlanList({ plans, isLoading, sortAsc }: { plans?: MealPlan[]; isLoa
 
 function WorkoutPlanList({ plans, isLoading, sortAsc }: { plans?: WorkoutPlan[]; isLoading: boolean; sortAsc: boolean }) {
   const { toast } = useToast();
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      setDeletingId(id);
       await apiRequest("DELETE", `/api/workouts/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
       toast({ title: "Workout deleted" });
+      setDeletingId(null);
     },
     onError: () => {
       toast({ title: "Failed to delete workout", variant: "destructive" });
+      setDeletingId(null);
     },
   });
 
@@ -393,7 +401,7 @@ function WorkoutPlanList({ plans, isLoading, sortAsc }: { plans?: WorkoutPlan[];
                     disabled={deleteMutation.isPending}
                     data-testid={`button-delete-workout-${wp.id}`}
                   >
-                    {deleteMutation.isPending ? (
+                    {deletingId === wp.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Trash2 className="h-4 w-4" />

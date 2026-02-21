@@ -128,13 +128,19 @@ export default function GoalPlans() {
     enabled: !!user,
   });
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      setDeletingId(id);
       await apiRequest("DELETE", `/api/goal-plans/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/goal-plans"] });
       toast({ title: "Wellness plan removed" });
+      setDeletingId(null);
+    },
+    onError: () => {
+      setDeletingId(null);
     },
   });
 
@@ -298,7 +304,11 @@ export default function GoalPlans() {
                         disabled={deleteMutation.isPending}
                         data-testid={`button-delete-goal-${gp.id}`}
                       >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        {deletingId === gp.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        )}
                       </Button>
                     </div>
 

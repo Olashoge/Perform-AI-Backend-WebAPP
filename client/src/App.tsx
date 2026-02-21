@@ -71,7 +71,7 @@ function AuthenticatedLayout() {
 
   return (
     <SidebarProvider style={sidebarStyle as React.CSSProperties} defaultOpen={false}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-dvh w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="h-12 border-b bg-background flex items-center gap-3 px-3 shrink-0" data-testid="mobile-header">

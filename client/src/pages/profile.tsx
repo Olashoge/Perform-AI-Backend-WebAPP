@@ -1036,7 +1036,7 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-3 pb-8">
+          <div className="flex justify-end gap-3 pb-16 sm:pb-8">
             <Button
               type="submit"
               disabled={saveMutation.isPending}
