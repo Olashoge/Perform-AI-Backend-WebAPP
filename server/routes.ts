@@ -297,7 +297,7 @@ export async function registerRoutes(
             mealPrefs: parsed.data,
           });
           log(`Generating full plan for user ${userId} (plan ${pendingPlan.id})`, "openai");
-          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays, standaloneCtx, standaloneConstraintBlock);
+          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays, standaloneCtx, standaloneConstraintBlock, { bodyContext: userProfile.bodyContext || undefined });
           await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
@@ -970,7 +970,8 @@ export async function registerRoutes(
             startDate: validStartDate,
             workoutPrefs: prefs,
           });
-          const result = await generateWorkoutPlan(prefs, exerciseContext, standaloneWCtx, workoutConstraintBlock);
+          const profileExtras = { bodyContext: userProfile.bodyContext || undefined, workoutLocation: userProfile.workoutLocationDefault || undefined, equipment: (userProfile.equipmentAvailable as string[]) || undefined, equipmentNotes: userProfile.equipmentOtherNotes || undefined };
+          const result = await generateWorkoutPlan(prefs, exerciseContext, standaloneWCtx, workoutConstraintBlock, profileExtras);
           await storage.updateWorkoutPlanStatus(plan.id, "ready", result);
           log(`Workout plan ${plan.id} generated successfully`, "openai");
         } catch (err) {
@@ -1382,7 +1383,8 @@ export async function registerRoutes(
             log(`Goal gen: generating workout plan ${pendingWorkout.id}`, "openai");
             const goalPrefContext = await storage.getUserPreferenceContext(userId);
             const goalExerciseCtx = { avoidedExercises: goalPrefContext.avoidedExercises, dislikedExercises: goalPrefContext.dislikedExercises };
-            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock);
+            const goalProfileExtras = { bodyContext: userProfile.bodyContext || undefined, workoutLocation: userProfile.workoutLocationDefault || undefined, equipment: (userProfile.equipmentAvailable as string[]) || undefined, equipmentNotes: userProfile.equipmentOtherNotes || undefined };
+            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock, goalProfileExtras);
 
             const workoutPostCheck = postValidateWorkoutPlan(result, constraintResult.safeSpec);
             let finalWorkoutResult = result;
@@ -1391,7 +1393,7 @@ export async function registerRoutes(
               log(`Goal gen: workout post-validation auto-fixed ${workoutPostCheck.violations.length} violation(s)`, "plan");
             } else if (workoutPostCheck.needsRegen) {
               log(`Goal gen: workout post-validation requires regen (${workoutPostCheck.violations.length} violations)`, "plan");
-              const regenResult = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock + "\nSTRICT MODE: Previous generation contained banned exercises. Absolutely do NOT include any banned exercises.");
+              const regenResult = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock + "\nSTRICT MODE: Previous generation contained banned exercises. Absolutely do NOT include any banned exercises.", goalProfileExtras);
               finalWorkoutResult = regenResult;
             }
             if (workoutPostCheck.violations.length > 0) {
@@ -1439,7 +1441,8 @@ export async function registerRoutes(
             const prefCtx = await storage.getUserPreferenceContext(userId);
             const workoutDays = parsedMeal.data.workoutDays || undefined;
             log(`Goal gen: generating meal plan ${pendingMeal.id}`, "openai");
-            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, constraintPromptBlock);
+            const mealProfileExtras = { bodyContext: userProfile.bodyContext || undefined };
+            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, constraintPromptBlock, mealProfileExtras);
 
             const mealPostCheck = postValidateMealPlan(planJson, constraintResult.safeSpec);
             let finalMealJson = planJson;
@@ -1448,7 +1451,7 @@ export async function registerRoutes(
               log(`Goal gen: meal post-validation auto-fixed ${mealPostCheck.violations.length} violation(s)`, "plan");
             } else if (mealPostCheck.needsRegen) {
               log(`Goal gen: meal post-validation requires regen (${mealPostCheck.violations.length} violations)`, "plan");
-              const regenPlan = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, constraintPromptBlock + "\nSTRICT MODE: Previous generation contained banned ingredients. Absolutely do NOT include any banned ingredients.");
+              const regenPlan = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, constraintPromptBlock + "\nSTRICT MODE: Previous generation contained banned ingredients. Absolutely do NOT include any banned ingredients.", mealProfileExtras);
               finalMealJson = regenPlan;
             }
             if (mealPostCheck.violations.length > 0) {
@@ -1943,17 +1946,18 @@ export async function registerRoutes(
             dislikedExercises: exercisePrefs.filter(p => p.preference === "dislike").map(p => p.exerciseName),
           };
 
+          const dailyWProfileExtras = { bodyContext: profile.bodyContext || undefined, workoutLocation: profile.workoutLocationDefault || undefined, equipment: (profile.equipmentAvailable as string[]) || undefined, equipmentNotes: profile.equipmentOtherNotes || undefined };
           const result = await generateSingleDayWorkout({
             date,
             goal: profile.primaryGoal || "maintenance",
-            location: "gym",
+            location: profile.workoutLocationDefault || "gym",
             trainingMode: "both",
             focusAreas: ["full_body"],
             sessionLength: profile.sessionDuration || 45,
             experienceLevel: profile.trainingExperience || "intermediate",
             healthConstraints: (profile.healthConstraints as string[]) || [],
             constraintBlock: adaptive.promptBlock || undefined,
-          }, exerciseContext);
+          }, exerciseContext, dailyWProfileExtras);
 
           const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
           const title = `Daily Workout — ${dateLabel}`;
@@ -2069,16 +2073,17 @@ export async function registerRoutes(
             dislikedExercises: exercisePrefs.filter((p: any) => p.status === "disliked" || p.preference === "dislike").map((p: any) => p.exerciseName),
           };
 
+          const regenProfileExtras = { bodyContext: profile.bodyContext || undefined, workoutLocation: profile.workoutLocationDefault || undefined, equipment: (profile.equipmentAvailable as string[]) || undefined, equipmentNotes: profile.equipmentOtherNotes || undefined };
           const result = await generateSingleDayWorkout({
             date,
             goal: profile.primaryGoal || "maintenance",
-            location: "gym",
+            location: profile.workoutLocationDefault || "gym",
             trainingMode: "both",
             focusAreas: ["full_body"],
             sessionLength: (profile as any).sessionDuration || 45,
             experienceLevel: profile.trainingExperience || "intermediate",
             healthConstraints: (profile.healthConstraints as string[]) || [],
-          }, exerciseContext);
+          }, exerciseContext, regenProfileExtras);
 
           const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
           const title = `Daily Workout — ${dateLabel}`;

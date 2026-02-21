@@ -536,6 +536,10 @@ export const userProfiles = pgTable("user_profiles", {
   foodsToAvoidNotes: varchar("foods_to_avoid_notes", { length: 500 }),
   appetiteLevel: varchar("appetite_level", { length: 20 }),
   spicePreference: varchar("spice_preference", { length: 20 }),
+  bodyContext: text("body_context").default(""),
+  workoutLocationDefault: varchar("workout_location_default", { length: 20 }).default("gym"),
+  equipmentAvailable: jsonb("equipment_available").default([]),
+  equipmentOtherNotes: text("equipment_other_notes").default(""),
   nextWeekPlanBias: varchar("next_week_plan_bias", { length: 30 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -572,6 +576,10 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
   allergiesIntolerances: z.array(z.string()).default([]),
   foodsToAvoid: z.array(z.string()).default([]),
   foodsToAvoidNotes: z.string().nullable().optional(),
+  bodyContext: z.string().default(""),
+  workoutLocationDefault: z.enum(["gym", "home", "outdoors"]).default("gym"),
+  equipmentAvailable: z.array(z.string()).default([]),
+  equipmentOtherNotes: z.string().default(""),
 });
 
 export type InsertUserProfile = z.infer<typeof insertUserProfileSchema>;

@@ -1,0 +1,235 @@
+You are working on the Perform AI webapp. Implement the refinements and upgrades below with clean architecture, minimal duplication, and consistent naming. Do NOT change dashboard hierarchy (item #3 previously discussed) or button prominence (item #6). Focus only on the items listed here.
+
+========================
+A) UI/UX REFINEMENTS (DO THESE)
+========================
+
+A1) Score color psychology (weekly score ring + any other weekly score indicator)
+- Replace red “failure” styling for mid-scores.
+- Implement a simple, premium color mapping:
+  - 0–40 => neutral gray (not red)
+  - 41–70 => soft amber
+  - 71–100 => green
+- Only use “red” for true failure states (e.g., error, blocked, invalid), NOT normal performance scoring.
+- Ensure this applies consistently wherever the weekly score is shown (Dashboard, Calendar weekly header card).
+
+Acceptance:
+- Score 50 is NOT red anywhere.
+- Score ring, small labels, and any related accents reflect mapping.
+
+A2) Adaptive weekly message (make it data-driven)
+Currently the weekly message is static. Make it adapt using the week’s completion/adherence breakdown:
+- Inputs available:
+  - meals completion %
+  - workouts completion %
+  - optionally: pace label (Gentle/Steady/Aggressive) if available
+- Implement message logic:
+  - If meals < workouts by >= 20 points: message focuses on nutrition consistency.
+  - If workouts < meals by >= 20 points: message focuses on training consistency.
+  - If both >= 80: message reinforces structure + progression/next step.
+  - If both between 40–79: message encourages tightening consistency.
+  - If both < 40: message is gentle, “reset / simplify / start small.”
+- Keep tone premium and calm. 1–2 sentences max.
+
+Acceptance:
+- Message changes based on meal/workout adherence and is not static.
+
+A4) Checkbox alignment polish (Daily Meal card)
+- On the Daily Meal card, checkboxes look visually detached.
+- Align each checkbox vertically centered with its meal row (Breakfast/Lunch/Dinner row).
+- Make the whole row clickable to toggle completion (checkbox remains visible for clarity).
+- Add subtle hover/active state on the row (very light background) to feel premium.
+
+Acceptance:
+- Checkbox is clearly associated with the specific meal row.
+- Clicking the row toggles completion reliably.
+
+A5) Percent text clarity in bars (Calendar weekly card / anywhere that shows meals/workouts bar)
+- Add subtle percentage text inside or adjacent to the bar for Meals and Workouts.
+- Must be readable but not heavy (small, muted).
+- Ensure 0% is clearly visible and doesn’t feel like “broken.”
+
+Acceptance:
+- User can see % values without hunting.
+- 0% looks intentional, not like a bug.
+
+========================
+B) “BODY CONTEXT” FIELD (PROFILE + AUTOPOPULATE + AI PROMPTS)
+========================
+
+We need a new user profile field that captures nuanced context: body type, body goals, challenges, limitations, anything else the app should know before generating plans.
+
+B1) Data model
+- Add a text field to user_profiles:
+  - name: bodyContext (or body_context)
+  - type: TEXT
+  - default: empty string
+
+B2) Profile UI
+- Under Physical Stats & Goals (near Primary Goal) add a textarea:
+  - Label: “Body & Goals Notes (optional)”
+  - Helper text (short): “Share body goals, body type, challenges, or anything important for your plan.”
+- Save this with profile.
+
+B3) Autopopulate into all plan creation flows
+- In Wellness wizard, Nutrition plan creation, Training plan creation:
+  - show a “Your Profile” summary card (already exists)
+  - include a line indicating body notes exists (e.g., “Body notes: Added” with a small “View” expand/collapse)
+  - add an optional textarea “Body & Goals Notes (optional)” prefilled from profile.bodyContext
+  - user can override for this plan (override applies to snapshot for the plan generation request; DO NOT overwrite the user profile unless they explicitly edit profile)
+
+B4) Must be sent to AI and importantly considered
+- Update AI prompt-building logic so bodyContext is included prominently.
+- Put it in a dedicated section in the prompt called:
+  “IMPORTANT USER CONTEXT (MUST FOLLOW)”
+- If blank, omit the section.
+
+Acceptance:
+- If profile bodyContext exists, it appears prefilled in Wellness/Nutrition/Training forms.
+- AI prompt includes it in a strong “IMPORTANT USER CONTEXT” section.
+
+========================
+C) EQUIPMENT SELECTOR (PROFILE + ALL TRAINING FORMS + AI PROMPTS)
+========================
+
+We need equipment availability selection, especially for Home vs Gym.
+
+C1) Data model
+- Add to user_profiles:
+  - workoutLocationDefault (string enum: gym | home | outdoors)
+  - equipmentAvailable (string array) OR JSON array stored in TEXT/JSON column depending on DB capability
+  - equipmentOtherNotes (text)
+- Keep naming consistent and reused in all forms.
+
+C2) Equipment list (include many options)
+Implement pill multi-select with categories but one combined selection set is fine for v1.
+Include at minimum:
+
+Cardio:
+- Treadmill, Stationary bike, Spin bike, Rowing machine, Elliptical, Stair climber, Ski erg, Assault/air bike, Jump rope
+
+Free weights:
+- Dumbbells, Adjustable dumbbells, Barbells, EZ bar, Kettlebells, Weight plates, Bench (flat), Bench (adjustable)
+
+Racks & accessories:
+- Squat rack, Power rack, Smith machine, Pull-up bar, Dip station, Resistance bands, Cable attachments
+
+Machines (gym):
+- Cable machine / functional trainer, Leg press, Hack squat, Leg extension, Leg curl, Lat pulldown, Seated row, Chest press machine, Pec deck, Shoulder press machine, Calf raise machine, Hip thrust machine, Glute bridge machine, Ab machine
+
+Home / bodyweight / mobility:
+- Yoga mat, Foam roller, Medicine ball, Slam ball, Stability ball, TRX / suspension trainer, Plyo box, Step platform
+
+Outdoors:
+- Track access, Hills/stairs, Field, Pool access
+
+C3) Behavior by workout location
+- If “Gym” selected:
+  - preselect a reasonable “typical gym set” (most machines + free weights)
+  - user can unselect or add more
+- If “Home” selected:
+  - start with nothing selected (empty), user selects what they have
+- If “Outdoors” selected:
+  - preselect outdoor-friendly items (track/hills/field/jumprope optional)
+
+C4) UI locations
+- Add to Profile page:
+  - Workout Location (dropdown)
+  - Equipment Available (pills multi-select)
+  - “Other equipment notes” textarea (for anything not listed)
+- In Training plan form and Wellness wizard training section:
+  - show the same fields prefilled from profile with overrides allowed (overrides do not change profile)
+- In any standalone workout generation forms:
+  - same behavior
+
+C5) Must be sent to AI and importantly considered
+- AI prompt must include:
+  - workout location
+  - selected equipment list
+  - equipmentOtherNotes
+- Put it in a strong section:
+  “AVAILABLE EQUIPMENT (MUST USE)”
+- The workout generator must avoid prescribing equipment not in the list (unless it also provides an alternate bodyweight option).
+
+Acceptance:
+- Gym selection preselects typical gym set.
+- Home starts empty.
+- Overrides work per-plan without overwriting profile.
+- AI prompt includes equipment section, and generated workouts respect it.
+
+========================
+D) PROFILE PAGE DOUBLE SCROLL FIX
+========================
+
+Profile page currently has double scrolling (container + page).
+- Ensure ONLY one scroll container exists (prefer browser/page scroll).
+- Remove fixed-height wrappers or overflow containers causing nested scrolling.
+- Keep header and layout intact.
+
+Acceptance:
+- One smooth scroll only on Profile page.
+
+========================
+E) DASHBOARD + CALENDAR WEEK CALC BUG (PAST/FUTURE WEEKS SHOW 0%)
+========================
+
+Bug: current week shows correct stats, past/future weeks show 0%.
+We need correct aggregation based on the selected week.
+
+E1) Standardize “week start” logic
+- Respect the user setting “Week starts on: Sunday/Monday” (already exists).
+- Create a single utility to compute:
+  - weekStartDate
+  - weekEndDate
+given a reference date and week-start preference.
+Use this everywhere.
+
+E2) Ensure data fetching uses the selected week range
+- Dashboard weekly card and Calendar weekly card must query completion/events for the computed weekStartDate..weekEndDate.
+- Include daily meals + daily workouts + scheduled workouts/meals from plans, as applicable to your existing schema.
+- Do not hardcode “current week.”
+
+E3) Correct labels
+- Based on reference date vs today:
+  - If weekStartDate == currentWeekStartDate: label “This week”
+  - If weekStartDate == currentWeekStartDate - 7 days: label “Last week”
+  - If weekStartDate == currentWeekStartDate + 7 days: label “Next week”
+  - Otherwise: label “Week of MMM d” (or “Week of Feb 15”)
+- Ensure displayed date range (e.g., “Feb 15 – Feb 21, 2026”) always matches computed start/end.
+
+E4) Acceptance checks
+- Navigate to a past week with known completions: percentages must reflect real data.
+- Navigate to a future week with scheduled items: should not default to 0% if there are items scheduled (should show denominators correctly; completion may be 0, but “planned” count must be correct).
+- The “0%” should be accurate, not a bug.
+
+========================
+F) CONSISTENT NAMING (KEEP IT CLEAN)
+========================
+- Use global canonical field names everywhere:
+  - “Workout Location”
+  - “Equipment Available”
+  - “Other equipment notes”
+  - “Body & Goals Notes”
+- Don’t introduce new variants like “Session Length vs Session Duration” etc. Keep prior standardization.
+
+========================
+G) IMPLEMENTATION NOTES
+========================
+- Any plan creation form should:
+  - Pull from profile as defaults
+  - Allow overrides
+  - Merge profile + overrides for the snapshot used at generation time
+  - Store snapshot with the generated plan/day item
+  - Never modify profile unless user edits profile directly
+- Add/update types, validators, and server-side safety checks where needed.
+
+Deliverables:
+1) Working UI changes (A1,A2,A4,A5)
+2) Profile + autopopulation + AI prompt inclusion for Body Context (B)
+3) Profile + forms + AI prompt inclusion for Equipment selector (C)
+4) Profile single-scroll fix (D)
+5) Week calculation + labels fixed for Dashboard and Calendar (E)
+
+After finishing:
+- Provide a concise summary of what changed and where, plus any migrations you ran.
+- Include screenshots or describe how to verify each acceptance item.

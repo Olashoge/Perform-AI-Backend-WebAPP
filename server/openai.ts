@@ -310,12 +310,32 @@ function cleanJsonString(raw: string): string {
   return cleaned.trim();
 }
 
-export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext, workoutDays?: string[], wellnessCtx?: WellnessContext, constraintBlock?: string): Promise<PlanOutput> {
+function buildBodyContextBlock(bodyContext?: string): string {
+  if (!bodyContext || bodyContext.trim() === "") return "";
+  return `\n\nIMPORTANT USER CONTEXT (MUST FOLLOW):\n${bodyContext.trim()}\n`;
+}
+
+function buildEquipmentBlock(location?: string, equipment?: string[], notes?: string): string {
+  if (!location && (!equipment || equipment.length === 0) && !notes) return "";
+  const parts: string[] = ["\n\nAVAILABLE EQUIPMENT (MUST USE):"];
+  if (location) parts.push(`Workout Location: ${location}`);
+  if (equipment && equipment.length > 0) {
+    parts.push(`Available Equipment: ${equipment.join(", ")}`);
+    parts.push("IMPORTANT: Only prescribe exercises using the equipment listed above. If an exercise requires unlisted equipment, provide a bodyweight alternative.");
+  }
+  if (notes && notes.trim()) parts.push(`Additional Equipment Notes: ${notes.trim()}`);
+  return parts.join("\n");
+}
+
+export async function generateFullPlan(prefs: Preferences, prefCtx?: UserPreferenceContext, workoutDays?: string[], wellnessCtx?: WellnessContext, constraintBlock?: string, profileExtras?: { bodyContext?: string }): Promise<PlanOutput> {
   let systemPrompt = buildSystemPrompt(prefs);
   if (constraintBlock) {
     systemPrompt += "\n\n" + constraintBlock;
   }
   let userPrompt = buildPlanPrompt(prefs, prefCtx);
+  if (profileExtras?.bodyContext) {
+    userPrompt += buildBodyContextBlock(profileExtras.bodyContext);
+  }
 
   if (wellnessCtx && wellnessCtx.trainingDays.length > 0) {
     userPrompt += buildMealWellnessBlock(wellnessCtx);
@@ -548,12 +568,18 @@ Return a JSON object with this exact structure:
 }`;
 }
 
-export async function generateWorkoutPlan(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }, wellnessCtx?: WellnessContext, constraintBlock?: string): Promise<WorkoutPlanOutput> {
+export async function generateWorkoutPlan(prefs: WorkoutPreferences, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }, wellnessCtx?: WellnessContext, constraintBlock?: string, profileExtras?: { bodyContext?: string; workoutLocation?: string; equipment?: string[]; equipmentNotes?: string }): Promise<WorkoutPlanOutput> {
   let systemPrompt = buildWorkoutSystemPrompt();
   if (constraintBlock) {
     systemPrompt += "\n\n" + constraintBlock;
   }
   let userPrompt = buildWorkoutPlanPrompt(prefs, exerciseContext);
+  if (profileExtras?.bodyContext) {
+    userPrompt += buildBodyContextBlock(profileExtras.bodyContext);
+  }
+  if (profileExtras) {
+    userPrompt += buildEquipmentBlock(profileExtras.workoutLocation, profileExtras.equipment, profileExtras.equipmentNotes);
+  }
 
   if (wellnessCtx) {
     userPrompt += buildWorkoutWellnessBlock(wellnessCtx);
@@ -767,7 +793,7 @@ export interface DailyWorkoutInput {
   constraintBlock?: string;
 }
 
-export async function generateSingleDayWorkout(input: DailyWorkoutInput, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }): Promise<WorkoutSession> {
+export async function generateSingleDayWorkout(input: DailyWorkoutInput, exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] }, profileExtras?: { bodyContext?: string; workoutLocation?: string; equipment?: string[]; equipmentNotes?: string }): Promise<WorkoutSession> {
   let systemPrompt = buildWorkoutSystemPrompt();
   if (input.constraintBlock) {
     systemPrompt += "\n\n" + input.constraintBlock;
@@ -797,6 +823,7 @@ EXERCISE PREFERENCES:
 ${exerciseContext.avoidedExercises.length > 0 ? `- AVOIDED exercises (NEVER include): ${exerciseContext.avoidedExercises.join(", ")}` : ""}
 ${exerciseContext.dislikedExercises.length > 0 ? `- Disliked exercises (deprioritize): ${exerciseContext.dislikedExercises.join(", ")}` : ""}
 ` : ""}
+${profileExtras?.bodyContext ? buildBodyContextBlock(profileExtras.bodyContext) : ""}${profileExtras ? buildEquipmentBlock(profileExtras.workoutLocation, profileExtras.equipment, profileExtras.equipmentNotes) : ""}
 Return ONLY a JSON object for the session:
 {
   "mode": "strength"|"cardio"|"mixed",

@@ -86,7 +86,7 @@ function AuthenticatedLayout() {
             <ThemeToggle />
           </header>
           <ActiveGoalBar />
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-auto min-h-0">
             <AuthenticatedRouter />
           </main>
         </div>

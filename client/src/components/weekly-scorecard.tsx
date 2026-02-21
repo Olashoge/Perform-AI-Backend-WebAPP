@@ -6,8 +6,52 @@ import {
   Dumbbell, UtensilsCrossed,
   TrendingUp, TrendingDown, Minus, Activity,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, startOfWeek, isSameDay } from "date-fns";
 import { useWeeklyAdherence } from "@/hooks/use-completions";
+
+function getScoreColor(score: number) {
+  if (score >= 71) return { text: "text-emerald-600 dark:text-emerald-400", ring: "stroke-emerald-500" };
+  if (score >= 41) return { text: "text-amber-600 dark:text-amber-400", ring: "stroke-amber-500" };
+  return { text: "text-muted-foreground", ring: "stroke-muted-foreground/60" };
+}
+
+function getWeekLabel(weekStart: Date, calWeekStartsOn?: 0 | 1): string {
+  const now = new Date();
+  const weekStartsOn: 0 | 1 = calWeekStartsOn ?? (weekStart.getDay() === 1 ? 1 : 0);
+  const currentWeekStart = startOfWeek(now, { weekStartsOn });
+  if (isSameDay(weekStart, currentWeekStart)) return "This Week";
+  const diffMs = weekStart.getTime() - currentWeekStart.getTime();
+  const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+  if (diffWeeks === -1) return "Last Week";
+  if (diffWeeks === 1) return "Next Week";
+  return `Week of ${format(weekStart, "MMM d")}`;
+}
+
+function getAdaptiveMessage(mealPct: number | null, workoutPct: number | null): string | null {
+  const m = mealPct ?? -1;
+  const w = workoutPct ?? -1;
+  if (m < 0 && w < 0) return null;
+
+  const mVal = m < 0 ? w : m;
+  const wVal = w < 0 ? m : w;
+
+  if (mVal < 40 && wVal < 40) {
+    return "A lighter week — that's okay. Start with one small win today and build from there.";
+  }
+  if (m >= 0 && w >= 0 && m < w - 20) {
+    return "Your training is on track. Bringing more consistency to your meals will amplify your results.";
+  }
+  if (m >= 0 && w >= 0 && w < m - 20) {
+    return "Nutrition is solid. Prioritizing your next workout session will help keep momentum building.";
+  }
+  if (mVal >= 80 && wVal >= 80) {
+    return "Strong consistency across the board. Stay the course — your structure is paying off.";
+  }
+  if (mVal >= 40 && wVal >= 40) {
+    return "Good foundation this week. Tightening consistency on a few more days will compound your progress.";
+  }
+  return "Keep showing up. Small, steady steps create lasting results.";
+}
 
 interface WeeklyScorecardProps {
   weekStart: Date;
@@ -55,23 +99,24 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
   const workoutPct = weeklyAdherence.workoutPct;
 
   const latestPerf = perfSummaries?.[0] ?? null;
-  const insights = (latestPerf?.insights || []) as string[];
 
   const momentumConfig: Record<string, { label: string; color: string; bg: string; icon: typeof TrendingUp }> = {
     building: { label: "Building", color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30", icon: TrendingUp },
     maintaining: { label: "Steady", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30", icon: Minus },
     fatigue_risk: { label: "Fatigue Risk", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30", icon: Activity },
-    slipping: { label: "Needs Attention", color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-900/30", icon: TrendingDown },
+    slipping: { label: "Needs Attention", color: "text-muted-foreground", bg: "bg-muted", icon: TrendingDown },
   };
   const momentum = latestPerf ? (momentumConfig[latestPerf.momentumState] || momentumConfig.maintaining) : null;
   const MomentumIcon = momentum?.icon ?? Activity;
 
-  const scoreColor = score >= 80 ? "text-emerald-600 dark:text-emerald-400" :
-    score >= 60 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400";
-  const ringColor = score >= 80 ? "stroke-emerald-500" :
-    score >= 60 ? "stroke-amber-500" : "stroke-red-500";
+  const colors = getScoreColor(score);
   const circumference = 2 * Math.PI * 40;
   const dashOffset = circumference - (score / 100) * circumference;
+  const weekLabel = getWeekLabel(weekStart);
+  const adaptiveMsg = getAdaptiveMessage(mealPct, workoutPct);
+
+  const mealBarColor = mealPct != null && mealPct >= 71 ? "bg-emerald-500" : mealPct != null && mealPct >= 41 ? "bg-amber-500" : "bg-muted-foreground/40";
+  const workoutBarColor = workoutPct != null && workoutPct >= 71 ? "bg-emerald-500" : workoutPct != null && workoutPct >= 41 ? "bg-amber-500" : "bg-muted-foreground/40";
 
   return (
     <Card className="mb-6 overflow-hidden" data-testid="card-performance-scorecard">
@@ -83,14 +128,14 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
                 <circle cx="50" cy="50" r="40" fill="none" className="stroke-muted" strokeWidth="6" />
                 <circle
                   cx="50" cy="50" r="40" fill="none"
-                  className={`${ringColor} transition-all duration-1000 ease-out`}
+                  className={`${colors.ring} transition-all duration-1000 ease-out`}
                   strokeWidth="6" strokeLinecap="round"
                   strokeDasharray={circumference}
                   strokeDashoffset={dashOffset}
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-3xl sm:text-4xl font-bold tabular-nums ${scoreColor}`} data-testid="text-adherence-score">
+                <span className={`text-3xl sm:text-4xl font-bold tabular-nums ${colors.text}`} data-testid="text-adherence-score">
                   {score}
                 </span>
                 <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Score</span>
@@ -101,7 +146,7 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
           <div className="flex-1 p-5 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">This Week</div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5" data-testid="text-week-label">{weekLabel}</div>
                 <div className="text-sm text-muted-foreground">
                   {format(weekStart, "MMM d")} — {format(weekEnd, "MMM d")}
                 </div>
@@ -125,8 +170,8 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
                     {mealPct != null ? `${mealPct}%` : "—"}
                   </span>
                 </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${mealPct ?? 0}%` }} />
+                <div className="relative h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className={`h-full ${mealBarColor} rounded-full transition-all duration-500`} style={{ width: `${Math.max(mealPct ?? 0, 2)}%` }} />
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-1">
                   {weeklyAdherence.completedMeals}/{weeklyAdherence.scheduledMeals} completed
@@ -142,8 +187,8 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
                     {workoutPct != null ? `${workoutPct}%` : "—"}
                   </span>
                 </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-teal-500 rounded-full transition-all duration-500" style={{ width: `${workoutPct ?? 0}%` }} />
+                <div className="relative h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className={`h-full ${workoutBarColor} rounded-full transition-all duration-500`} style={{ width: `${Math.max(workoutPct ?? 0, 2)}%` }} />
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-1">
                   {weeklyAdherence.completedWorkouts}/{weeklyAdherence.scheduledWorkouts} completed
@@ -151,15 +196,9 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
               </div>
             </div>
 
-            {insights.length > 0 && (
-              <div className="text-xs text-muted-foreground leading-relaxed line-clamp-2" data-testid="text-performance-insight">
-                {insights[0]}
-              </div>
-            )}
-
-            {!insights.length && latestPerf?.adjustmentStatement && (
-              <div className="text-xs text-muted-foreground leading-relaxed line-clamp-2" data-testid="text-adjustment-statement">
-                {latestPerf.adjustmentStatement}
+            {adaptiveMsg && (
+              <div className="text-xs text-muted-foreground leading-relaxed line-clamp-2" data-testid="text-adaptive-message">
+                {adaptiveMsg}
               </div>
             )}
           </div>

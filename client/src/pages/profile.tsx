@@ -27,10 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Ruler, Activity, Heart, Brain,
   Moon, Dumbbell, Clock, Flame, UtensilsCrossed,
-  X, Plus, Save, Check,
+  X, Plus, Save, Check, MapPin,
 } from "lucide-react";
 
 const LBS_PER_KG = 2.2046226218;
@@ -105,6 +106,31 @@ const SPICE_OPTIONS = [
   { value: "medium", label: "Medium" },
   { value: "spicy", label: "Spicy" },
 ];
+
+const WORKOUT_LOCATION_OPTIONS = [
+  { value: "gym", label: "Gym" },
+  { value: "home", label: "Home" },
+  { value: "outdoors", label: "Outdoors" },
+];
+
+const EQUIPMENT_CATEGORIES: { category: string; items: string[] }[] = [
+  { category: "Cardio", items: ["Treadmill", "Stationary bike", "Spin bike", "Rowing machine", "Elliptical", "Stair climber", "Ski erg", "Assault/air bike", "Jump rope"] },
+  { category: "Free weights", items: ["Dumbbells", "Adjustable dumbbells", "Barbells", "EZ bar", "Kettlebells", "Weight plates", "Bench (flat)", "Bench (adjustable)"] },
+  { category: "Racks & accessories", items: ["Squat rack", "Power rack", "Smith machine", "Pull-up bar", "Dip station", "Resistance bands", "Cable attachments"] },
+  { category: "Machines", items: ["Cable machine / functional trainer", "Leg press", "Hack squat", "Leg extension", "Leg curl", "Lat pulldown", "Seated row", "Chest press machine", "Pec deck", "Shoulder press machine", "Calf raise machine", "Hip thrust machine", "Glute bridge machine", "Ab machine"] },
+  { category: "Home / bodyweight / mobility", items: ["Yoga mat", "Foam roller", "Medicine ball", "Slam ball", "Stability ball", "TRX / suspension trainer", "Plyo box", "Step platform"] },
+  { category: "Outdoors", items: ["Track access", "Hills/stairs", "Field", "Pool access"] },
+];
+
+const GYM_PRESELECT = [
+  "Treadmill", "Stationary bike", "Rowing machine", "Elliptical",
+  "Dumbbells", "Barbells", "EZ bar", "Kettlebells", "Weight plates", "Bench (flat)", "Bench (adjustable)",
+  "Squat rack", "Power rack", "Smith machine", "Pull-up bar", "Dip station", "Resistance bands", "Cable attachments",
+  "Cable machine / functional trainer", "Leg press", "Leg extension", "Leg curl", "Lat pulldown", "Seated row", "Chest press machine", "Pec deck", "Shoulder press machine", "Calf raise machine",
+  "Yoga mat", "Foam roller",
+];
+
+const OUTDOORS_PRESELECT = ["Track access", "Hills/stairs", "Field", "Jump rope"];
 
 function TagInput({
   value,
@@ -221,6 +247,10 @@ export default function ProfilePage() {
       foodsToAvoidNotes: null,
       appetiteLevel: null,
       spicePreference: null,
+      bodyContext: "",
+      workoutLocationDefault: "gym",
+      equipmentAvailable: [],
+      equipmentOtherNotes: "",
     },
   });
 
@@ -267,6 +297,10 @@ export default function ProfilePage() {
         foodsToAvoidNotes: profile.foodsToAvoidNotes || null,
         appetiteLevel: (profile.appetiteLevel as "low" | "normal" | "high") || null,
         spicePreference: (profile.spicePreference as "mild" | "medium" | "spicy") || null,
+        bodyContext: profile.bodyContext || "",
+        workoutLocationDefault: (profile.workoutLocationDefault as "gym" | "home" | "outdoors") || "gym",
+        equipmentAvailable: (profile.equipmentAvailable as string[]) || [],
+        equipmentOtherNotes: profile.equipmentOtherNotes || "",
       });
       syncImperialFromMetric(profile.weightKg, profile.targetWeightKg, profile.heightCm);
     }
@@ -618,6 +652,27 @@ export default function ProfilePage() {
                     </FormItem>
                   )}
                 />
+                <div className="sm:col-span-2">
+                  <FormField
+                    control={form.control}
+                    name="bodyContext"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Body & Goals Notes (optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Share body goals, body type, challenges, or anything important for your plan."
+                            className="resize-none min-h-[80px]"
+                            {...field}
+                            value={field.value ?? ""}
+                            data-testid="input-body-context"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -797,6 +852,99 @@ export default function ProfilePage() {
                     </FormItem>
                   )}
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 sm:p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <MapPin className="h-5 w-5 text-muted-foreground" />
+                <h2 className="font-semibold text-base">Workout Location & Equipment</h2>
+              </div>
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="workoutLocationDefault"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Workout Location</FormLabel>
+                      <Select
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          const current = (form.getValues("equipmentAvailable") as string[]) || [];
+                          if (current.length === 0) {
+                            if (val === "gym") form.setValue("equipmentAvailable", [...GYM_PRESELECT]);
+                            else if (val === "outdoors") form.setValue("equipmentAvailable", [...OUTDOORS_PRESELECT]);
+                          }
+                        }}
+                        value={field.value ?? "gym"}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-workout-location">
+                            <SelectValue placeholder="Select location" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {WORKOUT_LOCATION_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div>
+                  <Label className="mb-2 block">Equipment Available</Label>
+                  {EQUIPMENT_CATEGORIES.map((cat) => (
+                    <div key={cat.category} className="mb-3">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">{cat.category}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {cat.items.map((item) => {
+                          const selected = ((form.watch("equipmentAvailable") as string[]) || []).includes(item);
+                          return (
+                            <Badge
+                              key={item}
+                              variant={selected ? "default" : "outline"}
+                              className="cursor-pointer select-none text-xs"
+                              onClick={() => {
+                                const current = (form.getValues("equipmentAvailable") as string[]) || [];
+                                form.setValue("equipmentAvailable", selected ? current.filter(e => e !== item) : [...current, item]);
+                              }}
+                              data-testid={`chip-equip-${item.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
+                            >
+                              {item}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <FormField
+                    control={form.control}
+                    name="equipmentOtherNotes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Other Equipment Notes</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Any other equipment or notes not listed above..."
+                            className="resize-none min-h-[60px]"
+                            {...field}
+                            value={field.value ?? ""}
+                            data-testid="input-equipment-notes"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>

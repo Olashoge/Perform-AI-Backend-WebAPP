@@ -205,13 +205,13 @@ export default function Dashboard() {
                   <div className="text-base sm:text-lg font-bold truncate">{format(weekStart, "MMMM d, yyyy")}</div>
                 </div>
                 <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                  <Button variant="ghost" size="icon" onClick={() => setWeekOffset(o => o - 1)} data-testid="button-prev-week">
+                  <Button variant="ghost" size="icon" onClick={() => { setWeekOffset(o => o - 1); setSelectedDate(d => addDays(d, -7)); }} data-testid="button-prev-week">
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => { setWeekOffset(0); setSelectedDate(now); }} data-testid="button-today">
                     Today
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => setWeekOffset(o => o + 1)} data-testid="button-next-week">
+                  <Button variant="ghost" size="icon" onClick={() => { setWeekOffset(o => o + 1); setSelectedDate(d => addDays(d, 7)); }} data-testid="button-next-week">
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

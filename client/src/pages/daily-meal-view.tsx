@@ -59,33 +59,56 @@ function MealCard({ slot, meal, feedbackState, onFeedback, mealId, date, complet
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger asChild>
-        <div className={`border rounded-xl p-4 cursor-pointer hover:bg-muted/30 transition-colors ${completed ? "opacity-60" : ""}`} data-testid={`daily-meal-card-${slot}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5 capitalize">{slot}</div>
-              <div className="font-semibold text-sm">{meal.name}</div>
-              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                {meal.cuisineTag && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{meal.cuisineTag}</Badge>}
-                {meal.prepTimeMinutes && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {meal.prepTimeMinutes} min
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <CompletionCheckbox
-                date={date}
-                itemType="meal"
-                sourceType="daily_meal"
-                sourceId={mealId}
-                itemKey={slot}
-                completed={completed}
-                onToggle={onToggleCompletion}
-              />
-              <Button
+      <div className={`border rounded-xl overflow-hidden transition-colors ${completed ? "opacity-60" : ""}`} data-testid={`daily-meal-card-${slot}`}>
+        <div
+          className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
+          onClick={() => {
+            onToggleCompletion({ date, itemType: "meal" as const, sourceType: "daily_meal" as const, sourceId: mealId, itemKey: slot, completed: !completed });
+          }}
+          data-testid={`daily-meal-row-${slot}`}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <CompletionCheckbox
+              date={date}
+              itemType="meal"
+              sourceType="daily_meal"
+              sourceId={mealId}
+              itemKey={slot}
+              completed={completed}
+              onToggle={onToggleCompletion}
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5 capitalize">{slot}</div>
+            <div className="font-semibold text-sm">{meal.name}</div>
+          </div>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOpen(!isOpen);
+              }}
+              data-testid={`button-expand-daily-${slot}`}
+            >
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+            </Button>
+          </CollapsibleTrigger>
+        </div>
+        <div className="px-4 pb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {meal.cuisineTag && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{meal.cuisineTag}</Badge>}
+            {meal.prepTimeMinutes && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {meal.prepTimeMinutes} min
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
                 variant="ghost"
                 size="icon"
                 className={`h-8 w-8 transition-colors duration-200 ${feedbackState === "like" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400" : "text-muted-foreground"}`}
@@ -111,20 +134,19 @@ function MealCard({ slot, meal, feedbackState, onFeedback, mealId, date, complet
               >
                 <ThumbsDown className="h-3.5 w-3.5" />
               </Button>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ml-1 ${isOpen ? "rotate-180" : ""}`} />
-            </div>
           </div>
-
-          {meal.nutritionEstimateRange && (
-            <div className="flex gap-3 mt-2 text-xs">
-              <span className="text-amber-600 dark:text-amber-400">{meal.nutritionEstimateRange.calories} cal</span>
-              <span>P: {meal.nutritionEstimateRange.protein_g}g</span>
-              <span>C: {meal.nutritionEstimateRange.carbs_g}g</span>
-              <span>F: {meal.nutritionEstimateRange.fat_g}g</span>
-            </div>
-          )}
         </div>
-      </CollapsibleTrigger>
+
+        {meal.nutritionEstimateRange && (
+          <div className="flex gap-3 px-4 pb-3 text-xs">
+            <span className="text-amber-600 dark:text-amber-400">{meal.nutritionEstimateRange.calories} cal</span>
+            <span>P: {meal.nutritionEstimateRange.protein_g}g</span>
+            <span>C: {meal.nutritionEstimateRange.carbs_g}g</span>
+            <span>F: {meal.nutritionEstimateRange.fat_g}g</span>
+          </div>
+        )}
+
+      </div>
       <CollapsibleContent>
         <div className="border border-t-0 rounded-b-xl p-4 -mt-2 pt-4 space-y-3">
           {meal.whyItHelpsGoal && (
