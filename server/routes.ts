@@ -970,7 +970,8 @@ export async function registerRoutes(
             startDate: validStartDate,
             workoutPrefs: prefs,
           });
-          const profileExtras = { bodyContext: userProfile.bodyContext || undefined, workoutLocation: userProfile.workoutLocationDefault || undefined, equipment: (userProfile.equipmentAvailable as string[]) || undefined, equipmentNotes: userProfile.equipmentOtherNotes || undefined };
+          const formEquip = (prefs as any).equipmentAvailable as string[] | undefined;
+          const profileExtras = { bodyContext: userProfile.bodyContext || undefined, workoutLocation: userProfile.workoutLocationDefault || undefined, equipment: (formEquip && formEquip.length > 0 ? formEquip : (userProfile.equipmentAvailable as string[])) || undefined, equipmentNotes: userProfile.equipmentOtherNotes || undefined };
           const result = await generateWorkoutPlan(prefs, exerciseContext, standaloneWCtx, workoutConstraintBlock, profileExtras);
           await storage.updateWorkoutPlanStatus(plan.id, "ready", result);
           log(`Workout plan ${plan.id} generated successfully`, "openai");
@@ -1383,7 +1384,8 @@ export async function registerRoutes(
             log(`Goal gen: generating workout plan ${pendingWorkout.id}`, "openai");
             const goalPrefContext = await storage.getUserPreferenceContext(userId);
             const goalExerciseCtx = { avoidedExercises: goalPrefContext.avoidedExercises, dislikedExercises: goalPrefContext.dislikedExercises };
-            const goalProfileExtras = { bodyContext: userProfile.bodyContext || undefined, workoutLocation: userProfile.workoutLocationDefault || undefined, equipment: (userProfile.equipmentAvailable as string[]) || undefined, equipmentNotes: userProfile.equipmentOtherNotes || undefined };
+            const goalFormEquip = (parsedWorkout.data as any).equipmentAvailable as string[] | undefined;
+            const goalProfileExtras = { bodyContext: userProfile.bodyContext || undefined, workoutLocation: userProfile.workoutLocationDefault || undefined, equipment: (goalFormEquip && goalFormEquip.length > 0 ? goalFormEquip : (userProfile.equipmentAvailable as string[])) || undefined, equipmentNotes: userProfile.equipmentOtherNotes || undefined };
             const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock, goalProfileExtras);
 
             const workoutPostCheck = postValidateWorkoutPlan(result, constraintResult.safeSpec);
