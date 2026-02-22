@@ -126,6 +126,7 @@ export async function registerRoutes(
   );
 
   ensureJwtSecrets();
+  log("Mounted auth routes: /api/auth/token-login, /api/auth/refresh, /api/auth/token-logout", "auth");
 
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
@@ -2474,6 +2475,10 @@ export async function registerRoutes(
       console.error("Adherence error stack:", err);
       return res.status(500).json({ message: "Failed to compute adherence" });
     }
+  });
+
+  app.use("/api/{*path}", (_req: Request, res: Response) => {
+    res.status(404).json({ message: "Not found" });
   });
 
   return httpServer;
