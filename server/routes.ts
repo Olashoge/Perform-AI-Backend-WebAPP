@@ -2483,12 +2483,19 @@ export async function registerRoutes(
     try {
       const userId = req.userId!;
       const weekStartsOn: 0 | 1 = (req.query.weekStartsOn === "1") ? 1 : 0;
-      const now = new Date();
-      const day = now.getDay();
-      const diff = (day < weekStartsOn ? day + 7 - weekStartsOn : day - weekStartsOn);
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - diff);
-      weekStart.setHours(0, 0, 0, 0);
+      const weekStartParam = req.query.weekStart as string | undefined;
+
+      let weekStart: Date;
+      if (weekStartParam && /^\d{4}-\d{2}-\d{2}$/.test(weekStartParam)) {
+        weekStart = new Date(weekStartParam + "T00:00:00");
+      } else {
+        const now = new Date();
+        const day = now.getDay();
+        const diff = (day < weekStartsOn ? day + 7 - weekStartsOn : day - weekStartsOn);
+        weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - diff);
+        weekStart.setHours(0, 0, 0, 0);
+      }
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
 
@@ -2561,10 +2568,17 @@ export async function registerRoutes(
         weekStart: startStr,
         weekEnd: endStr,
         score,
+        overallScore: score,
         mealsCompleted: completedMeals,
         mealsTotal: scheduledMeals,
         workoutsCompleted: completedWorkouts,
         workoutsTotal: scheduledWorkouts,
+        scheduledMeals,
+        completedMeals,
+        scheduledWorkouts,
+        completedWorkouts,
+        mealPct: mealPct,
+        workoutPct: workoutPct,
       });
     } catch (err: any) {
       log(`Weekly summary error: ${err?.message || err}`, "error");
@@ -2601,6 +2615,7 @@ export async function registerRoutes(
       const dailyWorkouts = await storage.getDailyWorkoutsByDateRange(userId, startStr, endStr);
       const completions = await storage.getCompletionsByDateRange(userId, startStr, endStr);
 
+      const allMealSlots = new Set<string>();
       const days: any[] = [];
 
       for (let i = 0; i < 7; i++) {
@@ -2609,6 +2624,7 @@ export async function registerRoutes(
         const dateStr = d.toISOString().slice(0, 10);
 
         const meals: Record<string, any> = {};
+        const planIds: string[] = [];
         for (const plan of scheduledPlans) {
           const planJson = plan.planJson as any;
           const planStart = plan.planStartDate!;
@@ -2620,24 +2636,22 @@ export async function registerRoutes(
               const dayMeals = planJson.days[j]?.meals;
               if (dayMeals) {
                 for (const [slot, meal] of Object.entries(dayMeals)) {
-                  if (!meals[slot]) meals[slot] = meal;
+                  if (!meals[slot]) {
+                    meals[slot] = meal;
+                    allMealSlots.add(slot);
+                  }
+                }
+                if (!planIds.includes(String(plan.id))) {
+                  planIds.push(String(plan.id));
                 }
               }
             }
           }
         }
 
-        const dm = dailyMeals.find(m => m.date === dateStr && m.status === "ready");
-        if (dm && dm.planJson) {
-          const dmMeals = (dm.planJson as any)?.meals;
-          if (dmMeals) {
-            for (const [slot, meal] of Object.entries(dmMeals)) {
-              if (!meals[slot]) meals[slot] = meal;
-            }
-          }
-        }
-
         let workout: any = null;
+        let workoutPlanId: string | null = null;
+        let isWorkoutDay = false;
         for (const wp of workoutScheduled) {
           const planJson = wp.planJson as any;
           const planStart = wp.planStartDate;
@@ -2647,12 +2661,19 @@ export async function registerRoutes(
             dd.setDate(dd.getDate() + j);
             if (dd.toISOString().slice(0, 10) === dateStr && planJson.days[j]?.isWorkoutDay) {
               workout = planJson.days[j].session || planJson.days[j];
+              workoutPlanId = String(wp.id);
+              isWorkoutDay = true;
             }
           }
         }
 
+        const dm = dailyMeals.find(m => m.date === dateStr && m.status === "ready");
+        const dailyMealObj = dm ? { id: String(dm.id), planJson: dm.planJson, generatedTitle: (dm as any).generatedTitle || null } : null;
+
         const dw = dailyWorkouts.find(w => w.date === dateStr && w.status === "ready");
-        if (dw && dw.planJson && !workout) {
+        const dailyWorkoutObj = dw ? { id: String(dw.id), planJson: dw.planJson, generatedTitle: (dw as any).generatedTitle || null } : null;
+
+        if (!workout && dw && dw.planJson) {
           workout = dw.planJson;
         }
 
@@ -2661,12 +2682,21 @@ export async function registerRoutes(
         days.push({
           date: dateStr,
           meals,
+          planIds,
           workout,
+          workoutPlanId,
+          isWorkoutDay,
+          dailyMeal: dailyMealObj,
+          dailyWorkout: dailyWorkoutObj,
+          hasDailyMeal: !!dm,
+          hasDailyWorkout: !!dw,
           completions: dayCompletions,
         });
       }
 
-      return res.json({ weekStart: startStr, weekEnd: endStr, days });
+      const mealSlots = Array.from(allMealSlots);
+
+      return res.json({ weekStart: startStr, weekEnd: endStr, mealSlots, days });
     } catch (err: any) {
       log(`Week data error: ${err?.message || err}`, "error");
       return res.status(500).json({ message: "Failed to load week data" });

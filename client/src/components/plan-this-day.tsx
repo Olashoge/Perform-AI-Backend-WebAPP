@@ -25,7 +25,7 @@ interface PlanThisDayProps {
 function invalidateDailyQueries() {
   queryClient.invalidateQueries({ predicate: (q) => {
     const key = q.queryKey[0] as string;
-    return key?.startsWith("/api/daily-coverage") || key?.startsWith("/api/daily-meals") || key?.startsWith("/api/daily-workouts");
+    return key?.startsWith("/api/daily-coverage") || key?.startsWith("/api/daily-meals") || key?.startsWith("/api/daily-workouts") || key?.startsWith("/api/week-data") || key?.startsWith("/api/weekly-summary");
   }});
 }
 

@@ -62,6 +62,7 @@ export function useCompletions(startDate: string, endDate: string, enabled = tru
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/completions", `?start=${startDate}&end=${endDate}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/completions/adherence"] });
+      queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/weekly-summary") || k?.startsWith("/api/week-data"); }});
     },
   });
 
@@ -118,7 +119,12 @@ export function useWeeklyAdherence(startDate: string, endDate: string, enabled =
     workoutPct: number | null;
     overallScore: number | null;
   }>({
-    queryKey: ["/api/completions/adherence", `?start=${startDate}&end=${endDate}`],
+    queryKey: ["/api/weekly-summary", startDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/weekly-summary?weekStart=${startDate}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
     enabled,
   });
 }

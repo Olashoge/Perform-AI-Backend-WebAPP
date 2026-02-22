@@ -28,16 +28,25 @@ function isActivePlan(startDate: string | null | undefined, referenceDate: Date)
 const DAY_ABBR_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_ABBR_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-interface AllCalendarData {
-  mealSlots: string[];
-  days: { date: string; meals: Record<string, Meal>; planIds?: string[] }[];
+interface WeekDataDay {
+  date: string;
+  meals: Record<string, Meal>;
+  planIds: string[];
+  workout: WorkoutSession | null;
+  workoutPlanId: string | null;
+  isWorkoutDay: boolean;
+  dailyMeal: { id: string; planJson: any; generatedTitle: string | null } | null;
+  dailyWorkout: { id: string; planJson: any; generatedTitle: string | null } | null;
+  hasDailyMeal: boolean;
+  hasDailyWorkout: boolean;
+  completions: any[];
 }
 
-interface WorkoutCalendarDay {
-  date: string;
-  isWorkoutDay: boolean;
-  session: WorkoutSession | null;
-  workoutPlanId: string;
+interface WeekDataResponse {
+  weekStart: string;
+  weekEnd: string;
+  mealSlots: string[];
+  days: WeekDataDay[];
 }
 
 export default function Dashboard() {
@@ -67,16 +76,6 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
-  const { data: calendarData } = useQuery<AllCalendarData>({
-    queryKey: ["/api/calendar/all"],
-    enabled: !!user,
-  });
-
-  const { data: workoutCalendarData } = useQuery<{ days: WorkoutCalendarDay[] }>({
-    queryKey: ["/api/calendar/workouts"],
-    enabled: !!user,
-  });
-
   const weekStartsOn: 0 | 1 = (() => {
     try {
       const stored = localStorage.getItem("cal_weekStart");
@@ -95,30 +94,10 @@ export default function Dashboard() {
   const { isCompleted, toggle } = useCompletions(weekStartStr, weekEndStr, !!user);
   const { data: weeklyAdherence } = useWeeklyAdherence(weekStartStr, weekEndStr, !!user);
 
-  const { data: dailyCoverage } = useQuery<Record<string, { meal: boolean; workout: boolean }>>({
-    queryKey: ["/api/daily-coverage", weekStartStr, weekEndStr],
+  const { data: weekData } = useQuery<WeekDataResponse>({
+    queryKey: ["/api/week-data", weekStartStr],
     queryFn: async () => {
-      const res = await fetch(`/api/daily-coverage?start=${weekStartStr}&end=${weekEndStr}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-    enabled: !!user,
-  });
-
-  const { data: dailyMealsRange } = useQuery<any[]>({
-    queryKey: ["/api/daily-meals", weekStartStr, weekEndStr],
-    queryFn: async () => {
-      const res = await fetch(`/api/daily-meals?start=${weekStartStr}&end=${weekEndStr}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-    enabled: !!user,
-  });
-
-  const { data: dailyWorkoutsRange } = useQuery<any[]>({
-    queryKey: ["/api/daily-workouts", weekStartStr, weekEndStr],
-    queryFn: async () => {
-      const res = await fetch(`/api/daily-workouts?start=${weekStartStr}&end=${weekEndStr}`, { credentials: "include" });
+      const res = await fetch(`/api/week-data?weekStart=${weekStartStr}&weekStartsOn=${weekStartsOn}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -136,38 +115,43 @@ export default function Dashboard() {
 
   const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
 
+  const selectedDay = useMemo(() => {
+    if (!weekData?.days) return null;
+    return weekData.days.find(d => d.date === selectedDateStr) || null;
+  }, [weekData, selectedDateStr]);
+
   const dayMeals = useMemo(() => {
-    if (!calendarData?.days) return null;
-    return calendarData.days.find(d => d.date === selectedDateStr);
-  }, [calendarData, selectedDateStr]);
+    if (!selectedDay || Object.keys(selectedDay.meals).length === 0) return null;
+    return { date: selectedDay.date, meals: selectedDay.meals, planIds: selectedDay.planIds };
+  }, [selectedDay]);
 
   const dayWorkout = useMemo(() => {
-    if (!workoutCalendarData?.days) return null;
-    return workoutCalendarData.days.find(d => d.date === selectedDateStr && d.isWorkoutDay);
-  }, [workoutCalendarData, selectedDateStr]);
+    if (!selectedDay || !selectedDay.isWorkoutDay || !selectedDay.workout) return null;
+    return { date: selectedDay.date, isWorkoutDay: true, session: selectedDay.workout, workoutPlanId: selectedDay.workoutPlanId! };
+  }, [selectedDay]);
 
   const selectedDailyMeal = useMemo(() => {
-    if (!dailyMealsRange) return null;
-    return dailyMealsRange.find(m => m.date === selectedDateStr && m.status === "ready") || null;
-  }, [dailyMealsRange, selectedDateStr]);
+    if (!selectedDay?.dailyMeal) return null;
+    return { ...selectedDay.dailyMeal, date: selectedDay.date, status: "ready" as const };
+  }, [selectedDay]);
 
   const selectedDailyWorkout = useMemo(() => {
-    if (!dailyWorkoutsRange) return null;
-    return dailyWorkoutsRange.find(w => w.date === selectedDateStr && w.status === "ready") || null;
-  }, [dailyWorkoutsRange, selectedDateStr]);
+    if (!selectedDay?.dailyWorkout) return null;
+    return { ...selectedDay.dailyWorkout, date: selectedDay.date, status: "ready" as const };
+  }, [selectedDay]);
 
   function hasMealsOnDate(date: Date): boolean {
     const ds = format(date, "yyyy-MM-dd");
-    const fromPlan = calendarData?.days?.some(d => d.date === ds && Object.keys(d.meals).length > 0) ?? false;
-    const fromDaily = dailyCoverage?.[ds]?.meal ?? false;
-    return fromPlan || fromDaily;
+    const day = weekData?.days?.find(d => d.date === ds);
+    if (!day) return false;
+    return Object.keys(day.meals).length > 0 || day.hasDailyMeal;
   }
 
   function hasWorkoutOnDate(date: Date): boolean {
     const ds = format(date, "yyyy-MM-dd");
-    const fromPlan = workoutCalendarData?.days?.some(d => d.date === ds && d.isWorkoutDay) ?? false;
-    const fromDaily = dailyCoverage?.[ds]?.workout ?? false;
-    return fromPlan || fromDaily;
+    const day = weekData?.days?.find(d => d.date === ds);
+    if (!day) return false;
+    return day.isWorkoutDay || day.hasDailyWorkout;
   }
 
   if (isLoading || !user) {
@@ -630,8 +614,8 @@ export default function Dashboard() {
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         date={selectedDate}
-        hasMeal={dailyCoverage?.[selectedDateStr]?.meal}
-        hasWorkout={dailyCoverage?.[selectedDateStr]?.workout}
+        hasMeal={selectedDay?.hasDailyMeal}
+        hasWorkout={selectedDay?.hasDailyWorkout}
       />
     </div>
   );

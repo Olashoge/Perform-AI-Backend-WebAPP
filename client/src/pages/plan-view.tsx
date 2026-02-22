@@ -84,6 +84,7 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/week-data") || k?.startsWith("/api/weekly-summary"); }});
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/workouts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       queryClient.invalidateQueries({ queryKey: ["/api/allowance/current", planId] });
@@ -256,6 +257,7 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/week-data") || k?.startsWith("/api/weekly-summary"); }});
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/workouts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       queryClient.invalidateQueries({ queryKey: ["/api/allowance/current", planId] });
@@ -393,6 +395,7 @@ function GroceryListView({ planId }: { planId: string }) {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId, "grocery"] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/week-data") || k?.startsWith("/api/weekly-summary"); }});
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       toast({ title: "Grocery list updated" });
     },
@@ -699,6 +702,7 @@ export default function PlanView() {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", params.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/occupied-dates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/week-data") || k?.startsWith("/api/weekly-summary"); }});
       toast({ title: "Plan scheduled", description: "Your calendar has been updated." });
       setStartDateOpen(false);
     },
@@ -715,6 +719,7 @@ export default function PlanView() {
       queryClient.invalidateQueries({ queryKey: ["/api/plan", params.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/occupied-dates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/week-data") || k?.startsWith("/api/weekly-summary"); }});
       setStartDateOpen(false);
       toast({ title: "Removed from calendar" });
     },
@@ -730,6 +735,7 @@ export default function PlanView() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
+      queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/week-data") || k?.startsWith("/api/weekly-summary"); }});
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/occupied-dates"] });
       toast({ title: "Plan deleted" });
       navigate("/plans");
