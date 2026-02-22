@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import { createHash, randomBytes } from "crypto";
 
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;

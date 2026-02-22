@@ -17,12 +17,21 @@ import { computeAdaptiveModifiers, buildAdaptivePromptBlock, computeWeeklyAdapta
 import type { AdaptiveSnapshot, AdaptiveInputs } from "./adaptive";
 import { buildUserContextForGeneration, type ContextOverrides } from "./context-builder";
 import connectPgSimple from "connect-pg-simple";
+import { ensureJwtSecrets, generateAccessToken, generateRefreshToken, verifyAccessToken, hashRefreshToken, getRefreshTokenExpiry } from "./jwt";
 
 const PgStore = connectPgSimple(session);
 
 declare module "express-session" {
   interface SessionData {
     userId: string;
+  }
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
   }
 }
 
@@ -73,10 +82,24 @@ async function runGroceryPricing(planId: string, planJson: PlanOutput, prefs: Pr
 }
 
 function requireAuth(req: Request, res: Response, next: Function) {
-  if (!req.session.userId) {
-    return res.status(401).json({ message: "Not authenticated" });
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.slice(7);
+      const payload = verifyAccessToken(token);
+      req.userId = payload.userId;
+      return next();
+    } catch {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
   }
-  next();
+
+  if (req.session?.userId) {
+    req.userId = req.session.userId;
+    return next();
+  }
+
+  return res.status(401).json({ message: "Not authenticated" });
 }
 
 export async function registerRoutes(
@@ -101,6 +124,8 @@ export async function registerRoutes(
       },
     })
   );
+
+  ensureJwtSecrets();
 
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
@@ -169,19 +194,145 @@ export async function registerRoutes(
   });
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
-    if (!req.session.userId) {
+    let userId: string | undefined;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const payload = verifyAccessToken(authHeader.slice(7));
+        userId = payload.userId;
+      } catch {
+        return res.status(401).json({ message: "Invalid or expired token" });
+      }
+    } else if (req.session?.userId) {
+      userId = req.session.userId;
+    }
+
+    if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const user = await storage.getUserById(req.session.userId);
+
+    const user = await storage.getUserById(userId);
     if (!user) {
       return res.status(401).json({ message: "Not authenticated" });
     }
     return res.json({ id: user.id, email: user.email });
   });
 
+  app.post("/api/auth/token-login", async (req: Request, res: Response) => {
+    try {
+      const parsed = loginSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid input" });
+      }
+
+      const user = await storage.getUserByEmail(parsed.data.email);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      const valid = await compare(parsed.data.password, user.passwordHash);
+      if (!valid) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      const accessToken = generateAccessToken(user);
+      const rawRefreshToken = generateRefreshToken();
+      const tokenHash = hashRefreshToken(rawRefreshToken);
+      const expiresAt = getRefreshTokenExpiry();
+
+      await storage.createRefreshToken(
+        user.id,
+        tokenHash,
+        expiresAt,
+        req.headers["user-agent"] || undefined,
+        req.ip || undefined
+      );
+
+      return res.json({
+        accessToken,
+        refreshToken: rawRefreshToken,
+        user: { id: user.id, email: user.email },
+      });
+    } catch (err) {
+      log(`Token login error: ${err}`, "auth");
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/refresh", async (req: Request, res: Response) => {
+    try {
+      const { refreshToken: rawToken } = req.body;
+      if (!rawToken || typeof rawToken !== "string") {
+        return res.status(400).json({ message: "refreshToken is required" });
+      }
+
+      const tokenHash = hashRefreshToken(rawToken);
+      const stored = await storage.getRefreshTokenByHash(tokenHash);
+
+      if (!stored) {
+        return res.status(401).json({ message: "Invalid refresh token" });
+      }
+
+      if (stored.expiresAt < new Date()) {
+        await storage.revokeRefreshToken(stored.id);
+        return res.status(401).json({ message: "Refresh token expired" });
+      }
+
+      await storage.revokeRefreshToken(stored.id);
+
+      const user = await storage.getUserById(stored.userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      const accessToken = generateAccessToken(user);
+      const newRawRefresh = generateRefreshToken();
+      const newHash = hashRefreshToken(newRawRefresh);
+      const expiresAt = getRefreshTokenExpiry();
+
+      await storage.createRefreshToken(
+        user.id,
+        newHash,
+        expiresAt,
+        req.headers["user-agent"] || undefined,
+        req.ip || undefined
+      );
+
+      return res.json({
+        accessToken,
+        refreshToken: newRawRefresh,
+      });
+    } catch (err) {
+      log(`Token refresh error: ${err}`, "auth");
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/token-logout", async (req: Request, res: Response) => {
+    try {
+      const { refreshToken: rawToken } = req.body;
+      if (!rawToken || typeof rawToken !== "string") {
+        return res.status(400).json({ message: "refreshToken is required" });
+      }
+
+      const tokenHash = hashRefreshToken(rawToken);
+      const stored = await storage.getRefreshTokenByHash(tokenHash);
+
+      if (stored) {
+        await storage.revokeRefreshToken(stored.id);
+      }
+
+      return res.json({ ok: true });
+    } catch (err) {
+      log(`Token logout error: ${err}`, "auth");
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/profile", requireAuth, async (req: Request, res: Response) => {
     try {
-      const profile = await storage.getUserProfile(req.session.userId!);
+      const profile = await storage.getUserProfile(req.userId!);
       return res.json(profile || null);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load profile" });
@@ -194,11 +345,11 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid profile data", errors: parsed.error.errors });
       }
-      const existing = await storage.getUserProfile(req.session.userId!);
+      const existing = await storage.getUserProfile(req.userId!);
       if (existing) {
         return res.status(409).json({ message: "Profile already exists. Use PUT to update." });
       }
-      const profile = await storage.createUserProfile(req.session.userId!, parsed.data);
+      const profile = await storage.createUserProfile(req.userId!, parsed.data);
       return res.json(profile);
     } catch (err) {
       console.error("Profile creation error:", err);
@@ -212,12 +363,12 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid profile data", errors: parsed.error.errors });
       }
-      const existing = await storage.getUserProfile(req.session.userId!);
+      const existing = await storage.getUserProfile(req.userId!);
       if (!existing) {
-        const profile = await storage.createUserProfile(req.session.userId!, parsed.data);
+        const profile = await storage.createUserProfile(req.userId!, parsed.data);
         return res.json(profile);
       }
-      const profile = await storage.updateUserProfile(req.session.userId!, parsed.data);
+      const profile = await storage.updateUserProfile(req.userId!, parsed.data);
       return res.json(profile);
     } catch (err) {
       return res.status(500).json({ message: "Failed to update profile" });
@@ -235,7 +386,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid preferences" });
       }
 
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       if (idempotencyKey) {
         const existing = await storage.findByIdempotencyKey(userId, idempotencyKey);
@@ -319,7 +470,7 @@ export async function registerRoutes(
 
   app.get("/api/plan/:id/status", requireAuth, async (req: Request, res: Response) => {
     const plan = await storage.getMealPlan(req.params.id as string);
-    if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+    if (!plan || plan.userId !== req.userId || plan.deletedAt) {
       return res.status(404).json({ message: "Plan not found" });
     }
     return res.json({ id: plan.id, status: plan.status, pricingStatus: plan.pricingStatus });
@@ -327,21 +478,21 @@ export async function registerRoutes(
 
   app.get("/api/plan/:id", requireAuth, async (req: Request, res: Response) => {
     const plan = await storage.getMealPlan(req.params.id as string);
-    if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+    if (!plan || plan.userId !== req.userId || plan.deletedAt) {
       return res.status(404).json({ message: "Plan not found" });
     }
     return res.json(plan);
   });
 
   app.get("/api/plans", requireAuth, async (req: Request, res: Response) => {
-    const plans = await storage.getMealPlansByUser(req.session.userId!);
+    const plans = await storage.getMealPlansByUser(req.userId!);
     return res.json(plans);
   });
 
   app.delete("/api/plans/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.userId) {
         return res.status(404).json({ message: "Plan not found" });
       }
       if (plan.deletedAt) {
@@ -358,11 +509,11 @@ export async function registerRoutes(
   app.post("/api/plan/:id/swap", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
 
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       const { allowance, result: swapCheck } = await checkMealSwapAllowed(userId, plan.id);
       if (!swapCheck.allowed) {
@@ -421,11 +572,11 @@ export async function registerRoutes(
   app.post("/api/plan/:id/regenerate-day", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
 
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       const { allowance, result: regenCheck } = await checkMealRegenAllowed(userId, plan.id);
       if (!regenCheck.allowed) {
@@ -487,7 +638,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid feedback data" });
       }
 
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { planId, mealFingerprint, mealName, cuisineTag, feedback, ingredients } = parsed.data;
 
       const record = await storage.upsertMealFeedback(userId, {
@@ -526,7 +677,7 @@ export async function registerRoutes(
 
   app.get("/api/preferences", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const allFeedback = await storage.getAllMealFeedback(userId);
       const allIngPrefs = await storage.getAllIngredientPreferences(userId);
 
@@ -544,7 +695,7 @@ export async function registerRoutes(
 
   app.delete("/api/preferences/meal/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const deleted = await storage.deleteMealFeedback(req.params.id as string, userId);
       if (!deleted) {
         return res.status(404).json({ message: "Meal feedback not found" });
@@ -558,7 +709,7 @@ export async function registerRoutes(
 
   app.delete("/api/preferences/ingredient/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const deleted = await storage.deleteIngredientPreference(req.params.id as string, userId);
       if (!deleted) {
         return res.status(404).json({ message: "Ingredient preference not found" });
@@ -572,7 +723,7 @@ export async function registerRoutes(
 
   app.get("/api/feedback/plan/:planId", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const feedbacks = await storage.getMealFeedbackForPlan(userId, req.params.planId as string);
       const feedbackMap: Record<string, "like" | "dislike"> = {};
       for (const f of feedbacks) {
@@ -588,7 +739,7 @@ export async function registerRoutes(
   app.post("/api/plan/:id/grocery/regenerate", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
 
@@ -611,11 +762,11 @@ export async function registerRoutes(
   app.get("/api/plan/:id/grocery", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
 
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const planJson = plan.planJson as PlanOutput;
       const pricing = plan.groceryPricingJson as GroceryPricing | null;
       const ownedItems = await storage.getOwnedGroceryItems(userId, plan.id);
@@ -656,7 +807,7 @@ export async function registerRoutes(
   app.post("/api/plan/:id/grocery/owned", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
 
@@ -665,7 +816,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "itemKey and isOwned (boolean) are required" });
       }
 
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       await storage.upsertOwnedGroceryItem(userId, plan.id, itemKey, isOwned);
       return res.json({ ok: true });
     } catch (err) {
@@ -677,7 +828,7 @@ export async function registerRoutes(
   app.patch("/api/plan/:id/start-date", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Plan not found" });
       }
       const { startDate } = req.body;
@@ -698,7 +849,7 @@ export async function registerRoutes(
 
   app.get("/api/calendar/all", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const scheduledPlans = await storage.getScheduledPlans(userId);
 
       const SLOT_ORDER: Record<string, number> = { breakfast: 1, lunch: 2, dinner: 3, snack: 4 };
@@ -748,7 +899,7 @@ export async function registerRoutes(
 
   app.get("/api/calendar/occupied-dates", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const excludePlanId = req.query.excludePlanId as string | undefined;
       const scheduledPlans = await storage.getScheduledPlans(userId);
 
@@ -774,7 +925,7 @@ export async function registerRoutes(
 
   app.get("/api/goal-plans/conflicts", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const occupiedDates = new Set<string>();
 
       const mealPlans = await storage.getScheduledPlans(userId);
@@ -808,7 +959,7 @@ export async function registerRoutes(
 
   app.get("/api/availability", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const excludeGoalId = req.query.excludeGoalId as string | undefined;
 
       const mealDates = new Set<string>();
@@ -860,7 +1011,7 @@ export async function registerRoutes(
   app.get("/api/plan/:id/calendar", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getMealPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.userId) {
         return res.status(404).json({ message: "Plan not found" });
       }
       if (plan.status !== "ready" || !plan.planJson) {
@@ -911,7 +1062,7 @@ export async function registerRoutes(
 
   app.post("/api/workout", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const parsed = workoutPreferencesSchema.safeParse(req.body.preferences);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid workout preferences", errors: parsed.error.flatten() });
@@ -996,7 +1147,7 @@ export async function registerRoutes(
   app.get("/api/workout/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getWorkoutPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
       return res.json(plan);
@@ -1008,7 +1159,7 @@ export async function registerRoutes(
   app.get("/api/workout/:id/status", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getWorkoutPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
       return res.json({ status: plan.status, errorMessage: plan.errorMessage });
@@ -1019,7 +1170,7 @@ export async function registerRoutes(
 
   app.get("/api/workouts", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plans = await storage.getWorkoutPlansByUser(req.session.userId!);
+      const plans = await storage.getWorkoutPlansByUser(req.userId!);
       return res.json(plans);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load workout plans" });
@@ -1029,7 +1180,7 @@ export async function registerRoutes(
   app.post("/api/workout/:id/start-date", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getWorkoutPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
       const { startDate } = req.body;
@@ -1043,7 +1194,7 @@ export async function registerRoutes(
   app.delete("/api/workouts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getWorkoutPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.userId) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
       await storage.softDeleteWorkoutPlan(plan.id);
@@ -1056,11 +1207,11 @@ export async function registerRoutes(
   app.post("/api/workout/:id/regenerate-session", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getWorkoutPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Workout plan not found" });
       }
 
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       const { allowance, result: regenCheck } = await checkWorkoutRegenAllowed(userId, plan.id);
       if (!regenCheck.allowed) {
@@ -1123,7 +1274,7 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid feedback data" });
       }
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const record = await storage.upsertWorkoutFeedback(userId, parsed.data);
       return res.json({ record, feedback: parsed.data.feedback });
     } catch (err) {
@@ -1134,7 +1285,7 @@ export async function registerRoutes(
 
   app.get("/api/feedback/workout/:planId", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const feedbacks = await storage.getWorkoutFeedbackForPlan(userId, req.params.planId as string);
       const feedbackMap: Record<string, "like" | "dislike"> = {};
       for (const f of feedbacks) {
@@ -1149,7 +1300,7 @@ export async function registerRoutes(
 
   app.get("/api/preferences/exercise", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const prefs = await storage.getExercisePreferences(userId);
       const liked = prefs.filter(p => p.status === "liked");
       const disliked = prefs.filter(p => p.status === "disliked");
@@ -1167,7 +1318,7 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid data" });
       }
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { exerciseKey, exerciseName, status } = parsed.data;
       const record = await storage.upsertExercisePreference(userId, exerciseKey, exerciseName, status);
       return res.json(record);
@@ -1179,7 +1330,7 @@ export async function registerRoutes(
 
   app.delete("/api/preferences/exercise/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const deleted = await storage.deleteExercisePreferenceById(req.params.id as string, userId);
       if (!deleted) {
         return res.status(404).json({ message: "Exercise preference not found" });
@@ -1193,7 +1344,7 @@ export async function registerRoutes(
 
   app.delete("/api/preferences/exercise/key/:key", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const deleted = await storage.deleteExercisePreference(userId, req.params.key as string);
       if (!deleted) {
         return res.status(404).json({ message: "Exercise preference not found" });
@@ -1211,7 +1362,7 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid goal plan data" });
       }
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const plan = await storage.createGoalPlan(userId, parsed.data.goalType, parsed.data.startDate);
       return res.json(plan);
     } catch (err) {
@@ -1222,7 +1373,7 @@ export async function registerRoutes(
 
   app.post("/api/goal-plans/generate", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { goalType, planType, startDate, pace, globalInputs, mealPreferences, workoutPreferences } = req.body;
 
       if (!goalType) {
@@ -1565,7 +1716,7 @@ export async function registerRoutes(
   app.get("/api/goal-plans/:id/generation-status", requireAuth, async (req: Request, res: Response) => {
     try {
       const goalPlan = await storage.getGoalPlan(req.params.id as string);
-      if (!goalPlan || goalPlan.userId !== req.session.userId || goalPlan.deletedAt) {
+      if (!goalPlan || goalPlan.userId !== req.userId || goalPlan.deletedAt) {
         return res.status(404).json({ message: "Goal plan not found" });
       }
 
@@ -1594,7 +1745,7 @@ export async function registerRoutes(
 
   app.get("/api/goal-plans", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plans = await storage.getGoalPlansByUser(req.session.userId!);
+      const plans = await storage.getGoalPlansByUser(req.userId!);
       return res.json(plans);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load goal plans" });
@@ -1604,7 +1755,7 @@ export async function registerRoutes(
   app.get("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getGoalPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Goal plan not found" });
       }
       return res.json(plan);
@@ -1616,7 +1767,7 @@ export async function registerRoutes(
   app.patch("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getGoalPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId || plan.deletedAt) {
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Goal plan not found" });
       }
       const { startDate, mealPlanId, workoutPlanId } = req.body;
@@ -1634,7 +1785,7 @@ export async function registerRoutes(
   app.delete("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getGoalPlan(req.params.id as string);
-      if (!plan || plan.userId !== req.session.userId) {
+      if (!plan || plan.userId !== req.userId) {
         return res.status(404).json({ message: "Goal plan not found" });
       }
       await storage.softDeleteGoalPlan(plan.id);
@@ -1646,7 +1797,7 @@ export async function registerRoutes(
 
   app.get("/api/allowance/current", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const mealPlanId = req.query.mealPlanId as string | undefined;
       const state = await getAllowanceState(userId, mealPlanId);
       if (!state) {
@@ -1660,7 +1811,7 @@ export async function registerRoutes(
 
   app.post("/api/allowance/redeem-flex-token", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const result = await redeemFlexToken(userId);
       if (!result.success) {
         return res.status(400).json({ message: result.message });
@@ -1673,7 +1824,7 @@ export async function registerRoutes(
 
   app.get("/api/ingredient-proposals", requireAuth, async (req: Request, res: Response) => {
     try {
-      const proposals = await storage.getPendingProposals(req.session.userId!);
+      const proposals = await storage.getPendingProposals(req.userId!);
       return res.json(proposals);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load proposals" });
@@ -1686,7 +1837,7 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid resolve data" });
       }
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { chosenIngredients, action } = parsed.data;
       const proposal = await storage.resolveProposal(req.params.id as string, userId, chosenIngredients, action);
       if (!proposal) {
@@ -1710,7 +1861,7 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid check-in data" });
       }
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const checkIn = await storage.createWeeklyCheckIn(userId, parsed.data);
 
       let performanceSummary = null;
@@ -1746,7 +1897,7 @@ export async function registerRoutes(
 
   app.get("/api/check-ins", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const goalPlanId = req.query.goalPlanId as string | undefined;
       const checkIns = await storage.getWeeklyCheckIns(userId, goalPlanId);
       return res.json(checkIns);
@@ -1757,7 +1908,7 @@ export async function registerRoutes(
 
   app.get("/api/performance/latest", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const summary = await storage.getLatestPerformanceSummary(userId);
       return res.json(summary || null);
     } catch (err) {
@@ -1767,7 +1918,7 @@ export async function registerRoutes(
 
   app.get("/api/performance", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const from = req.query.from as string | undefined;
       const to = req.query.to as string | undefined;
       if (from && to) {
@@ -1783,7 +1934,7 @@ export async function registerRoutes(
 
   app.post("/api/weekly-adaptation/compute", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const profile = await storage.getUserProfile(userId);
       if (!profile) return res.status(400).json({ message: "Profile required" });
 
@@ -1819,7 +1970,7 @@ export async function registerRoutes(
 
   app.get("/api/weekly-adaptation/latest", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const adaptation = await storage.getLatestWeeklyAdaptation(userId);
       return res.json(adaptation || null);
     } catch (err) {
@@ -1829,7 +1980,7 @@ export async function registerRoutes(
 
   app.get("/api/calendar/workout-occupied-dates", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const excludePlanId = req.query.excludePlanId as string | undefined;
       const plans = await storage.getScheduledWorkoutPlans(userId);
       const occupiedDates = new Set<string>();
@@ -1851,7 +2002,7 @@ export async function registerRoutes(
 
   app.get("/api/calendar/workouts", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const plans = await storage.getScheduledWorkoutPlans(userId);
 
       const allDays: any[] = [];
@@ -1883,7 +2034,7 @@ export async function registerRoutes(
   // ── Daily Meal Planning ──
   app.post("/api/daily-meal", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const profile = await storage.getUserProfile(userId);
       if (!profile) {
         return res.status(400).json({ message: "Profile required", profileRequired: true });
@@ -1958,7 +2109,7 @@ export async function registerRoutes(
 
   app.get("/api/daily-meal/:date", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const meal = await storage.getDailyMealByDate(userId, req.params.date);
       if (!meal) return res.status(404).json({ message: "No daily meal for this date" });
       return res.json(meal);
@@ -1969,7 +2120,7 @@ export async function registerRoutes(
 
   app.get("/api/daily-meals", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { start, end } = req.query;
       if (!start || !end) return res.status(400).json({ message: "start and end query params required" });
       const meals = await storage.getDailyMealsByDateRange(userId, start as string, end as string);
@@ -1982,7 +2133,7 @@ export async function registerRoutes(
   // ── Daily Workout Planning ──
   app.post("/api/daily-workout", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const profile = await storage.getUserProfile(userId);
       if (!profile) {
         return res.status(400).json({ message: "Profile required", profileRequired: true });
@@ -2049,7 +2200,7 @@ export async function registerRoutes(
 
   app.get("/api/daily-workout/:date", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const workout = await storage.getDailyWorkoutByDate(userId, req.params.date);
       if (!workout) return res.status(404).json({ message: "No daily workout for this date" });
       return res.json(workout);
@@ -2060,7 +2211,7 @@ export async function registerRoutes(
 
   app.get("/api/daily-workouts", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { start, end } = req.query;
       if (!start || !end) return res.status(400).json({ message: "start and end query params required" });
       const workouts = await storage.getDailyWorkoutsByDateRange(userId, start as string, end as string);
@@ -2073,7 +2224,7 @@ export async function registerRoutes(
   // ── Daily Plan Regeneration ──
   app.post("/api/daily-meal/:date/regenerate", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { date } = req.params;
       const profile = await storage.getUserProfile(userId);
       if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
@@ -2128,7 +2279,7 @@ export async function registerRoutes(
 
   app.post("/api/daily-workout/:date/regenerate", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { date } = req.params;
       const profile = await storage.getUserProfile(userId);
       if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
@@ -2178,7 +2329,7 @@ export async function registerRoutes(
   // ── Daily Coverage Check ──
   app.get("/api/daily-coverage", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { start, end } = req.query;
       if (!start || !end) return res.status(400).json({ message: "start and end required" });
       const meals = await storage.getDailyMealsByDateRange(userId, start as string, end as string);
@@ -2201,7 +2352,7 @@ export async function registerRoutes(
   // ── Activity Completions ──
   app.get("/api/completions", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { start, end, sourceType, sourceId } = req.query;
 
       if (sourceType && sourceId) {
@@ -2219,7 +2370,7 @@ export async function registerRoutes(
 
   app.post("/api/completions/toggle", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const parsed = toggleCompletionSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
@@ -2235,7 +2386,7 @@ export async function registerRoutes(
 
   app.get("/api/completions/adherence", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { start, end } = req.query;
       if (!start || !end) return res.status(400).json({ message: "start and end required" });
 

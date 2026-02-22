@@ -9,7 +9,7 @@ I prefer iterative development with clear communication at each stage. Please as
 ## System Architecture
 The application uses a modern web stack for a responsive and intuitive user experience. The frontend is built with React, Vite, and TypeScript, styled using Tailwind CSS and shadcn/ui components. The UI/UX includes a premium visual redesign with an icon-only navigation sidebar and an active goal bar.
 
-The backend is an Express server in TypeScript, utilizing session-based authentication with PostgreSQL for 30-day session persistence. PostgreSQL is the primary database, managed via Drizzle ORM.
+The backend is an Express server in TypeScript with dual authentication: cookie-based sessions (for web, 30-day persistence via connect-pg-simple) and JWT Bearer tokens (for mobile/API clients). PostgreSQL is the primary database, managed via Drizzle ORM.
 
 Key features include:
 -   **Personalized Plan Generation**: AI-generated 7-day meal and workout plans based on user profiles and preferences. Meal plans are configurable for 2 or 3 meals daily, and workout plans consider various factors like goals, location, and experience.
@@ -32,8 +32,10 @@ Key features include:
 -   **Completion Tracking**: Users can mark individual meals and workouts as complete, contributing to adherence calculations.
 -   **Rate Limiting**: AI calls are rate-limited to 10 per user per day.
 -   **Soft Deletion**: Plans and goals are soft-deleted for data integrity and recovery.
+-   **Dual Authentication (Session + JWT)**: Web app uses cookie-based sessions (unchanged). Mobile/API clients use JWT Bearer tokens via `POST /api/auth/token-login` (returns accessToken + refreshToken), `POST /api/auth/refresh` (token rotation), and `POST /api/auth/token-logout` (revoke). Access tokens expire in 15 minutes, refresh tokens in 30 days. Refresh tokens are SHA-256 hashed in the `refresh_tokens` table (never stored in plaintext). Unified `requireAuth` middleware checks Bearer header first, then falls back to session cookie. All protected routes use `req.userId` (set by either auth method). Module: `server/jwt.ts`. Env vars: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL` (default 15m), `JWT_REFRESH_TTL` (default 30d).
 
 ## External Dependencies
 -   **OpenAI**: Used for generating personalized meal plans and workout programs.
 -   **PostgreSQL**: The primary database for all application data.
 -   **connect-pg-simple**: Used for PostgreSQL-backed session storage.
+-   **jsonwebtoken**: Used for JWT access token signing and verification.
