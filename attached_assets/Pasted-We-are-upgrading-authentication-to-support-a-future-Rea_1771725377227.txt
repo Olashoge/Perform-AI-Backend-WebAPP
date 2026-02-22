@@ -1,0 +1,160 @@
+We are upgrading authentication to support a future React Native iOS app.
+
+CRITICAL:
+- DO NOT break existing cookie-based session authentication.
+- DO NOT remove session middleware.
+- Web app must continue working exactly as it does now.
+- We are ADDING JWT-based auth in parallel.
+
+GOAL:
+Support both:
+1) Existing session-based auth (for web)
+2) Bearer JWT auth (for mobile clients)
+
+----------------------------------------
+STEP 1 — ENVIRONMENT VARIABLES
+----------------------------------------
+
+Add support for these environment variables:
+
+JWT_ACCESS_SECRET
+JWT_REFRESH_SECRET
+JWT_ACCESS_TTL=15m
+JWT_REFRESH_TTL=30d
+
+If not present, throw a clear startup error.
+
+----------------------------------------
+STEP 2 — DATABASE TABLE
+----------------------------------------
+
+Add a new Prisma model:
+
+model RefreshToken {
+  id            String   @id @default(uuid())
+  userId        String
+  tokenHash     String
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime @default(now())
+  lastUsedAt    DateTime?
+  userAgent     String?
+  ipAddress     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+Generate and apply migration.
+
+IMPORTANT:
+- Store hashed refresh tokens only (never plaintext).
+- Use a secure hashing method (bcrypt or crypto hash).
+
+----------------------------------------
+STEP 3 — JWT UTILITIES
+----------------------------------------
+
+Create a small auth utility module:
+
+- generateAccessToken(user)
+- generateRefreshToken(user)
+- verifyAccessToken(token)
+- hashRefreshToken(token)
+
+Access token payload:
+{
+  userId,
+  email
+}
+
+Access token expires in 15 minutes.
+Refresh token expires in 30 days.
+
+----------------------------------------
+STEP 4 — NEW AUTH ROUTES (FOR MOBILE)
+----------------------------------------
+
+Add routes:
+
+POST /api/auth/token-login
+Input: { email, password }
+Behavior:
+- Validate user credentials
+- Generate access token
+- Generate refresh token
+- Store hashed refresh token in DB
+Return:
+{
+  accessToken,
+  refreshToken,
+  user
+}
+
+POST /api/auth/refresh
+Input: { refreshToken }
+Behavior:
+- Verify refresh token
+- Ensure not expired or revoked
+- Rotate: revoke old token
+- Issue new access + refresh tokens
+Return:
+{
+  accessToken,
+  refreshToken
+}
+
+POST /api/auth/token-logout
+Input: { refreshToken }
+Behavior:
+- Revoke refresh token
+
+----------------------------------------
+STEP 5 — UNIFIED AUTH MIDDLEWARE
+----------------------------------------
+
+Create middleware:
+
+authenticateUser
+
+Logic:
+1) If Authorization header exists:
+     Bearer <token>
+     → verify JWT
+     → attach user to req.user
+2) Else if session exists:
+     → use session user
+3) Else:
+     → return 401
+
+Replace existing protected route guards with this middleware.
+
+DO NOT remove session logic.
+
+----------------------------------------
+STEP 6 — KEEP WEB LOGIN UNCHANGED
+----------------------------------------
+
+DO NOT modify:
+POST /api/auth/login (web login)
+Session handling
+Cookie configuration
+
+----------------------------------------
+STEP 7 — TEST CHECKLIST OUTPUT
+----------------------------------------
+
+When finished:
+Print a short checklist for me:
+
+1) How to test session login (web)
+2) How to test JWT login (curl example)
+3) How to test token refresh
+4) How to test logout
+
+----------------------------------------
+
+Proceed without asking questions.
+Do not refactor unrelated parts of the system.
+Keep architecture clean and minimal.

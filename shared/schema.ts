@@ -657,6 +657,20 @@ export const weeklyAdaptations = pgTable("weekly_adaptations", {
 
 export type WeeklyAdaptation = typeof weeklyAdaptations.$inferSelect;
 
+export const refreshTokens = pgTable("refresh_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+  userAgent: text("user_agent"),
+  ipAddress: text("ip_address"),
+});
+
+export type RefreshToken = typeof refreshTokens.$inferSelect;
+
 export const dailyMeals = pgTable("daily_meals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
