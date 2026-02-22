@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull, lt, lte } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, weeklyAdaptations, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion, type WeeklyAdaptation } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, weeklyAdaptations, refreshTokens, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion, type WeeklyAdaptation, type RefreshToken } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -103,6 +103,11 @@ export interface IStorage {
   upsertWeeklyAdaptation(userId: string, weekStartDate: string, computedSignals: any, adaptationParams: any, summaryText: string): Promise<WeeklyAdaptation>;
   getLatestWeeklyAdaptation(userId: string): Promise<WeeklyAdaptation | undefined>;
   getWeeklyAdaptationsByRange(userId: string, from: string, to: string): Promise<WeeklyAdaptation[]>;
+  createRefreshToken(userId: string, tokenHash: string, expiresAt: Date, userAgent?: string, ipAddress?: string): Promise<RefreshToken>;
+  getRefreshTokenByHash(tokenHash: string): Promise<RefreshToken | undefined>;
+  revokeRefreshToken(id: string): Promise<void>;
+  revokeAllRefreshTokensForUser(userId: string): Promise<void>;
+  updateRefreshTokenLastUsed(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1139,6 +1144,48 @@ export class DatabaseStorage implements IStorage {
         lte(weeklyAdaptations.weekStartDate, to),
       ))
       .orderBy(desc(weeklyAdaptations.weekStartDate));
+  }
+
+  async createRefreshToken(userId: string, tokenHash: string, expiresAt: Date, userAgent?: string, ipAddress?: string): Promise<RefreshToken> {
+    const [token] = await db.insert(refreshTokens).values({
+      userId,
+      tokenHash,
+      expiresAt,
+      userAgent: userAgent || null,
+      ipAddress: ipAddress || null,
+    }).returning();
+    return token;
+  }
+
+  async getRefreshTokenByHash(tokenHash: string): Promise<RefreshToken | undefined> {
+    const [token] = await db.select().from(refreshTokens)
+      .where(and(
+        eq(refreshTokens.tokenHash, tokenHash),
+        isNull(refreshTokens.revokedAt),
+      ))
+      .limit(1);
+    return token;
+  }
+
+  async revokeRefreshToken(id: string): Promise<void> {
+    await db.update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(refreshTokens.id, id));
+  }
+
+  async revokeAllRefreshTokensForUser(userId: string): Promise<void> {
+    await db.update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(
+        eq(refreshTokens.userId, userId),
+        isNull(refreshTokens.revokedAt),
+      ));
+  }
+
+  async updateRefreshTokenLastUsed(id: string): Promise<void> {
+    await db.update(refreshTokens)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(refreshTokens.id, id));
   }
 }
 
