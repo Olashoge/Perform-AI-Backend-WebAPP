@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Ruler, Activity, Heart, Brain,
   Moon, Dumbbell, Clock, Flame, UtensilsCrossed,
-  X, Plus, Save, Check, MapPin,
+  X, Plus, Save, Check, MapPin, ChevronDown,
 } from "lucide-react";
 import { EQUIPMENT_CATEGORIES, GYM_PRESELECT, HOME_PRESELECT, OUTDOORS_PRESELECT } from "@/lib/equipment-constants";
 
@@ -181,6 +181,58 @@ function TagInput({
   );
 }
 
+function EquipmentAccordion({ selected, onToggle }: { selected: string[]; onToggle: (item: string) => void }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  return (
+    <div>
+      <Label className="mb-2 block">Equipment Available</Label>
+      <div className="space-y-1">
+        {EQUIPMENT_CATEGORIES.map((cat) => {
+          const isOpen = expanded[cat.category] ?? false;
+          const count = cat.items.filter(i => selected.includes(i)).length;
+          return (
+            <div key={cat.category} className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                onClick={() => setExpanded(prev => ({ ...prev, [cat.category]: !isOpen }))}
+                data-testid={`toggle-equip-cat-${cat.category.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
+              >
+                <span className="font-medium">{cat.category}</span>
+                <div className="flex items-center gap-2">
+                  {count > 0 && (
+                    <Badge variant="secondary" className="text-xs h-5 min-w-[20px] justify-center">{count}</Badge>
+                  )}
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                </div>
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-2.5 pt-1 flex flex-wrap gap-1.5">
+                  {cat.items.map((item) => {
+                    const isSelected = selected.includes(item);
+                    return (
+                      <Badge
+                        key={item}
+                        variant={isSelected ? "default" : "outline"}
+                        className="cursor-pointer select-none text-xs"
+                        onClick={() => onToggle(item)}
+                        data-testid={`chip-equip-${item.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
+                      >
+                        {item}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 type UnitSystem = "imperial" | "metric";
 
 export default function ProfilePage() {
@@ -230,6 +282,7 @@ export default function ProfilePage() {
       appetiteLevel: null,
       spicePreference: null,
       bodyContext: "",
+      favoriteMealsText: "",
       workoutLocationDefault: null,
       equipmentAvailable: [],
       equipmentOtherNotes: "",
@@ -280,6 +333,7 @@ export default function ProfilePage() {
         appetiteLevel: (profile.appetiteLevel as "low" | "normal" | "high") || null,
         spicePreference: (profile.spicePreference as "mild" | "medium" | "spicy") || null,
         bodyContext: profile.bodyContext || "",
+        favoriteMealsText: profile.favoriteMealsText || "",
         workoutLocationDefault: (profile.workoutLocationDefault as "gym" | "home" | "outdoors") || null,
         equipmentAvailable: (profile.equipmentAvailable as string[]) || [],
         equipmentOtherNotes: profile.equipmentOtherNotes || "",
@@ -877,33 +931,14 @@ export default function ProfilePage() {
                   )}
                 />
 
-                <div>
-                  <Label className="mb-2 block">Equipment Available</Label>
-                  {EQUIPMENT_CATEGORIES.map((cat) => (
-                    <div key={cat.category} className="mb-3">
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">{cat.category}</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {cat.items.map((item) => {
-                          const selected = ((form.watch("equipmentAvailable") as string[]) || []).includes(item);
-                          return (
-                            <Badge
-                              key={item}
-                              variant={selected ? "default" : "outline"}
-                              className="cursor-pointer select-none text-xs"
-                              onClick={() => {
-                                const current = (form.getValues("equipmentAvailable") as string[]) || [];
-                                form.setValue("equipmentAvailable", selected ? current.filter(e => e !== item) : [...current, item]);
-                              }}
-                              data-testid={`chip-equip-${item.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
-                            >
-                              {item}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <EquipmentAccordion
+                  selected={(form.watch("equipmentAvailable") as string[]) || []}
+                  onToggle={(item) => {
+                    const current = (form.getValues("equipmentAvailable") as string[]) || [];
+                    const isSelected = current.includes(item);
+                    form.setValue("equipmentAvailable", isSelected ? current.filter(e => e !== item) : [...current, item]);
+                  }}
+                />
 
                 <div>
                   <FormField
@@ -1027,6 +1062,35 @@ export default function ProfilePage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <FormField
+                    control={form.control}
+                    name="favoriteMealsText"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          <span className="flex items-center gap-1.5">
+                            <Flame className="h-3.5 w-3.5" />
+                            Favorite Meals (optional)
+                          </span>
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="e.g. chicken stir-fry, overnight oats, grilled salmon with veggies, Greek yogurt bowls"
+                            className="resize-none min-h-[80px]"
+                            {...field}
+                            value={field.value ?? ""}
+                            data-testid="input-favorite-meals"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          AI will include healthier versions of your favorites when possible.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}

@@ -538,6 +538,7 @@ export const userProfiles = pgTable("user_profiles", {
   appetiteLevel: varchar("appetite_level", { length: 20 }),
   spicePreference: varchar("spice_preference", { length: 20 }),
   bodyContext: text("body_context").default(""),
+  favoriteMealsText: text("favorite_meals_text").default(""),
   workoutLocationDefault: varchar("workout_location_default", { length: 20 }).default("gym"),
   equipmentAvailable: jsonb("equipment_available").default([]),
   equipmentOtherNotes: text("equipment_other_notes").default(""),
@@ -578,6 +579,7 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
   foodsToAvoid: z.array(z.string()).default([]),
   foodsToAvoidNotes: z.string().nullable().optional(),
   bodyContext: z.string().default(""),
+  favoriteMealsText: z.string().default(""),
   workoutLocationDefault: z.enum(["gym", "home", "outdoors"]).nullable().optional(),
   equipmentAvailable: z.array(z.string()).default([]),
   equipmentOtherNotes: z.string().default(""),
@@ -640,6 +642,20 @@ export const performanceSummaries = pgTable("performance_summaries", {
 ]);
 
 export type PerformanceSummary = typeof performanceSummaries.$inferSelect;
+
+export const weeklyAdaptations = pgTable("weekly_adaptations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  weekStartDate: varchar("week_start_date", { length: 10 }).notNull(),
+  computedSignals: jsonb("computed_signals").notNull().default({}),
+  adaptationParams: jsonb("adaptation_params").notNull().default({}),
+  summaryText: text("summary_text").notNull().default(""),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("weekly_adapt_user_week_idx").on(table.userId, table.weekStartDate),
+]);
+
+export type WeeklyAdaptation = typeof weeklyAdaptations.$inferSelect;
 
 export const dailyMeals = pgTable("daily_meals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

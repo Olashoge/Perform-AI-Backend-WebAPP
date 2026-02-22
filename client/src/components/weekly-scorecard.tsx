@@ -10,9 +10,10 @@ import { format, startOfWeek, isSameDay } from "date-fns";
 import { useWeeklyAdherence } from "@/hooks/use-completions";
 
 function getScoreColor(score: number) {
-  if (score >= 71) return { text: "text-emerald-600 dark:text-emerald-400", ring: "stroke-emerald-500" };
-  if (score >= 41) return { text: "text-amber-600 dark:text-amber-400", ring: "stroke-amber-500" };
-  return { text: "text-muted-foreground", ring: "stroke-muted-foreground/60" };
+  if (score >= 85) return { text: "text-emerald-600 dark:text-emerald-400", ring: "stroke-emerald-500" };
+  if (score >= 70) return { text: "text-lime-600 dark:text-lime-400", ring: "stroke-lime-500" };
+  if (score >= 50) return { text: "text-amber-600 dark:text-amber-400", ring: "stroke-amber-500" };
+  return { text: "text-red-600 dark:text-red-400", ring: "stroke-red-500" };
 }
 
 function getWeekLabel(weekStart: Date, calWeekStartsOn?: 0 | 1): string {

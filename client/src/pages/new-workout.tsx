@@ -263,6 +263,12 @@ export default function NewWorkout() {
                         <span className="font-medium">{(profile.healthConstraints as string[]).join(", ")}</span>
                       </div>
                     )}
+                    {profile.bodyContext && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Body notes:</span>{" "}
+                        <span className="font-medium">{profile.bodyContext}</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

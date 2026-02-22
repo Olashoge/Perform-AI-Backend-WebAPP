@@ -13,8 +13,9 @@ import { evaluateConstraints, buildConstraintPromptBlock } from "./constraints/e
 import { postValidateMealPlan, postValidateWorkoutPlan } from "./constraints/post-validation";
 import type { RuleContext, PlanKind } from "./constraints/types";
 import { computeWeeklySummary } from "./performance/computeWeeklySummary";
-import { computeAdaptiveModifiers, buildAdaptivePromptBlock } from "./adaptive";
+import { computeAdaptiveModifiers, buildAdaptivePromptBlock, computeWeeklyAdaptation } from "./adaptive";
 import type { AdaptiveSnapshot, AdaptiveInputs } from "./adaptive";
+import { buildUserContextForGeneration, type ContextOverrides } from "./context-builder";
 import connectPgSimple from "connect-pg-simple";
 
 const PgStore = connectPgSimple(session);
@@ -297,7 +298,9 @@ export async function registerRoutes(
             mealPrefs: parsed.data,
           });
           log(`Generating full plan for user ${userId} (plan ${pendingPlan.id})`, "openai");
-          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays, standaloneCtx, standaloneConstraintBlock, { bodyContext: userProfile.bodyContext || undefined });
+          const userCtx = buildUserContextForGeneration(userProfile);
+          standaloneConstraintBlock += userCtx.mealPromptBlock;
+          const planJson = await generateFullPlan(parsed.data, prefCtx, workoutDays, standaloneCtx, standaloneConstraintBlock, userCtx.profileExtras);
           await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
@@ -971,8 +974,9 @@ export async function registerRoutes(
             workoutPrefs: prefs,
           });
           const formEquip = (prefs as any).equipmentAvailable as string[] | undefined;
-          const profileExtras = { bodyContext: userProfile.bodyContext || undefined, workoutLocation: userProfile.workoutLocationDefault || undefined, equipment: (formEquip && formEquip.length > 0 ? formEquip : (userProfile.equipmentAvailable as string[])) || undefined, equipmentNotes: userProfile.equipmentOtherNotes || undefined };
-          const result = await generateWorkoutPlan(prefs, exerciseContext, standaloneWCtx, workoutConstraintBlock, profileExtras);
+          const workoutUserCtx = buildUserContextForGeneration(userProfile, formEquip && formEquip.length > 0 ? { equipmentAvailable: formEquip } : undefined);
+          workoutConstraintBlock += workoutUserCtx.workoutPromptBlock;
+          const result = await generateWorkoutPlan(prefs, exerciseContext, standaloneWCtx, workoutConstraintBlock, workoutUserCtx.profileExtras);
           await storage.updateWorkoutPlanStatus(plan.id, "ready", result);
           log(`Workout plan ${plan.id} generated successfully`, "openai");
         } catch (err) {
@@ -1385,8 +1389,9 @@ export async function registerRoutes(
             const goalPrefContext = await storage.getUserPreferenceContext(userId);
             const goalExerciseCtx = { avoidedExercises: goalPrefContext.avoidedExercises, dislikedExercises: goalPrefContext.dislikedExercises };
             const goalFormEquip = (parsedWorkout.data as any).equipmentAvailable as string[] | undefined;
-            const goalProfileExtras = { bodyContext: userProfile.bodyContext || undefined, workoutLocation: userProfile.workoutLocationDefault || undefined, equipment: (goalFormEquip && goalFormEquip.length > 0 ? goalFormEquip : (userProfile.equipmentAvailable as string[])) || undefined, equipmentNotes: userProfile.equipmentOtherNotes || undefined };
-            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock, goalProfileExtras);
+            const goalWorkoutCtx = buildUserContextForGeneration(userProfile, goalFormEquip && goalFormEquip.length > 0 ? { equipmentAvailable: goalFormEquip } : undefined);
+            const goalConstraintBlock = constraintPromptBlock + goalWorkoutCtx.workoutPromptBlock;
+            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, goalConstraintBlock, goalWorkoutCtx.profileExtras);
 
             const workoutPostCheck = postValidateWorkoutPlan(result, constraintResult.safeSpec);
             let finalWorkoutResult = result;
@@ -1395,7 +1400,7 @@ export async function registerRoutes(
               log(`Goal gen: workout post-validation auto-fixed ${workoutPostCheck.violations.length} violation(s)`, "plan");
             } else if (workoutPostCheck.needsRegen) {
               log(`Goal gen: workout post-validation requires regen (${workoutPostCheck.violations.length} violations)`, "plan");
-              const regenResult = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, constraintPromptBlock + "\nSTRICT MODE: Previous generation contained banned exercises. Absolutely do NOT include any banned exercises.", goalProfileExtras);
+              const regenResult = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, goalConstraintBlock + "\nSTRICT MODE: Previous generation contained banned exercises. Absolutely do NOT include any banned exercises.", goalWorkoutCtx.profileExtras);
               finalWorkoutResult = regenResult;
             }
             if (workoutPostCheck.violations.length > 0) {
@@ -1443,8 +1448,9 @@ export async function registerRoutes(
             const prefCtx = await storage.getUserPreferenceContext(userId);
             const workoutDays = parsedMeal.data.workoutDays || undefined;
             log(`Goal gen: generating meal plan ${pendingMeal.id}`, "openai");
-            const mealProfileExtras = { bodyContext: userProfile.bodyContext || undefined };
-            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, constraintPromptBlock, mealProfileExtras);
+            const goalMealCtx = buildUserContextForGeneration(userProfile);
+            const mealConstraintBlock = constraintPromptBlock + goalMealCtx.mealPromptBlock;
+            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, mealConstraintBlock, goalMealCtx.profileExtras);
 
             const mealPostCheck = postValidateMealPlan(planJson, constraintResult.safeSpec);
             let finalMealJson = planJson;
@@ -1453,7 +1459,7 @@ export async function registerRoutes(
               log(`Goal gen: meal post-validation auto-fixed ${mealPostCheck.violations.length} violation(s)`, "plan");
             } else if (mealPostCheck.needsRegen) {
               log(`Goal gen: meal post-validation requires regen (${mealPostCheck.violations.length} violations)`, "plan");
-              const regenPlan = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, constraintPromptBlock + "\nSTRICT MODE: Previous generation contained banned ingredients. Absolutely do NOT include any banned ingredients.", mealProfileExtras);
+              const regenPlan = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, mealConstraintBlock + "\nSTRICT MODE: Previous generation contained banned ingredients. Absolutely do NOT include any banned ingredients.", goalMealCtx.profileExtras);
               finalMealJson = regenPlan;
             }
             if (mealPostCheck.violations.length > 0) {
@@ -1715,7 +1721,23 @@ export async function registerRoutes(
         log(`Performance summary computation error: ${perfErr}`, "plan");
       }
 
-      return res.json({ checkIn, performanceSummary });
+      let weeklyAdaptation = null;
+      try {
+        const profile = await storage.getUserProfile(userId);
+        if (profile) {
+          const summaries = await storage.getRecentPerformanceSummaries(userId, 4);
+          const { signals, params, summaryText } = computeWeeklyAdaptation(profile, summaries);
+          weeklyAdaptation = await storage.upsertWeeklyAdaptation(userId, checkIn.weekStartDate, signals, params, summaryText);
+          if (params.adjustmentAction !== "maintain") {
+            await storage.updateUserProfile(userId, { nextWeekPlanBias: params.adjustmentAction } as any);
+          }
+          log(`Weekly adaptation computed for user ${userId}: action=${params.adjustmentAction}, trend=${signals.trend}`, "plan");
+        }
+      } catch (adaptErr) {
+        log(`Weekly adaptation computation error: ${adaptErr}`, "plan");
+      }
+
+      return res.json({ checkIn, performanceSummary, weeklyAdaptation });
     } catch (err) {
       log(`Check-in creation error: ${err}`, "plan");
       return res.status(500).json({ message: "Failed to save check-in" });
@@ -1756,6 +1778,52 @@ export async function registerRoutes(
       return res.json(summaries);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load performance summaries" });
+    }
+  });
+
+  app.post("/api/weekly-adaptation/compute", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required" });
+
+      const summaries = await storage.getRecentPerformanceSummaries(userId, 4);
+      const { signals, params, summaryText } = computeWeeklyAdaptation(profile, summaries);
+
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+      const weekStartDate = monday.toISOString().slice(0, 10);
+
+      const adaptation = await storage.upsertWeeklyAdaptation(
+        userId,
+        weekStartDate,
+        signals,
+        params,
+        summaryText,
+      );
+
+      if (params.adjustmentAction !== "maintain") {
+        await storage.updateUserProfile(userId, {
+          nextWeekPlanBias: params.adjustmentAction,
+        } as any);
+      }
+
+      return res.json(adaptation);
+    } catch (err) {
+      log(`Weekly adaptation compute error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to compute weekly adaptation" });
+    }
+  });
+
+  app.get("/api/weekly-adaptation/latest", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const adaptation = await storage.getLatestWeeklyAdaptation(userId);
+      return res.json(adaptation || null);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load weekly adaptation" });
     }
   });
 
@@ -1849,6 +1917,8 @@ export async function registerRoutes(
       (async () => {
         try {
           const prefCtx = await storage.getUserPreferenceContext(userId);
+          const dailyMealCtx = buildUserContextForGeneration(profile);
+          const dailyMealConstraint = (adaptive.promptBlock || "") + dailyMealCtx.mealPromptBlock;
           const result = await generateSingleDayMeals({
             date,
             mealsPerDay: mealsPerDay as 2 | 3,
@@ -1858,10 +1928,10 @@ export async function registerRoutes(
             allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
             spiceLevel: profile.spicePreference || "medium",
             age: profile.age || undefined,
-            currentWeight: profile.weight ? Number(profile.weight) : undefined,
-            targetWeight: profile.targetWeight ? Number(profile.targetWeight) : undefined,
-            weightUnit: profile.weightUnit || "lb",
-            constraintBlock: adaptive.promptBlock || undefined,
+            currentWeight: profile.weightKg ? Number(profile.weightKg) : undefined,
+            targetWeight: profile.targetWeightKg ? Number(profile.targetWeightKg) : undefined,
+            weightUnit: profile.unitSystem === "metric" ? "kg" : "lb",
+            constraintBlock: dailyMealConstraint || undefined,
           }, prefCtx);
 
           const groceryItems: any[] = [];
@@ -1948,18 +2018,19 @@ export async function registerRoutes(
             dislikedExercises: exercisePrefs.filter(p => p.preference === "dislike").map(p => p.exerciseName),
           };
 
-          const dailyWProfileExtras = { bodyContext: profile.bodyContext || undefined, workoutLocation: profile.workoutLocationDefault || undefined, equipment: (profile.equipmentAvailable as string[]) || undefined, equipmentNotes: profile.equipmentOtherNotes || undefined };
+          const dailyWorkoutCtx = buildUserContextForGeneration(profile);
+          const dailyWConstraint = (adaptive.promptBlock || "") + dailyWorkoutCtx.workoutPromptBlock;
           const result = await generateSingleDayWorkout({
             date,
             goal: profile.primaryGoal || "maintenance",
             location: profile.workoutLocationDefault || "gym",
             trainingMode: "both",
             focusAreas: ["full_body"],
-            sessionLength: profile.sessionDuration || 45,
+            sessionLength: profile.sessionDurationMinutes || 45,
             experienceLevel: profile.trainingExperience || "intermediate",
             healthConstraints: (profile.healthConstraints as string[]) || [],
-            constraintBlock: adaptive.promptBlock || undefined,
-          }, exerciseContext, dailyWProfileExtras);
+            constraintBlock: dailyWConstraint || undefined,
+          }, exerciseContext, dailyWorkoutCtx.profileExtras);
 
           const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
           const title = `Daily Workout — ${dateLabel}`;
@@ -2017,7 +2088,7 @@ export async function registerRoutes(
       (async () => {
         try {
           const prefCtx = await storage.getUserPreferenceContext(userId);
-          const prof = profile as any;
+          const regenMealCtx = buildUserContextForGeneration(profile);
           const result = await generateSingleDayMeals({
             date,
             mealsPerDay: mealsPerDay as 2 | 3,
@@ -2027,9 +2098,10 @@ export async function registerRoutes(
             allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
             spiceLevel: profile.spicePreference || "medium",
             age: profile.age || undefined,
-            currentWeight: prof.weight ? Number(prof.weight) : (profile.weightKg ? Number(profile.weightKg) : undefined),
-            targetWeight: prof.targetWeight ? Number(prof.targetWeight) : (profile.targetWeightKg ? Number(profile.targetWeightKg) : undefined),
-            weightUnit: prof.weightUnit || "lb",
+            currentWeight: profile.weightKg ? Number(profile.weightKg) : undefined,
+            targetWeight: profile.targetWeightKg ? Number(profile.targetWeightKg) : undefined,
+            weightUnit: profile.unitSystem === "metric" ? "kg" : "lb",
+            constraintBlock: regenMealCtx.mealPromptBlock || undefined,
           }, prefCtx);
 
           const groceryItems: any[] = [];
@@ -2075,17 +2147,18 @@ export async function registerRoutes(
             dislikedExercises: exercisePrefs.filter((p: any) => p.status === "disliked" || p.preference === "dislike").map((p: any) => p.exerciseName),
           };
 
-          const regenProfileExtras = { bodyContext: profile.bodyContext || undefined, workoutLocation: profile.workoutLocationDefault || undefined, equipment: (profile.equipmentAvailable as string[]) || undefined, equipmentNotes: profile.equipmentOtherNotes || undefined };
+          const regenWorkoutCtx = buildUserContextForGeneration(profile);
           const result = await generateSingleDayWorkout({
             date,
             goal: profile.primaryGoal || "maintenance",
             location: profile.workoutLocationDefault || "gym",
             trainingMode: "both",
             focusAreas: ["full_body"],
-            sessionLength: (profile as any).sessionDuration || 45,
+            sessionLength: profile.sessionDurationMinutes || 45,
             experienceLevel: profile.trainingExperience || "intermediate",
             healthConstraints: (profile.healthConstraints as string[]) || [],
-          }, exerciseContext, regenProfileExtras);
+            constraintBlock: regenWorkoutCtx.workoutPromptBlock || undefined,
+          }, exerciseContext, regenWorkoutCtx.profileExtras);
 
           const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
           const title = `Daily Workout — ${dateLabel}`;

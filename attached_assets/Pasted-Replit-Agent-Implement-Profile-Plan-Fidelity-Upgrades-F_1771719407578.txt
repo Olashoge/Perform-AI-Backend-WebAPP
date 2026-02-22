@@ -1,0 +1,251 @@
+Replit Agent — Implement Profile → Plan Fidelity Upgrades (Favorites, Body Context, Equipment Enforcement) + UI Cleanups + Weekly Auto-Adaptation (#7)
+
+CONTEXT / GOAL
+We are building Perform AI as a coordinated system. Every user input must influence generation (plans + daily meals/workouts). Profile is the single source of truth. Wizards/forms should auto-populate from profile and allow optional overrides without modifying the profile. Every generated artifact must store a snapshot of the merged inputs used.
+
+SCOPE (DO THESE NOW)
+A) Add “Favorite Meals” free-text field in Profile and sync it into Nutrition Plan + Wellness Wizard Nutrition pages (auto-populate + included in AI prompts)
+B) Enforce “all filled inputs influence AI” for all plan generation (wellness, meal plan, workout plan, daily meal, daily workout)
+C) Fix/Clean up:
+  #2 Equipment selector UX + enforcement
+  #3 Body Context (body type/goals/challenges) UX + prompt inclusion
+  #4 Score ring psychology (visual headroom mapping)
+  #6 “Today’s Budget” module styling alignment
+D) Implement #7: true automatic weekly plan adaptation logic (v1) driven by adherence + friction + user profile flags
+
+DO NOT TOUCH
+Do not change #1 and #5 (they are already correct).
+
+========================================================
+A) NEW FIELD: PROFILE “FAVORITE MEALS” + SYNC EVERYWHERE
+========================================================
+
+1) Data Model
+- Add to user_profiles table:
+  - favoriteMealsText (TEXT / nullable)
+  - (Optional but recommended) favoriteMealsParsed (JSON array) if you parse lines into items; otherwise keep text only.
+
+2) Profile UI
+- Under Nutrition & Lifestyle section add:
+  Label: “Favorite Meals (optional)”
+  Helper text: “List meals you love. We’ll include healthier versions in your plans.”
+  Input: multiline textarea
+  Placeholder examples:
+    - “Jollof rice + grilled salmon”
+    - “Greek yogurt parfait”
+    - “Eggs + toast”
+    - “Pasta + shrimp”
+  Save into user_profiles.favoriteMealsText.
+
+3) Nutrition Plan Create page (standalone) + Wellness Wizard Nutrition step
+- Add same field with same label + helper text, placed near “Diet & Cuisine” section (right after Diet/Cuisine styles OR after Foods to Avoid).
+- Auto-populate from profile:
+  - Show “Using Your Profile” card already exists; include “Favorite meals: (first ~60 chars) …” and “Edit” link.
+- Override behavior:
+  - User can edit favorite meals field on the plan form; treat as an override for THIS plan only; DO NOT update profile unless user goes to profile.
+- Persist in plan snapshot:
+  - Save merged value into planSnapshot.favoriteMealsText (and into plan record field if you keep dedicated snapshot column).
+
+4) AI Prompt Requirements (Favorites)
+- In every meal-plan generation prompt and daily-meal generation prompt:
+  - If favoriteMealsText is present, the AI MUST include at least 1 favorite meal per day (or per plan) in a “healthier version” appropriate to the user’s goal and constraints.
+  - If the favorite meal conflicts with foodsToAvoid/allergies, AI must either:
+    a) adjust ingredients to comply, or
+    b) propose a close alternative and explicitly label it as a substitution.
+
+========================================================
+B) “EVERY FILLED INPUT INFLUENCES AI” — FIDELITY GUARANTEE
+========================================================
+
+Implement a single “context builder” used by ALL generators:
+- wellness plan generation
+- standalone meal plan generation
+- standalone workout plan generation
+- daily meal generation
+- daily workout generation
+
+1) Context Builder
+Create one function (server-side) e.g. buildUserContextForGeneration(userId, overrides):
+- Fetch user profile
+- Merge overrides (form fields) over profile defaults
+- Include ALL non-empty fields in a structured object:
+  - demographics: age, sex
+  - measurements: height, weight, targetWeight, unitPreference
+  - goals: primaryGoal, pace
+  - training: experience, trainingDays, sessionDuration
+  - activity: activityLevel
+  - health: injuriesLimitationsChronic (merged field)
+  - nutrition: allergiesIntolerances, foodsToAvoid, appetiteLevel, spicePreference, cuisineStyles
+  - NEW: favoriteMealsText
+  - NEW: bodyContextNotes (body type/goals/challenges) (see section C)
+  - equipment: workoutLocation, equipmentAvailable[], equipmentOtherNotes
+  - any other profile preferences already captured (likes/dislikes etc.)
+- Return:
+  - mergedContext (object)
+  - snapshotForDB (object)
+  - a human-readable “context summary” for the UI
+
+2) Prompt Construction
+All prompts must include:
+- “User context (must follow strictly)” as a bullet list
+- explicit constraints:
+  - AllergiesIntolerances: hard constraint
+  - FoodsToAvoid: hard constraint
+  - EquipmentAvailable: hard constraint for workouts
+  - SessionDuration + training days: must match schedule
+  - FavoriteMealsText: soft constraint but must be included regularly
+  - BodyContextNotes: high priority guidance
+
+3) Snapshot Persistence
+Every generated item (plans + daily items) must store:
+- profileSnapshot: the full mergedContext used at generation time
+- overridesApplied: the diff vs profile (optional but helpful)
+So later adaptations and debugging are possible.
+
+========================================================
+C) CLEANUPS —
+========================================================
+
+#2 Equipment Selector (UX density + enforcement)
+1) Mobile density
+- Reduce pill height and vertical spacing on mobile:
+  - smaller padding (py)
+  - tighter row gap
+- Keep categories collapsible:
+  - Add accordion sections: Cardio / Free Weights / Machines / Accessories / Recovery & Mobility
+  - Default expanded for Gym, collapsed for Home (optional).
+2) Enforcement
+- Workout generation MUST only use selected equipment.
+- If an exercise requires equipment not selected, AI must substitute from allowed equipment.
+- Add validation test:
+  - If equipmentAvailable excludes “Barbells”, ensure no barbell-only exercises are produced.
+- For “Gym” location:
+  - Preselect a broad default set.
+  - User can deselect.
+- Add “Other equipment / notes” textarea:
+  - Save to profile + plan snapshot
+  - Include in prompt.
+
+#3 Body Context (notes) UX + prompt inclusion
+1) Add Profile field (if not already in DB)
+- user_profiles.bodyContextNotes TEXT nullable
+Label: “Body Type, Goals & Challenges (optional)”
+Helper: “Anything that helps us tailor plans (ex: ‘hard to gain weight’, ‘lower belly fat’, ‘knees sensitive’, ‘busy schedule’).”
+2) Add to all plan forms (wellness / nutrition / training / daily meal/daily workout if there’s a form)
+- Auto-populate from profile
+- Override allowed per plan
+3) Prompt priority
+- Include bodyContextNotes high priority. AI must reflect it in strategy:
+  - ex: “hard appetite / thin” → higher calorie density, simpler meal cadence, more liquid calories options, etc.
+  - ex: “wants abs” → progressive nutrition adherence + training emphasis.
+
+#4 Score Ring Psychology (visual headroom mapping)
+Goal: 75 should not “feel” like 95.
+Implement:
+- Color scale by bands (no need to change primary brand green; adjust saturation/opacity):
+  - 0–49: red
+  - 50–69: amber
+  - 70–84: lighter green (less saturated)
+  - 85–100: full brand green
+- Ensure ring thickness/visual weight doesn’t imply “complete” at 75:
+  - Consider reducing ring thickness slightly for <85 OR keeping thickness constant and only adjust color intensity.
+- Apply consistently anywhere score ring appears (Dashboard + Calendar).
+
+#6 “Today’s Budget” module styling alignment
+This module is visually mismatched.
+Fix:
+- Remove red underline styling (it signals error).
+- Match typography + spacing to weekly score card.
+- Convert into a small “Usage / Limits” card with consistent progress bars:
+  - Meal Swaps used/total
+  - Day Regens used/total
+  - Plan Regens used/total
+Use same progress bar component and palette as Meals/Workouts completion bars.
+
+========================================================
+D) TRUE AUTOMATIC WEEKLY PLAN ADAPTATION LOGIC (V1)
+========================================================
+
+Objective:
+When a week ends (or on weekly check-in), automatically adapt the NEXT week’s plan generation parameters based on adherence + friction + profile flags.
+
+Define signals (inputs):
+- mealCompletionRate (0–1) from checkboxes
+- workoutCompletionRate (0–1)
+- optional energy rating (if you have it)
+- friction indicators:
+  - repeated skips on same meal type (breakfast/lunch/dinner)
+  - repeated skipped workouts on same day
+  - swaps/regens usage (proxy for dissatisfaction)
+- profile flags:
+  - appetiteLevel
+  - bodyContextNotes keywords (hardgainer, busy, low appetite)
+  - goal type (muscle gain vs fat loss vs performance)
+
+Adaptation rules (simple + explainable):
+1) If mealCompletionRate < 0.60:
+  - Reduce complexity:
+    - fewer unique recipes, more repeats
+    - shorter prep time emphasis
+  - Increase calorie density if goal is muscle gain OR low appetite flagged
+  - Add 1 “favorite meal” daily in healthier version
+2) If workoutCompletionRate < 0.60:
+  - Reduce volume slightly:
+    - fewer exercises per session OR fewer sets
+  - Increase equipment alignment:
+    - prefer machines if gym selected; prefer dumbbells/bands for home
+  - Keep intensity moderate; prioritize consistency
+3) If both meal and workout > 0.80:
+  - Progressive overload / progression:
+    - workouts: slight volume or intensity increase
+    - nutrition: small adjustment toward goal (calorie surplus/deficit tuning)
+4) If energy low (if available):
+  - Reduce intensity and increase recovery emphasis next week.
+
+Where adaptation is stored:
+- Create table: weekly_adaptations
+  - userId
+  - weekStart
+  - computedSignals JSON
+  - adaptationParams JSON (what changed: complexity, volume, calorie density, favorite meal frequency, etc.)
+  - createdAt
+- Next plan generation uses latest adaptationParams as additional constraints.
+
+UX:
+- On Weekly Check-in / Progress:
+  - Show a small “Next week adjustments” summary (plain language):
+    - “Simplifying meals for easier consistency”
+    - “Slightly reducing workout volume to improve completion”
+    - “Including favorite meals more often”
+No technical jargon.
+
+Trigger:
+- When user submits weekly check-in OR when week rolls over and we have enough completion data, generate/store adaptationParams.
+
+Safety:
+- Never auto-change user profile.
+- Only affect next week generation defaults and prompts.
+- Users can always regenerate.
+
+========================================================
+ACCEPTANCE TESTS (MUST PASS)
+========================================================
+1) Profile favorite meals shows in Profile, Nutrition Plan form, Wellness Nutrition step; edits in profile propagate; overrides do NOT change profile.
+2) Any filled input (allergies, foods to avoid, injuries, equipment, body context, favorites, session duration) appears in prompt context and is reflected in output.
+3) Workouts never include equipment not selected.
+4) Score ring: 75 visually distinct from 90+ (headroom).
+5) Today’s Budget module matches rest of UI (no red error-like underline).
+6) Weekly auto-adaptation:
+  - Simulate low meal adherence week → next plan generation shows simplified meals + more favorites.
+  - Simulate low workout adherence week → next plan reduces volume and improves completion.
+  - Simulate high adherence week → progressive overload applied.
+
+DELIVERABLES
+- DB migrations + prisma schema updates
+- Updated Profile UI
+- Updated Nutrition Plan UI + Wellness Wizard Nutrition UI
+- Shared context builder + prompt updates across all generators
+- Equipment selector UI adjustments + strict enforcement
+- Score ring and Today’s Budget styling alignment
+- Weekly adaptation engine v1 + storage + basic UI summary
+- Tests / manual verification notes in PR description

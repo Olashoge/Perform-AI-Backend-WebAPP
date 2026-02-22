@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WeeklyCheckIn, GoalPlan, PerformanceSummary } from "@shared/schema";
+import { WeeklyAdaptationCard } from "@/components/weekly-adaptation-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -326,6 +327,10 @@ export default function CheckIns() {
         ) : latestSummary ? (
           <PerformanceSummaryCard summary={latestSummary} />
         ) : null}
+
+        <div className="mb-6">
+          <WeeklyAdaptationCard />
+        </div>
 
         {recentSummaries && recentSummaries.length > 1 && (
           <Card className="mb-6" data-testid="recent-progress-section">

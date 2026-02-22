@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull, lt, lte } from "drizzle-orm";
 import { db } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, planAllowances, planUsageEvents, flexTokens, planBehaviorSummaries, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, weeklyAdaptations, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GroceryPricing, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type PlanAllowance, type PlanUsageEvent, type FlexToken, type PlanBehaviorSummary, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion, type WeeklyAdaptation } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -100,6 +100,9 @@ export interface IStorage {
   upsertActivityCompletion(userId: string, date: string, itemType: string, sourceType: string, sourceId: string, itemKey: string, completed: boolean): Promise<ActivityCompletion>;
   getCompletionsByDateRange(userId: string, startDate: string, endDate: string): Promise<ActivityCompletion[]>;
   getCompletionsBySource(userId: string, sourceType: string, sourceId: string): Promise<ActivityCompletion[]>;
+  upsertWeeklyAdaptation(userId: string, weekStartDate: string, computedSignals: any, adaptationParams: any, summaryText: string): Promise<WeeklyAdaptation>;
+  getLatestWeeklyAdaptation(userId: string): Promise<WeeklyAdaptation | undefined>;
+  getWeeklyAdaptationsByRange(userId: string, from: string, to: string): Promise<WeeklyAdaptation[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1101,6 +1104,41 @@ export class DatabaseStorage implements IStorage {
         eq(activityCompletions.sourceType, sourceType),
         eq(activityCompletions.sourceId, sourceId),
       ));
+  }
+
+  async upsertWeeklyAdaptation(userId: string, weekStartDate: string, computedSignals: any, adaptationParams: any, summaryText: string): Promise<WeeklyAdaptation> {
+    const existing = await db.select().from(weeklyAdaptations)
+      .where(and(eq(weeklyAdaptations.userId, userId), eq(weeklyAdaptations.weekStartDate, weekStartDate)))
+      .limit(1);
+    if (existing.length > 0) {
+      const [updated] = await db.update(weeklyAdaptations)
+        .set({ computedSignals, adaptationParams, summaryText })
+        .where(eq(weeklyAdaptations.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    const [row] = await db.insert(weeklyAdaptations)
+      .values({ userId, weekStartDate, computedSignals, adaptationParams, summaryText })
+      .returning();
+    return row;
+  }
+
+  async getLatestWeeklyAdaptation(userId: string): Promise<WeeklyAdaptation | undefined> {
+    const [row] = await db.select().from(weeklyAdaptations)
+      .where(eq(weeklyAdaptations.userId, userId))
+      .orderBy(desc(weeklyAdaptations.weekStartDate))
+      .limit(1);
+    return row;
+  }
+
+  async getWeeklyAdaptationsByRange(userId: string, from: string, to: string): Promise<WeeklyAdaptation[]> {
+    return db.select().from(weeklyAdaptations)
+      .where(and(
+        eq(weeklyAdaptations.userId, userId),
+        gte(weeklyAdaptations.weekStartDate, from),
+        lte(weeklyAdaptations.weekStartDate, to),
+      ))
+      .orderBy(desc(weeklyAdaptations.weekStartDate));
   }
 }
 

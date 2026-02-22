@@ -260,6 +260,12 @@ export default function NewPlan() {
                         <span className="font-medium">{(profile.foodsToAvoid as string[]).join(", ")}</span>
                       </div>
                     )}
+                    {profile.favoriteMealsText && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <span className="text-muted-foreground">Favorites:</span>{" "}
+                        <span className="font-medium">{profile.favoriteMealsText}</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

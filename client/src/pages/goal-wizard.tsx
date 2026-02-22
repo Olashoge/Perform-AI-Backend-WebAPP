@@ -482,6 +482,12 @@ export default function GoalWizard() {
                 {((profileData.healthConstraints as string[]) || []).length > 0 && (
                   <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Health constraints:</span>{" "}<span className="font-medium">{(profileData.healthConstraints as string[]).join(", ")}</span></div>
                 )}
+                {profileData.favoriteMealsText && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Favorites:</span>{" "}<span className="font-medium">{profileData.favoriteMealsText}</span></div>
+                )}
+                {profileData.bodyContext && (
+                  <div className="col-span-2 sm:col-span-3"><span className="text-muted-foreground">Body notes:</span>{" "}<span className="font-medium">{profileData.bodyContext}</span></div>
+                )}
               </div>
             </CardContent>
           </Card>
