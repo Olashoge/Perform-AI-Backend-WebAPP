@@ -34,6 +34,13 @@ Key features include:
 -   **Soft Deletion**: Plans and goals are soft-deleted for data integrity and recovery.
 -   **Dual Authentication (Session + JWT)**: Web app uses cookie-based sessions (unchanged). Mobile/API clients use JWT Bearer tokens via `POST /api/auth/token-login` (returns accessToken + refreshToken), `POST /api/auth/refresh` (token rotation), and `POST /api/auth/token-logout` (revoke). Access tokens expire in 15 minutes, refresh tokens in 30 days. Refresh tokens are SHA-256 hashed in the `refresh_tokens` table (never stored in plaintext). Unified `requireAuth` middleware checks Bearer header first, then falls back to session cookie. All protected routes use `req.userId` (set by either auth method). Module: `server/jwt.ts`. Env vars: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL` (default 15m), `JWT_REFRESH_TTL` (default 30d).
 
+## Mobile Rebuild Documentation
+The `docs/` folder contains a comprehensive documentation pack for rebuilding the app as a React Native iOS client:
+-   `docs/api-reference.md` — Complete API endpoint reference with request/response examples
+-   `docs/data-models.md` — TypeScript type definitions for all entities (for Swift replication)
+-   `docs/auth-guide.md` — JWT authentication flow guide with mobile implementation patterns
+-   `docs/mobile-architecture.md` — Screen map, navigation structure, and feature parity guide
+
 ## External Dependencies
 -   **OpenAI**: Used for generating personalized meal plans and workout programs.
 -   **PostgreSQL**: The primary database for all application data.

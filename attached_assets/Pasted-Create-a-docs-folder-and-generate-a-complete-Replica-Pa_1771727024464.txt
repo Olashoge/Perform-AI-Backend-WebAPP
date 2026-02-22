@@ -1,0 +1,56 @@
+Create a /docs folder and generate a complete “Replica Pack” for rebuilding this app as a React Native iOS app that uses the same backend.
+
+OUTPUT FORMAT RULES:
+- Write actual markdown files into /docs (not just chat text).
+- Each doc must include links/paths to the relevant source files in the repo.
+- Be explicit and exhaustive; avoid vague descriptions.
+
+CREATE THESE DOCUMENTS:
+
+1) /docs/00_SYSTEM_OVERVIEW.md
+- App architecture (frontend, backend, DB, AI)
+- How key modules connect (profile → constraint engine → generation → schedules → dashboard aggregates → completion tracking → weekly score)
+- Environments/config (Replit deployment notes)
+
+2) /docs/01_AUTH_WEB_AND_MOBILE.md
+- Explain dual auth: cookie sessions for web + JWT for mobile
+- JWT endpoints: POST /api/auth/token-login, /api/auth/refresh, /api/auth/token-logout
+- Exact request/response JSON schemas, status codes, error payloads
+- How protected routes accept Cookie OR Authorization: Bearer
+- Token TTLs, refresh rotation, revocation, DB storage (SHA-256 hash)
+- Security notes (what is stored where, what headers are required)
+
+3) /docs/02_API_CONTRACT.md
+- Complete API inventory grouped by feature (Profile, Wellness, Nutrition, Training, Daily Meal, Daily Workout, Calendar, Dashboard, Check-ins/Completion)
+- For every endpoint: method, path, auth required, request body, response body, example curl, and which DB tables it touches
+
+4) /docs/03_DATABASE_SCHEMA_AND_INVARIANTS.md
+- Copy the Prisma schema (or ORM schema) into the doc
+- Table-by-table explanation: purpose, relationships, important fields
+- Invariants / rules the code relies on (profile required, snapshot logic, overrides, completion rules, week calculations)
+
+5) /docs/04_AI_GENERATION_PIPELINE.md
+- Where prompts are built, what inputs are included (ALL user-filled fields must be included)
+- Constraint engine flow and how it influences generation
+- What gets saved (snapshot, metadata, schedule entries)
+- Regeneration rules, budgets/limits, and safety checks (age, restrictions)
+
+6) /docs/05_UI_STRUCTURE_WEB.md
+- Web routes/pages, component structure, styling/theme system
+- How shared “Using Your Profile” cards are implemented
+- Naming conventions used globally for fields
+
+7) /docs/06_MOBILE_REBUILD_PLAN.md
+- Step-by-step plan to rebuild as React Native iOS using the same backend
+- Suggested screen list + navigation stack
+- Data fetching strategy
+- Auth storage approach (secure storage for refresh token)
+- A minimal vertical slice milestone list (auth → profile → dashboard → daily items → completion toggle)
+
+After generating docs, add a final file:
+8) /docs/README.md
+- How to use this doc pack to rebuild a near-identical app
+- Order to read docs
+- Key “must match” contracts
+
+Make sure everything reflects the CURRENT codebase after JWT changes. Ensure docs are accurate and reference the exact files and functions that implement each behavior.
