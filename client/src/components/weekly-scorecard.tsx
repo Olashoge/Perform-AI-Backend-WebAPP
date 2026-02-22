@@ -7,7 +7,7 @@ import {
   TrendingUp, TrendingDown, Minus, Activity,
 } from "lucide-react";
 import { format, startOfWeek, isSameDay } from "date-fns";
-import { useWeeklySummary } from "@/hooks/use-completions";
+import { useWeeklyAdherence } from "@/hooks/use-completions";
 
 function getScoreColor(score: number) {
   if (score >= 85) return { text: "text-emerald-600 dark:text-emerald-400", ring: "stroke-emerald-500" };
@@ -63,14 +63,14 @@ interface WeeklyScorecardProps {
 }
 
 export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, enabled = true }: WeeklyScorecardProps) {
-  const { data: weeklySummary, isLoading: summaryLoading } = useWeeklySummary(weekStartStr, enabled);
+  const { data: weeklyAdherence, isLoading: adherenceLoading } = useWeeklyAdherence(weekStartStr, weekEndStr, enabled);
 
   const { data: perfSummaries } = useQuery<PerformanceSummary[]>({
     queryKey: ["/api/performance"],
     enabled,
   });
 
-  if (summaryLoading) {
+  if (adherenceLoading) {
     return (
       <Card className="mb-6 overflow-hidden" data-testid="card-performance-scorecard-loading">
         <CardContent className="p-0">
@@ -91,13 +91,13 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
     );
   }
 
-  if (!weeklySummary) {
+  if (!weeklyAdherence) {
     return null;
   }
 
-  const mealPct = weeklySummary.mealsTotal > 0 ? Math.round((weeklySummary.mealsCompleted / weeklySummary.mealsTotal) * 100) : null;
-  const workoutPct = weeklySummary.workoutsTotal > 0 ? Math.round((weeklySummary.workoutsCompleted / weeklySummary.workoutsTotal) * 100) : null;
-  const score = weeklySummary.score ?? 0;
+  const score = weeklyAdherence.overallScore ?? 0;
+  const mealPct = weeklyAdherence.mealPct;
+  const workoutPct = weeklyAdherence.workoutPct;
 
   const latestPerf = perfSummaries?.[0] ?? null;
 
@@ -175,7 +175,7 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
                   <div className={`h-full ${mealBarColor} rounded-full transition-all duration-500`} style={{ width: `${Math.max(mealPct ?? 0, 2)}%` }} />
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  {weeklySummary.mealsCompleted}/{weeklySummary.mealsTotal} completed
+                  {weeklyAdherence.completedMeals}/{weeklyAdherence.scheduledMeals} completed
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-muted/50">
@@ -192,7 +192,7 @@ export function WeeklyScorecard({ weekStart, weekEnd, weekStartStr, weekEndStr, 
                   <div className={`h-full ${workoutBarColor} rounded-full transition-all duration-500`} style={{ width: `${Math.max(workoutPct ?? 0, 2)}%` }} />
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  {weeklySummary.workoutsCompleted}/{weeklySummary.workoutsTotal} completed
+                  {weeklyAdherence.completedWorkouts}/{weeklyAdherence.scheduledWorkouts} completed
                 </div>
               </div>
             </div>
