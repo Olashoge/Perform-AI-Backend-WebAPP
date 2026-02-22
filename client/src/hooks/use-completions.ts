@@ -62,6 +62,8 @@ export function useCompletions(startDate: string, endDate: string, enabled = tru
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/completions", `?start=${startDate}&end=${endDate}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/completions/adherence"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/weekly-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/week-data"] });
     },
   });
 
