@@ -2477,6 +2477,279 @@ export async function registerRoutes(
     }
   });
 
+  // ── Mobile Aggregation Routes ──
+
+  app.get("/api/weekly-summary", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const weekStartsOn: 0 | 1 = (req.query.weekStartsOn === "1") ? 1 : 0;
+      const now = new Date();
+      const day = now.getDay();
+      const diff = (day < weekStartsOn ? day + 7 - weekStartsOn : day - weekStartsOn);
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - diff);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      const startStr = weekStart.toISOString().slice(0, 10);
+      const endStr = weekEnd.toISOString().slice(0, 10);
+
+      let scheduledMeals = 0;
+      let scheduledWorkouts = 0;
+
+      const mealPlans = await storage.getMealPlansByUser(userId);
+      for (const mp of mealPlans) {
+        if (!mp.planStartDate || mp.deletedAt) continue;
+        const plan = mp.planJson as any;
+        if (!plan?.days) continue;
+        for (let d = 0; d < (plan.days.length || 7); d++) {
+          const dayDate = new Date(mp.planStartDate + "T00:00:00");
+          dayDate.setDate(dayDate.getDate() + d);
+          const ds = dayDate.toISOString().split("T")[0];
+          if (ds >= startStr && ds <= endStr) {
+            const dayMeals = plan.days[d]?.meals;
+            if (dayMeals) scheduledMeals += Object.keys(dayMeals).length;
+          }
+        }
+      }
+
+      const workoutPlans = await storage.getWorkoutPlansByUser(userId);
+      for (const wp of workoutPlans) {
+        if (!wp.planStartDate || wp.deletedAt) continue;
+        const plan = wp.planJson as any;
+        if (!plan?.days) continue;
+        for (let d = 0; d < plan.days.length; d++) {
+          const day = plan.days[d];
+          if (!day || day.isWorkoutDay === false) continue;
+          const dayDate = new Date(wp.planStartDate + "T00:00:00");
+          dayDate.setDate(dayDate.getDate() + d);
+          const ds = dayDate.toISOString().split("T")[0];
+          if (ds >= startStr && ds <= endStr) scheduledWorkouts++;
+        }
+      }
+
+      const dailyMeals = await storage.getDailyMealsByDateRange(userId, startStr, endStr);
+      for (const dm of dailyMeals) {
+        if (dm.status !== "ready" || !dm.planJson) continue;
+        const meals = (dm.planJson as any)?.meals;
+        if (meals) scheduledMeals += Object.keys(meals).length;
+      }
+
+      const dailyWorkouts = await storage.getDailyWorkoutsByDateRange(userId, startStr, endStr);
+      for (const dw of dailyWorkouts) {
+        if (dw.status !== "ready" || !dw.planJson) continue;
+        scheduledWorkouts++;
+      }
+
+      const completions = await storage.getCompletionsByDateRange(userId, startStr, endStr);
+      const completedMeals = completions.filter(c => c.itemType === "meal" && c.completed).length;
+      const completedWorkouts = completions.filter(c => c.itemType === "workout" && c.completed).length;
+
+      const mealPct = scheduledMeals > 0 ? Math.round((completedMeals / scheduledMeals) * 100) : null;
+      const workoutPct = scheduledWorkouts > 0 ? Math.round((completedWorkouts / scheduledWorkouts) * 100) : null;
+      let score: number | null = null;
+      if (mealPct != null && workoutPct != null) {
+        score = Math.round(mealPct * 0.5 + workoutPct * 0.5);
+      } else if (mealPct != null) {
+        score = mealPct;
+      } else if (workoutPct != null) {
+        score = workoutPct;
+      }
+
+      return res.json({
+        weekStart: startStr,
+        weekEnd: endStr,
+        score,
+        mealsCompleted: completedMeals,
+        mealsTotal: scheduledMeals,
+        workoutsCompleted: completedWorkouts,
+        workoutsTotal: scheduledWorkouts,
+      });
+    } catch (err: any) {
+      log(`Weekly summary error: ${err?.message || err}`, "error");
+      return res.status(500).json({ message: "Failed to compute weekly summary" });
+    }
+  });
+
+  app.get("/api/week-data", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const weekStartParam = req.query.weekStart as string | undefined;
+      const weekStartsOn: 0 | 1 = (req.query.weekStartsOn === "1") ? 1 : 0;
+
+      let weekStart: Date;
+      if (weekStartParam && /^\d{4}-\d{2}-\d{2}$/.test(weekStartParam)) {
+        weekStart = new Date(weekStartParam + "T00:00:00");
+      } else {
+        const now = new Date();
+        const day = now.getDay();
+        const diff = (day < weekStartsOn ? day + 7 - weekStartsOn : day - weekStartsOn);
+        weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - diff);
+        weekStart.setHours(0, 0, 0, 0);
+      }
+
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const startStr = weekStart.toISOString().slice(0, 10);
+      const endStr = weekEnd.toISOString().slice(0, 10);
+
+      const scheduledPlans = await storage.getScheduledPlans(userId);
+      const workoutScheduled = await storage.getScheduledWorkoutPlans(userId);
+      const dailyMeals = await storage.getDailyMealsByDateRange(userId, startStr, endStr);
+      const dailyWorkouts = await storage.getDailyWorkoutsByDateRange(userId, startStr, endStr);
+      const completions = await storage.getCompletionsByDateRange(userId, startStr, endStr);
+
+      const days: any[] = [];
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        const dateStr = d.toISOString().slice(0, 10);
+
+        const meals: Record<string, any> = {};
+        for (const plan of scheduledPlans) {
+          const planJson = plan.planJson as any;
+          const planStart = plan.planStartDate!;
+          if (!planJson?.days) continue;
+          for (let j = 0; j < planJson.days.length; j++) {
+            const dd = new Date(planStart + "T00:00:00");
+            dd.setDate(dd.getDate() + j);
+            if (dd.toISOString().slice(0, 10) === dateStr) {
+              const dayMeals = planJson.days[j]?.meals;
+              if (dayMeals) {
+                for (const [slot, meal] of Object.entries(dayMeals)) {
+                  if (!meals[slot]) meals[slot] = meal;
+                }
+              }
+            }
+          }
+        }
+
+        const dm = dailyMeals.find(m => m.date === dateStr && m.status === "ready");
+        if (dm && dm.planJson) {
+          const dmMeals = (dm.planJson as any)?.meals;
+          if (dmMeals) {
+            for (const [slot, meal] of Object.entries(dmMeals)) {
+              if (!meals[slot]) meals[slot] = meal;
+            }
+          }
+        }
+
+        let workout: any = null;
+        for (const wp of workoutScheduled) {
+          const planJson = wp.planJson as any;
+          const planStart = wp.planStartDate;
+          if (!planStart || !planJson?.days) continue;
+          for (let j = 0; j < planJson.days.length; j++) {
+            const dd = new Date(planStart + "T00:00:00");
+            dd.setDate(dd.getDate() + j);
+            if (dd.toISOString().slice(0, 10) === dateStr && planJson.days[j]?.isWorkoutDay) {
+              workout = planJson.days[j].session || planJson.days[j];
+            }
+          }
+        }
+
+        const dw = dailyWorkouts.find(w => w.date === dateStr && w.status === "ready");
+        if (dw && dw.planJson && !workout) {
+          workout = dw.planJson;
+        }
+
+        const dayCompletions = completions.filter(c => c.date === dateStr);
+
+        days.push({
+          date: dateStr,
+          meals,
+          workout,
+          completions: dayCompletions,
+        });
+      }
+
+      return res.json({ weekStart: startStr, weekEnd: endStr, days });
+    } catch (err: any) {
+      log(`Week data error: ${err?.message || err}`, "error");
+      return res.status(500).json({ message: "Failed to load week data" });
+    }
+  });
+
+  app.get("/api/day-data/:date", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const dateStr = req.params.date;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD" });
+      }
+
+      const meals: Record<string, any> = {};
+      const scheduledPlans = await storage.getScheduledPlans(userId);
+      for (const plan of scheduledPlans) {
+        const planJson = plan.planJson as any;
+        const planStart = plan.planStartDate!;
+        if (!planJson?.days) continue;
+        for (let j = 0; j < planJson.days.length; j++) {
+          const dd = new Date(planStart + "T00:00:00");
+          dd.setDate(dd.getDate() + j);
+          if (dd.toISOString().slice(0, 10) === dateStr) {
+            const dayMeals = planJson.days[j]?.meals;
+            if (dayMeals) {
+              for (const [slot, meal] of Object.entries(dayMeals)) {
+                if (!meals[slot]) meals[slot] = meal;
+              }
+            }
+          }
+        }
+      }
+
+      const dailyMeal = await storage.getDailyMealByDate(userId, dateStr);
+      if (dailyMeal && dailyMeal.status === "ready" && dailyMeal.planJson) {
+        const dmMeals = (dailyMeal.planJson as any)?.meals;
+        if (dmMeals) {
+          for (const [slot, meal] of Object.entries(dmMeals)) {
+            if (!meals[slot]) meals[slot] = meal;
+          }
+        }
+      }
+
+      let workout: any = null;
+      const workoutScheduled = await storage.getScheduledWorkoutPlans(userId);
+      for (const wp of workoutScheduled) {
+        const planJson = wp.planJson as any;
+        const planStart = wp.planStartDate;
+        if (!planStart || !planJson?.days) continue;
+        for (let j = 0; j < planJson.days.length; j++) {
+          const dd = new Date(planStart + "T00:00:00");
+          dd.setDate(dd.getDate() + j);
+          if (dd.toISOString().slice(0, 10) === dateStr && planJson.days[j]?.isWorkoutDay) {
+            workout = planJson.days[j].session || planJson.days[j];
+          }
+        }
+      }
+
+      const dailyWorkout = await storage.getDailyWorkoutByDate(userId, dateStr);
+      if (dailyWorkout && dailyWorkout.status === "ready" && dailyWorkout.planJson && !workout) {
+        workout = dailyWorkout.planJson;
+      }
+
+      const completions = await storage.getCompletionsByDateRange(userId, dateStr, dateStr);
+
+      const coverage = await storage.getDailyMealsByDateRange(userId, dateStr, dateStr);
+      const workoutCoverage = await storage.getDailyWorkoutsByDateRange(userId, dateStr, dateStr);
+
+      return res.json({
+        date: dateStr,
+        meals,
+        workout,
+        completions,
+        hasDailyMeal: coverage.some(m => m.status === "ready"),
+        hasDailyWorkout: workoutCoverage.some(w => w.status === "ready"),
+      });
+    } catch (err: any) {
+      log(`Day data error: ${err?.message || err}`, "error");
+      return res.status(500).json({ message: "Failed to load day data" });
+    }
+  });
+
   app.use("/api/{*path}", (_req: Request, res: Response) => {
     res.status(404).json({ message: "Not found" });
   });
