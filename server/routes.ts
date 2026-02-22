@@ -262,7 +262,7 @@ export async function registerRoutes(
 
   app.post("/api/auth/refresh", async (req: Request, res: Response) => {
     try {
-      const { refreshToken: rawToken } = req.body;
+      const rawToken = req.body?.refreshToken;
       if (!rawToken || typeof rawToken !== "string") {
         return res.status(400).json({ message: "refreshToken is required" });
       }
@@ -311,7 +311,7 @@ export async function registerRoutes(
 
   app.post("/api/auth/token-logout", async (req: Request, res: Response) => {
     try {
-      const { refreshToken: rawToken } = req.body;
+      const rawToken = req.body?.refreshToken;
       if (!rawToken || typeof rawToken !== "string") {
         return res.status(400).json({ message: "refreshToken is required" });
       }
