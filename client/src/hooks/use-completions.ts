@@ -108,6 +108,23 @@ export function useCompletions(startDate: string, endDate: string, enabled = tru
   };
 }
 
+export interface WeeklySummaryData {
+  weekStart: string;
+  weekEnd: string;
+  score: number | null;
+  mealsCompleted: number;
+  mealsTotal: number;
+  workoutsCompleted: number;
+  workoutsTotal: number;
+}
+
+export function useWeeklySummary(weekStartDate: string, enabled = true) {
+  return useQuery<WeeklySummaryData>({
+    queryKey: ["/api/weekly-summary", `?weekStart=${weekStartDate}`],
+    enabled,
+  });
+}
+
 export function useWeeklyAdherence(startDate: string, endDate: string, enabled = true) {
   return useQuery<{
     scheduledMeals: number;
@@ -119,6 +136,26 @@ export function useWeeklyAdherence(startDate: string, endDate: string, enabled =
     overallScore: number | null;
   }>({
     queryKey: ["/api/completions/adherence", `?start=${startDate}&end=${endDate}`],
+    enabled,
+  });
+}
+
+export interface WeekDataDay {
+  date: string;
+  meals: Array<{ slot: string; meal: any; sourceType: string; sourceId: string }>;
+  workouts: Array<{ session: any; sourceType: string; sourceId: string; dayIndex?: number }>;
+  completions: any[];
+}
+
+export interface WeekData {
+  weekStart: string;
+  weekEnd: string;
+  days: WeekDataDay[];
+}
+
+export function useWeekData(weekStartDate: string, enabled = true) {
+  return useQuery<WeekData>({
+    queryKey: ["/api/week-data", `?weekStart=${weekStartDate}`],
     enabled,
   });
 }
