@@ -42,6 +42,7 @@ The `docs/` folder contains a comprehensive documentation pack for rebuilding th
 -   `docs/data-models.md` — TypeScript type definitions for all entities (for Swift replication)
 -   `docs/auth-guide.md` — JWT authentication flow guide with mobile implementation patterns
 -   `docs/mobile-architecture.md` — Screen map, navigation structure, and feature parity guide
+-   `docs/plan-lifecycle.md` — Plan lifecycle guide covering storage, viewing, scheduling, deletion, completions, feedback, allowances, and grocery lists for iOS feature parity
 
 ## External Dependencies
 -   **OpenAI**: Used for generating personalized meal plans and workout programs.
