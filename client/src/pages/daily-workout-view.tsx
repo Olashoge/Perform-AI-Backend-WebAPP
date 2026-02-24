@@ -12,10 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CompletionCheckbox } from "@/components/completion-checkbox";
 import {
   ArrowLeft, Dumbbell, Clock, Loader2, Zap, Timer,
-  ThumbsUp, ThumbsDown, RefreshCw,
+  ThumbsUp, ThumbsDown, RefreshCw, Ban,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 
 interface DailyWorkoutData {
   id: string;
@@ -49,27 +52,71 @@ export default function DailyWorkoutView() {
 
   const { isCompleted, toggle } = useCompletions(params.date!, params.date!, !!workout);
 
-  const [exerciseFeedback, setExerciseFeedback] = useState<Record<string, "like" | "dislike" | null>>({});
+  const { data: exercisePrefData } = useQuery<{ liked: any[]; disliked: any[]; avoided: any[] }>({
+    queryKey: ["/api/preferences/exercise"],
+    enabled: !!user,
+  });
 
-  const feedbackMutation = useMutation({
-    mutationFn: async (data: { sessionKey: string; feedback: "like" | "dislike" | "neutral" }) => {
-      const res = await apiRequest("POST", "/api/feedback/workout", {
-        dayIndex: 0,
-        sessionKey: data.sessionKey,
-        feedback: data.feedback,
-      });
-      return await res.json();
+  const [optimisticExPrefs, setOptimisticExPrefs] = useState<Record<string, "liked" | "disliked" | "avoided" | null>>({});
+
+  const exercisePrefMap = useMemo(() => {
+    const map: Record<string, "liked" | "disliked" | "avoided"> = {};
+    if (exercisePrefData) {
+      for (const item of exercisePrefData.liked) map[item.exerciseKey] = "liked";
+      for (const item of exercisePrefData.disliked) map[item.exerciseKey] = "disliked";
+      for (const item of exercisePrefData.avoided) map[item.exerciseKey] = "avoided";
+    }
+    for (const [k, v] of Object.entries(optimisticExPrefs)) {
+      if (v === null) {
+        delete map[k];
+      } else {
+        map[k] = v;
+      }
+    }
+    return map;
+  }, [exercisePrefData, optimisticExPrefs]);
+
+  const [avoidModalExercise, setAvoidModalExercise] = useState<{ key: string; name: string } | null>(null);
+
+  const exercisePrefMutation = useMutation({
+    mutationFn: async (body: { exerciseKey: string; exerciseName: string; status: "liked" | "disliked" | "avoided" }) => {
+      await apiRequest("POST", "/api/preferences/exercise", body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences/exercise"] });
+    },
+    onError: (_err, variables) => {
+      setOptimisticExPrefs(prev => { const next = { ...prev }; delete next[variables.exerciseKey]; return next; });
+      toast({ title: "Failed to save exercise preference", variant: "destructive" });
     },
   });
 
-  const handleExerciseFeedback = (exerciseName: string, feedback: "like" | "dislike" | "neutral") => {
-    const key = exerciseName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    setExerciseFeedback(prev => ({
-      ...prev,
-      [key]: feedback === "neutral" ? null : feedback,
-    }));
-    feedbackMutation.mutate({ sessionKey: key, feedback });
-  };
+  const exerciseDeletePrefMutation = useMutation({
+    mutationFn: async (key: string) => {
+      await apiRequest("DELETE", `/api/preferences/exercise/key/${encodeURIComponent(key)}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences/exercise"] });
+    },
+    onError: (_err, key) => {
+      setOptimisticExPrefs(prev => { const next = { ...prev }; delete next[key]; return next; });
+      toast({ title: "Failed to remove exercise preference", variant: "destructive" });
+    },
+  });
+
+  const handleExercisePref = useCallback((exerciseKey: string, exerciseName: string, status: "liked" | "disliked" | "neutral") => {
+    if (status === "neutral") {
+      setOptimisticExPrefs(prev => ({ ...prev, [exerciseKey]: null }));
+      exerciseDeletePrefMutation.mutate(exerciseKey);
+      return;
+    }
+    if (status === "disliked") {
+      setAvoidModalExercise({ key: exerciseKey, name: exerciseName });
+      return;
+    }
+    setOptimisticExPrefs(prev => ({ ...prev, [exerciseKey]: "liked" }));
+    exercisePrefMutation.mutate({ exerciseKey, exerciseName, status: "liked" });
+  }, [exercisePrefMutation, exerciseDeletePrefMutation]);
 
   const regenerateMutation = useMutation({
     mutationFn: async () => {
@@ -240,12 +287,19 @@ export default function DailyWorkoutView() {
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Exercises</div>
                 <div className="space-y-3">
                   {session.main.map((ex: any, i: number) => {
-                    const exKey = ex.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                    const fbState = exerciseFeedback[exKey];
+                    const exKey = ex.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+                    const prefStatus = exercisePrefMap[exKey];
+                    const isLiked = prefStatus === "liked";
+                    const isDisliked = prefStatus === "disliked" || prefStatus === "avoided";
                     return (
                       <div key={i} className="flex items-start justify-between border-t pt-3 first:border-t-0 first:pt-0" data-testid={`exercise-${i}`}>
                         <div className="flex-1">
-                          <div className="text-sm font-medium">{ex.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{ex.name}</span>
+                            {prefStatus === "avoided" && (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Avoided</Badge>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             {ex.type && (
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">{ex.type}</Badge>
@@ -262,9 +316,9 @@ export default function DailyWorkoutView() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className={`h-7 w-7 transition-colors duration-200 ${fbState === "like" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400" : "text-muted-foreground"}`}
-                            onClick={() => handleExerciseFeedback(ex.name, fbState === "like" ? "neutral" : "like")}
-                            title={fbState === "like" ? "Remove like" : "Like this exercise"}
+                            className={`h-7 w-7 transition-colors duration-200 ${isLiked ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400" : "text-muted-foreground"}`}
+                            onClick={() => handleExercisePref(exKey, ex.name, isLiked ? "neutral" : "liked")}
+                            title={isLiked ? "Remove like" : "Like this exercise"}
                             data-testid={`button-like-exercise-${i}`}
                           >
                             <ThumbsUp className="h-3 w-3" />
@@ -272,9 +326,9 @@ export default function DailyWorkoutView() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className={`h-7 w-7 transition-colors duration-200 ${fbState === "dislike" ? "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400" : "text-muted-foreground"}`}
-                            onClick={() => handleExerciseFeedback(ex.name, fbState === "dislike" ? "neutral" : "dislike")}
-                            title={fbState === "dislike" ? "Remove dislike" : "Dislike this exercise"}
+                            className={`h-7 w-7 transition-colors duration-200 ${isDisliked ? "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400" : "text-muted-foreground"}`}
+                            onClick={() => handleExercisePref(exKey, ex.name, isDisliked ? "neutral" : "disliked")}
+                            title={isDisliked ? "Remove dislike" : "Dislike this exercise"}
                             data-testid={`button-dislike-exercise-${i}`}
                           >
                             <ThumbsDown className="h-3 w-3" />
@@ -328,6 +382,55 @@ export default function DailyWorkoutView() {
           )}
         </div>
       )}
+
+      <Dialog open={!!avoidModalExercise} onOpenChange={(open) => !open && setAvoidModalExercise(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Avoid this exercise?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            You disliked <span className="font-medium text-foreground">{avoidModalExercise?.name}</span>. Would you like to completely avoid it in future workout plans?
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (avoidModalExercise) {
+                  setOptimisticExPrefs(prev => ({ ...prev, [avoidModalExercise.key]: "disliked" }));
+                  exercisePrefMutation.mutate({
+                    exerciseKey: avoidModalExercise.key,
+                    exerciseName: avoidModalExercise.name,
+                    status: "disliked",
+                  });
+                }
+                setAvoidModalExercise(null);
+              }}
+              data-testid="button-keep-disliked"
+            >
+              Just Dislike
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                if (avoidModalExercise) {
+                  setOptimisticExPrefs(prev => ({ ...prev, [avoidModalExercise.key]: "avoided" }));
+                  exercisePrefMutation.mutate({
+                    exerciseKey: avoidModalExercise.key,
+                    exerciseName: avoidModalExercise.name,
+                    status: "avoided",
+                  });
+                  toast({ title: `${avoidModalExercise.name} will be avoided in future plans` });
+                }
+                setAvoidModalExercise(null);
+              }}
+              data-testid="button-avoid-exercise"
+            >
+              <Ban className="h-4 w-4 mr-1.5" />
+              Avoid Completely
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
