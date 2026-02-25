@@ -1,0 +1,88 @@
+IMPLEMENT: Adaptive “Apply Recovery Week” adjustment (v1) with preview-ready diff output.
+
+GOAL
+When user clicks “Adjust Next Week Plan” on mobile, we will apply a deterministic adjustment to next week, regenerate the plan(s), and return a clear change summary.
+
+Rules:
+- Do NOT add new feature families.
+- Do NOT add sleep/stress data collection.
+- Use existing plan generation + constraint engine patterns.
+- Keep changes deterministic and explainable.
+
+WHAT TO BUILD
+
+1) Add ONE endpoint:
+POST /api/performance/apply-recovery-week
+
+Auth:
+- requireAuth (same as other protected routes)
+
+Request body:
+{
+  "weekStart": "YYYY-MM-DD",        // week being adjusted (based on user’s week view)
+  "activeWellnessPlanId"?: string   // optional, if your app has active plan concept
+}
+
+Response:
+{
+  "status": "ok",
+  "changes": {
+    "training": [
+      { "label": "Training days", "from": 4, "to": 3 },
+      { "label": "Session duration", "from": 60, "to": 45 },
+      { "label": "Intensity focus", "from": "strength", "to": "mobility+strength" }
+    ],
+    "nutrition": [
+      { "label": "Dinner complexity", "from": "standard", "to": "simplified" },
+      { "label": "Meal prep load", "from": "normal", "to": "lower" }
+    ],
+    "reason": [
+      "Performance is declining vs last week.",
+      "No active streak this week.",
+      "Consistency is below threshold."
+    ]
+  },
+  "newPlanIds": {
+    "mealPlanId"?: string,
+    "workoutPlanId"?: string,
+    "wellnessPlanId"?: string
+  }
+}
+
+2) Adjustment logic (simple, deterministic)
+Only run if user’s performanceState.label is "declining" OR "at_risk".
+If not, return 409 with a message: "Recovery week not recommended for current state."
+
+For the target next week plan generation inputs:
+Training:
+- trainingDaysOfWeek: reduce count by 1 (min 2 days)
+  - If user has explicit days list, drop the day with lowest adherence in the current week if available; else drop the last day in list.
+- sessionDuration: reduce by 15 minutes (clamp min 25)
+- focus: if user selected high intensity focus, add mobility emphasis:
+  - set a flag: recoveryMode=true OR trainingModifier="recovery"
+
+Nutrition:
+- add a flag: nutritionSimplicity="high"
+- ensure meal generator chooses simpler recipes (shorter steps / fewer ingredients) using existing prompt/constraints (do not add pricing back)
+
+3) Regeneration target
+Apply the adjustment to the user’s upcoming scheduled wellness plan if one exists. If your system stores an “active plan” concept:
+- Prefer adjusting the active wellness plan for the next week.
+Otherwise:
+- Create a new wellness plan scheduled for the next available 7-day window starting at weekStart (or weekStart + 7 if weekStart is current week), respecting your conflict rules.
+
+4) Persistence
+- Store an “adjustmentApplied” record on the generated plan snapshot:
+  - { type: "recovery_week_v1", appliedAt, basedOnWeekStart }
+So we can audit later.
+
+5) Tests (must run and report)
+- User in declining state: endpoint returns 200, changes object populated, new plans created/scheduled, calendar shows updated week.
+- User not in declining/at_risk: endpoint returns 409.
+- Conflicts: if weekStart collisions occur, return 409 with a clear message.
+- No grocery pricing or regen counters reintroduced.
+
+Deliverables:
+- Files changed
+- Any schema changes (only if absolutely required; prefer no migrations)
+- Example response (keys + sample values)

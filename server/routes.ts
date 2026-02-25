@@ -1697,6 +1697,342 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/performance/apply-recovery-week", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { weekStart, activeWellnessPlanId } = req.body;
+
+      if (!weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+        return res.status(400).json({ message: "weekStart is required (YYYY-MM-DD)" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) {
+        return res.status(429).json({ message: "Daily AI call limit reached (10/day). Try again tomorrow." });
+      }
+
+      const userProfile = await storage.getUserProfile(userId);
+      if (!userProfile) {
+        return res.status(400).json({ message: "Profile is required." });
+      }
+
+      const allMealPlans = await storage.getMealPlansByUser(userId);
+      const allWorkoutPlans = await storage.getWorkoutPlansByUser(userId);
+
+      const weekStartDate = new Date(weekStart + "T00:00:00");
+      const weekEndDate = new Date(weekStartDate);
+      weekEndDate.setDate(weekStartDate.getDate() + 6);
+      const startStr = weekStartDate.toISOString().slice(0, 10);
+      const endStr = weekEndDate.toISOString().slice(0, 10);
+
+      const currentWeek = await computeWeekScore(userId, startStr, endStr, allMealPlans, allWorkoutPlans);
+
+      const priorWeekScores: (number | null)[] = [];
+      for (let w = 3; w >= 1; w--) {
+        const pStart = new Date(weekStartDate);
+        pStart.setDate(weekStartDate.getDate() - w * 7);
+        const pEnd = new Date(pStart);
+        pEnd.setDate(pStart.getDate() + 6);
+        const ps = pStart.toISOString().slice(0, 10);
+        const pe = pEnd.toISOString().slice(0, 10);
+        const wd = await computeWeekScore(userId, ps, pe, allMealPlans, allWorkoutPlans);
+        priorWeekScores.push(wd.score);
+      }
+      priorWeekScores.push(currentWeek.score);
+
+      const validScores = priorWeekScores.filter((s): s is number => s != null);
+      const previousWeekScore = priorWeekScores[2] ?? null;
+      const streakDays = await computeStreakDays(userId, endStr);
+
+      if (currentWeek.score == null) {
+        return res.status(409).json({ message: "No scheduled items for this week. Cannot assess performance state." });
+      }
+
+      const perfInput = {
+        currentWeekOverallScore: currentWeek.score,
+        previousWeekOverallScore: previousWeekScore,
+        last4WeeksOverallScores: validScores.length > 0 ? validScores : [currentWeek.score],
+        streakDays,
+      };
+      const perfState = computePerformanceState(perfInput);
+
+      if (perfState.label !== "declining" && perfState.label !== "at_risk") {
+        return res.status(409).json({
+          message: "Recovery week not recommended for current state.",
+          currentLabel: perfState.label,
+          pcs: perfState.pcs,
+        });
+      }
+
+      let sourceGoalPlan: any = null;
+      if (activeWellnessPlanId) {
+        sourceGoalPlan = await storage.getGoalPlan(activeWellnessPlanId);
+      }
+      if (!sourceGoalPlan) {
+        const goalPlans = await storage.getGoalPlansByUser(userId);
+        const readyPlans = goalPlans.filter(gp => gp.status === "ready" && !gp.deletedAt);
+        if (readyPlans.length > 0) {
+          sourceGoalPlan = readyPlans[0];
+        }
+      }
+
+      if (!sourceGoalPlan) {
+        return res.status(409).json({ message: "No active wellness plan found to base recovery week on." });
+      }
+
+      const targetWeekStart = new Date(weekStartDate);
+      targetWeekStart.setDate(targetWeekStart.getDate() + 7);
+      const targetStartStr = targetWeekStart.toISOString().slice(0, 10);
+      const targetEndDate = new Date(targetWeekStart);
+      targetEndDate.setDate(targetWeekStart.getDate() + 6);
+      const targetEndStr = targetEndDate.toISOString().slice(0, 10);
+
+      const sourceTraining = (sourceGoalPlan.trainingInputs as any) || {};
+      const sourceNutrition = (sourceGoalPlan.nutritionInputs as any) || {};
+
+      const origDays: string[] = sourceTraining.daysOfWeek || ["Mon", "Wed", "Fri"];
+      const origSessionLength: number = sourceTraining.sessionLength || 45;
+      const origTrainingMode: string = sourceTraining.trainingMode || "both";
+
+      const reducedDays = origDays.length > 2 ? origDays.slice(0, origDays.length - 1) : [...origDays];
+      const reducedSessionLength = Math.max(25, origSessionLength - 15);
+
+      let intensityFrom = origTrainingMode;
+      let intensityTo = origTrainingMode;
+      if (origTrainingMode === "strength" || origTrainingMode === "both") {
+        intensityTo = "mobility+strength";
+      }
+
+      const recoveryWorkoutPrefs = {
+        ...sourceTraining,
+        daysOfWeek: reducedDays,
+        sessionLength: reducedSessionLength,
+        trainingMode: intensityTo === "mobility+strength" ? "both" : origTrainingMode,
+        recoveryMode: true,
+      };
+
+      const origPrepStyle: string = sourceNutrition.prepStyle || "cook_daily";
+      const recoveryMealPrefs = {
+        ...sourceNutrition,
+        nutritionSimplicity: "high",
+        cookingTime: "quick",
+        recoveryMode: true,
+      };
+      if (recoveryMealPrefs.goal === "fat_loss") recoveryMealPrefs.goal = "weight_loss";
+
+      const needsWorkout = sourceGoalPlan.planType === "both" || sourceGoalPlan.planType === "workout";
+      const needsMeal = sourceGoalPlan.planType === "both" || sourceGoalPlan.planType === "meal";
+
+      const goalTitle = `Recovery Week · ${targetWeekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+
+      const adaptive = await computeAdaptiveForUser(userId);
+      const planKind: PlanKind = sourceGoalPlan.planType === "both" ? "both" : sourceGoalPlan.planType === "meal" ? "meal" : "workout";
+
+      const [scheduledMealDates, scheduledWorkoutDates] = await Promise.all([
+        storage.getScheduledMealPlanDates(userId),
+        storage.getScheduledWorkoutPlanDates(userId),
+      ]);
+
+      for (let d = 0; d < 7; d++) {
+        const checkDate = new Date(targetWeekStart);
+        checkDate.setDate(targetWeekStart.getDate() + d);
+        const checkStr = checkDate.toISOString().split("T")[0];
+        if ((needsMeal && scheduledMealDates.includes(checkStr)) || (needsWorkout && scheduledWorkoutDates.includes(checkStr))) {
+          return res.status(409).json({ message: `Schedule conflict: ${checkStr} already has a plan. Remove or reschedule the existing plan first.` });
+        }
+      }
+
+      const ruleCtx: RuleContext = {
+        profile: userProfile,
+        planKind,
+        startDate: targetStartStr,
+        mealPreferences: needsMeal ? recoveryMealPrefs : undefined,
+        workoutPreferences: needsWorkout ? recoveryWorkoutPrefs : undefined,
+        existingScheduledMealDates: scheduledMealDates,
+        existingScheduledWorkoutDates: scheduledWorkoutDates,
+      };
+      const constraintResult = evaluateConstraints(ruleCtx);
+      let constraintPromptBlock = buildConstraintPromptBlock(constraintResult.safeSpec, planKind, userProfile.nextWeekPlanBias);
+      constraintPromptBlock += adaptive.promptBlock;
+      constraintPromptBlock += "\n\n[RECOVERY WEEK MODE] This is a recovery/deload week. Reduce intensity and volume. Prioritize mobility, flexibility, and recovery exercises. Keep meals simple with fewer ingredients and shorter prep times.";
+
+      const initialProgress = {
+        stage: needsWorkout ? "TRAINING" : (needsMeal ? "NUTRITION" : "FINALIZING"),
+        stageStatuses: {
+          TRAINING: needsWorkout ? "PENDING" : "SKIPPED",
+          NUTRITION: needsMeal ? "PENDING" : "SKIPPED",
+          SCHEDULING: "PENDING",
+          FINALIZING: "PENDING",
+        },
+      };
+
+      const goalPlan = await storage.createGoalPlanFull(userId, {
+        goalType: sourceGoalPlan.goalType,
+        planType: sourceGoalPlan.planType,
+        startDate: targetStartStr,
+        endDate: targetEndStr,
+        title: goalTitle,
+        globalInputs: {
+          ...(sourceGoalPlan.globalInputs as any || {}),
+          adjustmentApplied: {
+            type: "recovery_week_v1",
+            appliedAt: new Date().toISOString(),
+            basedOnWeekStart: weekStart,
+            performanceLabel: perfState.label,
+            pcs: perfState.pcs,
+          },
+        },
+        nutritionInputs: needsMeal ? recoveryMealPrefs : undefined,
+        trainingInputs: needsWorkout ? recoveryWorkoutPrefs : undefined,
+        status: "generating",
+        progress: initialProgress,
+        profileSnapshot: userProfile,
+        adaptiveSnapshot: adaptive.snapshot,
+      });
+
+      const changes = {
+        training: [] as { label: string; from: any; to: any }[],
+        nutrition: [] as { label: string; from: any; to: any }[],
+        reason: perfState.explanation,
+      };
+
+      if (needsWorkout) {
+        if (origDays.length !== reducedDays.length) {
+          changes.training.push({ label: "Training days", from: origDays.length, to: reducedDays.length });
+        }
+        if (origSessionLength !== reducedSessionLength) {
+          changes.training.push({ label: "Session duration", from: origSessionLength, to: reducedSessionLength });
+        }
+        if (intensityFrom !== intensityTo) {
+          changes.training.push({ label: "Intensity focus", from: intensityFrom, to: intensityTo });
+        }
+      }
+
+      if (needsMeal) {
+        changes.nutrition.push({ label: "Dinner complexity", from: "standard", to: "simplified" });
+        changes.nutrition.push({ label: "Meal prep load", from: origPrepStyle === "cook_daily" ? "normal" : origPrepStyle, to: "lower" });
+      }
+
+      (async () => {
+        try {
+          let workoutPlanId: string | null = null;
+          let mealPlanId: string | null = null;
+
+          const parsedWorkoutForCtx = needsWorkout ? workoutPreferencesSchema.safeParse(recoveryWorkoutPrefs) : null;
+          const parsedMealForCtx = needsMeal ? (() => { const mp = { ...recoveryMealPrefs }; return preferencesSchema.safeParse(mp); })() : null;
+
+          const wellnessCtx = buildWellnessContext({
+            goalType: sourceGoalPlan.goalType,
+            startDate: targetStartStr,
+            endDate: targetEndStr,
+            mealPrefs: parsedMealForCtx?.success ? parsedMealForCtx.data : undefined,
+            workoutPrefs: parsedWorkoutForCtx?.success ? parsedWorkoutForCtx.data : undefined,
+            globalInputs: sourceGoalPlan.globalInputs || undefined,
+          });
+
+          if (needsWorkout) {
+            await storage.updateGoalPlan(goalPlan.id, {
+              progress: { ...initialProgress, stage: "TRAINING", stageStatuses: { ...initialProgress.stageStatuses, TRAINING: "RUNNING" } },
+            });
+
+            const parsedWorkout = workoutPreferencesSchema.safeParse(recoveryWorkoutPrefs);
+            if (!parsedWorkout.success) throw new Error("Invalid recovery workout preferences");
+
+            const wIdempotencyKey = crypto.randomUUID();
+            const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, targetStartStr, userProfile, adaptive.snapshot);
+            workoutPlanId = pendingWorkout.id;
+            await storage.updateGoalPlan(goalPlan.id, { workoutPlanId });
+
+            log(`Recovery gen: generating workout plan ${pendingWorkout.id}`, "openai");
+            const goalPrefContext = await storage.getUserPreferenceContext(userId);
+            const goalExerciseCtx = { avoidedExercises: goalPrefContext.avoidedExercises, dislikedExercises: goalPrefContext.dislikedExercises };
+            const goalFormEquip = (parsedWorkout.data as any).equipmentAvailable as string[] | undefined;
+            const goalWorkoutCtx = buildUserContextForGeneration(userProfile, goalFormEquip && goalFormEquip.length > 0 ? { equipmentAvailable: goalFormEquip } : undefined);
+            const goalConstraintBlock = constraintPromptBlock + goalWorkoutCtx.workoutPromptBlock;
+            const result = await generateWorkoutPlan(parsedWorkout.data, goalExerciseCtx, wellnessCtx, goalConstraintBlock, goalWorkoutCtx.profileExtras);
+
+            await storage.updateWorkoutPlanStatus(pendingWorkout.id, "ready", result);
+            await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingWorkout.id, type: "workout", recovery: true });
+            log(`Recovery gen: workout plan ${pendingWorkout.id} ready`, "openai");
+
+            await storage.updateGoalPlan(goalPlan.id, {
+              progress: {
+                stage: needsMeal ? "NUTRITION" : "SCHEDULING",
+                stageStatuses: { ...initialProgress.stageStatuses, TRAINING: "DONE", ...(needsMeal ? { NUTRITION: "RUNNING" as const } : { SCHEDULING: "RUNNING" as const }) },
+              },
+            });
+          }
+
+          if (needsMeal) {
+            if (!needsWorkout) {
+              await storage.updateGoalPlan(goalPlan.id, {
+                progress: { ...initialProgress, stage: "NUTRITION", stageStatuses: { ...initialProgress.stageStatuses, NUTRITION: "RUNNING" } },
+              });
+            }
+
+            const parsedMeal = preferencesSchema.safeParse(recoveryMealPrefs);
+            if (!parsedMeal.success) throw new Error("Invalid recovery meal preferences");
+
+            const mealIdempotencyKey = crypto.randomUUID();
+            const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, targetStartStr, userProfile, adaptive.snapshot);
+            mealPlanId = pendingMeal.id;
+            await storage.updateGoalPlan(goalPlan.id, { mealPlanId });
+
+            const prefCtx = await storage.getUserPreferenceContext(userId);
+            const workoutDays = parsedMeal.data.workoutDays || undefined;
+            log(`Recovery gen: generating meal plan ${pendingMeal.id}`, "openai");
+            const goalMealCtx = buildUserContextForGeneration(userProfile);
+            const mealConstraintBlock = constraintPromptBlock + goalMealCtx.mealPromptBlock;
+            const planJson = await generateFullPlan(parsedMeal.data, prefCtx, workoutDays, wellnessCtx, mealConstraintBlock, goalMealCtx.profileExtras);
+
+            await storage.updatePlanStatus(pendingMeal.id, "ready", planJson);
+            await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingMeal.id, type: "meal", recovery: true });
+            log(`Recovery gen: meal plan ${pendingMeal.id} ready`, "openai");
+          }
+
+          if (targetStartStr) {
+            if (mealPlanId) await storage.updatePlanStartDate(mealPlanId, targetStartStr);
+            if (workoutPlanId) await storage.updateWorkoutStartDate(workoutPlanId, targetStartStr);
+          }
+
+          await storage.updateGoalPlan(goalPlan.id, {
+            status: "ready",
+            progress: {
+              stage: "FINALIZING",
+              stageStatuses: {
+                TRAINING: needsWorkout ? "DONE" : "SKIPPED",
+                NUTRITION: needsMeal ? "DONE" : "SKIPPED",
+                SCHEDULING: "DONE",
+                FINALIZING: "DONE",
+              },
+            },
+          });
+
+          log(`Recovery gen: goal plan ${goalPlan.id} completed`, "openai");
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          log(`Recovery gen: goal plan ${goalPlan.id} failed: ${errMsg}`, "openai");
+          await storage.updateGoalPlan(goalPlan.id, {
+            status: "failed",
+            progress: { stage: "FAILED", error: errMsg },
+          });
+        }
+      })();
+
+      return res.json({
+        status: "ok",
+        goalPlanId: goalPlan.id,
+        changes,
+        newPlanIds: {
+          wellnessPlanId: goalPlan.id,
+        },
+      });
+    } catch (err: any) {
+      log(`Recovery week error: ${err?.message || err}`, "error");
+      return res.status(500).json({ message: "Failed to apply recovery week" });
+    }
+  });
+
   app.get("/api/ingredient-proposals", requireAuth, async (req: Request, res: Response) => {
     try {
       const proposals = await storage.getPendingProposals(req.userId!);
