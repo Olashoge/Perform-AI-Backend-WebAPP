@@ -1,0 +1,73 @@
+Implement Performance “State Engine v1” using a weighted composite score, and expose it via existing weekly summary/performance endpoints (or add ONE minimal endpoint if necessary). This must be deterministic (no LLM), fast, and used by both web and mobile.
+
+GOAL
+- Compute a new object: performanceState for a given week:
+  - pcs (0..1)
+  - label: "on_track" | "building_momentum" | "recovering" | "at_risk" | "declining"
+  - deltaPoints (currentScore - prevScore)
+  - deltaNorm01
+  - trendSlope (points per week)
+  - trendNorm01
+  - streakDays (existing)
+  - explanation: array of 2–4 short reason strings (rule-based)
+- Return this in the weekly summary payload that Performance tab uses.
+
+INPUTS REQUIRED
+- currentWeekOverallScore (0–100)
+- previousWeekOverallScore (0–100, if missing treat as null)
+- last4WeeksOverallScores array oldest→newest (length 2–4 allowed)
+- streakDays integer
+
+NORMALIZATION (exact math)
+1) Weekly score:
+- weeklyNorm = currentScore / 100
+
+2) Delta (week over week):
+- deltaPoints = currentScore - prevScore
+- DELTA_CLAMP = 25
+- deltaClamped = clamp(deltaPoints, -25, +25)
+- deltaNorm01 = (deltaClamped + 25) / 50
+
+If prevScore missing, set deltaNorm01 = 0.5 and deltaPoints = 0.
+
+3) Trend (4-week slope):
+Given w1,w2,w3,w4 oldest→newest:
+- slope = ( (-1.5*w1) + (-0.5*w2) + (0.5*w3) + (1.5*w4) ) / 5
+If only 3 weeks, compute linear regression slope OR use slopeApprox = (w3 - w1)/2
+If only 2 weeks, slopeApprox = (w2 - w1)
+- SLOPE_CLAMP = 10
+- slopeClamped = clamp(slope, -10, +10)
+- trendNorm01 = (slopeClamped + 10) / 20
+
+4) Streak:
+- streakNorm01 = min(streakDays, 7) / 7
+
+COMPOSITE
+PCS = 0.45*weeklyNorm + 0.25*deltaNorm01 + 0.20*trendNorm01 + 0.10*streakNorm01
+
+STATE LABEL MAPPING
+- pcs >= 0.75 -> on_track
+- 0.60–0.749 -> building_momentum
+- 0.45–0.599 -> recovering
+- 0.30–0.449 -> at_risk
+- < 0.30 -> declining
+
+EXPLANATION STRINGS (rule-based)
+Return 2–4 bullet strings such as:
+- If deltaPoints < -10: "Performance dropped vs last week."
+- If deltaPoints > 10: "Performance improved vs last week."
+- If trendSlope < -3: "4-week trend is declining."
+- If trendSlope > 3: "4-week trend is improving."
+- If currentScore < 40: "Overall adherence is low this week."
+- If streakDays >= 5: "You have momentum from a strong streak."
+
+IMPLEMENTATION
+- Create a utility: lib/performanceState.ts (or server/utils/...)
+- Add unit-like checks (simple tests or assertions) for edge cases.
+- Wire into the weekly summary/performance endpoint used by Dashboard/Performance tab.
+- Update docs/api-reference.md to document performanceState.
+
+DELIVERABLES
+- Files changed
+- Endpoint payload example (keys only)
+- Confirm web still works and no extra DB tables added

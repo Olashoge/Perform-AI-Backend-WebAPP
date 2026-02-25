@@ -12,6 +12,7 @@ import { evaluateConstraints, buildConstraintPromptBlock } from "./constraints/e
 import { postValidateMealPlan, postValidateWorkoutPlan } from "./constraints/post-validation";
 import type { RuleContext, PlanKind } from "./constraints/types";
 import { computeWeeklySummary } from "./performance/computeWeeklySummary";
+import { computePerformanceState, type PerformanceStateInput } from "./performance/performanceState";
 import { computeAdaptiveModifiers, buildAdaptivePromptBlock, computeWeeklyAdaptation } from "./adaptive";
 import type { AdaptiveSnapshot, AdaptiveInputs } from "./adaptive";
 import { buildUserContextForGeneration, type ContextOverrides } from "./context-builder";
@@ -2352,6 +2353,99 @@ export async function registerRoutes(
 
   // ── Mobile Aggregation Routes ──
 
+  async function computeWeekScore(
+    userId: string,
+    startStr: string,
+    endStr: string,
+    allMealPlans: any[],
+    allWorkoutPlans: any[],
+  ): Promise<{ scheduledMeals: number; scheduledWorkouts: number; completedMeals: number; completedWorkouts: number; mealPct: number | null; workoutPct: number | null; score: number | null }> {
+    let scheduledMeals = 0;
+    let scheduledWorkouts = 0;
+
+    for (const mp of allMealPlans) {
+      if (!mp.planStartDate || mp.deletedAt) continue;
+      const plan = mp.planJson as any;
+      if (!plan?.days) continue;
+      for (let d = 0; d < (plan.days.length || 7); d++) {
+        const dayDate = new Date(mp.planStartDate + "T00:00:00");
+        dayDate.setDate(dayDate.getDate() + d);
+        const ds = dayDate.toISOString().split("T")[0];
+        if (ds >= startStr && ds <= endStr) {
+          const dayMeals = plan.days[d]?.meals;
+          if (dayMeals) scheduledMeals += Object.keys(dayMeals).length;
+        }
+      }
+    }
+
+    for (const wp of allWorkoutPlans) {
+      if (!wp.planStartDate || wp.deletedAt) continue;
+      const plan = wp.planJson as any;
+      if (!plan?.days) continue;
+      for (let d = 0; d < plan.days.length; d++) {
+        const day = plan.days[d];
+        if (!day || day.isWorkoutDay === false) continue;
+        const dayDate = new Date(wp.planStartDate + "T00:00:00");
+        dayDate.setDate(dayDate.getDate() + d);
+        const ds = dayDate.toISOString().split("T")[0];
+        if (ds >= startStr && ds <= endStr) scheduledWorkouts++;
+      }
+    }
+
+    const dailyMeals = await storage.getDailyMealsByDateRange(userId, startStr, endStr);
+    for (const dm of dailyMeals) {
+      if (dm.status !== "ready" || !dm.planJson) continue;
+      const meals = (dm.planJson as any)?.meals;
+      if (meals) scheduledMeals += Object.keys(meals).length;
+    }
+
+    const dailyWorkouts = await storage.getDailyWorkoutsByDateRange(userId, startStr, endStr);
+    for (const dw of dailyWorkouts) {
+      if (dw.status !== "ready" || !dw.planJson) continue;
+      scheduledWorkouts++;
+    }
+
+    const completions = await storage.getCompletionsByDateRange(userId, startStr, endStr);
+    const completedMeals = completions.filter(c => c.itemType === "meal" && c.completed).length;
+    const completedWorkouts = completions.filter(c => c.itemType === "workout" && c.completed).length;
+
+    const mealPct = scheduledMeals > 0 ? Math.round((completedMeals / scheduledMeals) * 100) : null;
+    const workoutPct = scheduledWorkouts > 0 ? Math.round((completedWorkouts / scheduledWorkouts) * 100) : null;
+    let score: number | null = null;
+    if (mealPct != null && workoutPct != null) {
+      score = Math.round(mealPct * 0.5 + workoutPct * 0.5);
+    } else if (mealPct != null) {
+      score = mealPct;
+    } else if (workoutPct != null) {
+      score = workoutPct;
+    }
+
+    return { scheduledMeals, scheduledWorkouts, completedMeals, completedWorkouts, mealPct, workoutPct, score };
+  }
+
+  async function computeStreakDays(userId: string, endDate: string): Promise<number> {
+    const end = new Date(endDate + "T00:00:00");
+    let streak = 0;
+    for (let i = 0; i < 30; i++) {
+      const checkDate = new Date(end);
+      checkDate.setDate(end.getDate() - i);
+      const ds = checkDate.toISOString().split("T")[0];
+      const dayCompletions = await storage.getCompletionsByDateRange(userId, ds, ds);
+      const hasScheduled = dayCompletions.length > 0;
+      if (!hasScheduled) {
+        if (i === 0) continue;
+        break;
+      }
+      const allCompleted = dayCompletions.every(c => c.completed);
+      if (allCompleted) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
   app.get("/api/weekly-summary", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2375,83 +2469,57 @@ export async function registerRoutes(
       const startStr = weekStart.toISOString().slice(0, 10);
       const endStr = weekEnd.toISOString().slice(0, 10);
 
-      let scheduledMeals = 0;
-      let scheduledWorkouts = 0;
+      const allMealPlans = await storage.getMealPlansByUser(userId);
+      const allWorkoutPlans = await storage.getWorkoutPlansByUser(userId);
 
-      const mealPlans = await storage.getMealPlansByUser(userId);
-      for (const mp of mealPlans) {
-        if (!mp.planStartDate || mp.deletedAt) continue;
-        const plan = mp.planJson as any;
-        if (!plan?.days) continue;
-        for (let d = 0; d < (plan.days.length || 7); d++) {
-          const dayDate = new Date(mp.planStartDate + "T00:00:00");
-          dayDate.setDate(dayDate.getDate() + d);
-          const ds = dayDate.toISOString().split("T")[0];
-          if (ds >= startStr && ds <= endStr) {
-            const dayMeals = plan.days[d]?.meals;
-            if (dayMeals) scheduledMeals += Object.keys(dayMeals).length;
-          }
-        }
+      const current = await computeWeekScore(userId, startStr, endStr, allMealPlans, allWorkoutPlans);
+
+      const priorWeekScores: (number | null)[] = [];
+      for (let w = 3; w >= 1; w--) {
+        const pStart = new Date(weekStart);
+        pStart.setDate(weekStart.getDate() - w * 7);
+        const pEnd = new Date(pStart);
+        pEnd.setDate(pStart.getDate() + 6);
+        const ps = pStart.toISOString().slice(0, 10);
+        const pe = pEnd.toISOString().slice(0, 10);
+        const weekData = await computeWeekScore(userId, ps, pe, allMealPlans, allWorkoutPlans);
+        priorWeekScores.push(weekData.score);
       }
+      priorWeekScores.push(current.score);
 
-      const workoutPlans = await storage.getWorkoutPlansByUser(userId);
-      for (const wp of workoutPlans) {
-        if (!wp.planStartDate || wp.deletedAt) continue;
-        const plan = wp.planJson as any;
-        if (!plan?.days) continue;
-        for (let d = 0; d < plan.days.length; d++) {
-          const day = plan.days[d];
-          if (!day || day.isWorkoutDay === false) continue;
-          const dayDate = new Date(wp.planStartDate + "T00:00:00");
-          dayDate.setDate(dayDate.getDate() + d);
-          const ds = dayDate.toISOString().split("T")[0];
-          if (ds >= startStr && ds <= endStr) scheduledWorkouts++;
-        }
-      }
+      const validScores = priorWeekScores.filter((s): s is number => s != null);
 
-      const dailyMeals = await storage.getDailyMealsByDateRange(userId, startStr, endStr);
-      for (const dm of dailyMeals) {
-        if (dm.status !== "ready" || !dm.planJson) continue;
-        const meals = (dm.planJson as any)?.meals;
-        if (meals) scheduledMeals += Object.keys(meals).length;
-      }
+      const previousWeekScore = priorWeekScores[2] ?? null;
 
-      const dailyWorkouts = await storage.getDailyWorkoutsByDateRange(userId, startStr, endStr);
-      for (const dw of dailyWorkouts) {
-        if (dw.status !== "ready" || !dw.planJson) continue;
-        scheduledWorkouts++;
-      }
+      const streakDays = await computeStreakDays(userId, endStr);
 
-      const completions = await storage.getCompletionsByDateRange(userId, startStr, endStr);
-      const completedMeals = completions.filter(c => c.itemType === "meal" && c.completed).length;
-      const completedWorkouts = completions.filter(c => c.itemType === "workout" && c.completed).length;
-
-      const mealPct = scheduledMeals > 0 ? Math.round((completedMeals / scheduledMeals) * 100) : null;
-      const workoutPct = scheduledWorkouts > 0 ? Math.round((completedWorkouts / scheduledWorkouts) * 100) : null;
-      let score: number | null = null;
-      if (mealPct != null && workoutPct != null) {
-        score = Math.round(mealPct * 0.5 + workoutPct * 0.5);
-      } else if (mealPct != null) {
-        score = mealPct;
-      } else if (workoutPct != null) {
-        score = workoutPct;
+      let performanceState = null;
+      if (current.score != null) {
+        const input: PerformanceStateInput = {
+          currentWeekOverallScore: current.score,
+          previousWeekOverallScore: previousWeekScore,
+          last4WeeksOverallScores: validScores.length > 0 ? validScores : [current.score],
+          streakDays,
+        };
+        performanceState = computePerformanceState(input);
       }
 
       return res.json({
         weekStart: startStr,
         weekEnd: endStr,
-        score,
-        overallScore: score,
-        mealsCompleted: completedMeals,
-        mealsTotal: scheduledMeals,
-        workoutsCompleted: completedWorkouts,
-        workoutsTotal: scheduledWorkouts,
-        scheduledMeals,
-        completedMeals,
-        scheduledWorkouts,
-        completedWorkouts,
-        mealPct: mealPct,
-        workoutPct: workoutPct,
+        score: current.score,
+        overallScore: current.score,
+        mealsCompleted: current.completedMeals,
+        mealsTotal: current.scheduledMeals,
+        workoutsCompleted: current.completedWorkouts,
+        workoutsTotal: current.scheduledWorkouts,
+        scheduledMeals: current.scheduledMeals,
+        completedMeals: current.completedMeals,
+        scheduledWorkouts: current.scheduledWorkouts,
+        completedWorkouts: current.completedWorkouts,
+        mealPct: current.mealPct,
+        workoutPct: current.workoutPct,
+        performanceState,
       });
     } catch (err: any) {
       log(`Weekly summary error: ${err?.message || err}`, "error");

@@ -21,6 +21,7 @@ All endpoints return JSON. Dates use `YYYY-MM-DD` format. IDs are UUIDs.
 - [Calendar](#calendar)
 - [Ingredient Proposals](#ingredient-proposals)
 - [Check-ins](#check-ins)
+- [Weekly Summary (with Performance State)](#weekly-summary-with-performance-state)
 - [Performance](#performance)
 - [Weekly Adaptation](#weekly-adaptation)
 - [Daily Planning](#daily-planning)
@@ -1255,6 +1256,68 @@ Submit a weekly check-in.
 Get check-ins, optionally filtered by goal plan.
 
 **Response (200):** Array of check-in objects.
+
+---
+
+## Weekly Summary (with Performance State)
+
+> **Protected** — requires `Authorization: Bearer <accessToken>`
+
+### GET /api/weekly-summary
+
+Unified weekly summary including adherence data and the deterministic Performance State Engine v1.
+
+| Query Param    | Type   | Required | Notes                                |
+|----------------|--------|----------|--------------------------------------|
+| `weekStart`    | string | No       | `YYYY-MM-DD` (defaults to current week) |
+| `weekStartsOn` | `0\|1` | No       | `0` = Sunday (default), `1` = Monday |
+
+**Response (200):**
+```json
+{
+  "weekStart": "2026-02-22",
+  "weekEnd": "2026-02-28",
+  "score": 65,
+  "overallScore": 65,
+  "mealsCompleted": 12,
+  "mealsTotal": 14,
+  "workoutsCompleted": 2,
+  "workoutsTotal": 3,
+  "scheduledMeals": 14,
+  "completedMeals": 12,
+  "scheduledWorkouts": 3,
+  "completedWorkouts": 2,
+  "mealPct": 86,
+  "workoutPct": 67,
+  "performanceState": {
+    "pcs": 0.73,
+    "label": "building_momentum",
+    "deltaPoints": 15,
+    "deltaNorm01": 0.8,
+    "trendSlope": 5.5,
+    "trendNorm01": 0.775,
+    "streakDays": 4,
+    "explanation": [
+      "Performance improved vs last week.",
+      "4-week trend is improving.",
+      "Strong adherence this week."
+    ]
+  }
+}
+```
+
+**performanceState** is `null` when `overallScore` is `null` (no scheduled items).
+
+**Label mapping:**
+| PCS Range   | Label               |
+|-------------|---------------------|
+| ≥ 0.75      | `on_track`          |
+| 0.60–0.749  | `building_momentum` |
+| 0.45–0.599  | `recovering`        |
+| 0.30–0.449  | `at_risk`           |
+| < 0.30      | `declining`         |
+
+**PCS formula:** `0.45 × weeklyNorm + 0.25 × deltaNorm01 + 0.20 × trendNorm01 + 0.10 × streakNorm01`
 
 ---
 
