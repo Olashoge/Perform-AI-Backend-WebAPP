@@ -16,8 +16,7 @@ const TIMEOUT_MS = 2 * 60 * 1000;
 const TIMELINE_STAGES = [
   { label: "Building your meal plan...", minSec: 0 },
   { label: "Compiling your grocery list...", minSec: 20 },
-  { label: "Estimating prices...", minSec: 40 },
-  { label: "Syncing everything together...", minSec: 60 },
+  { label: "Syncing everything together...", minSec: 40 },
 ];
 
 const TIPS = [

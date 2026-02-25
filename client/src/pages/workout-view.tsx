@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays } from "date-fns";
-import { AllowancePanel } from "@/components/allowance-panel";
+
 import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
 import { CompletionCheckbox } from "@/components/completion-checkbox";
 import { useCompletions } from "@/hooks/use-completions";
@@ -405,7 +405,6 @@ export default function WorkoutView() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workout", id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/allowance"] });
       toast({ title: "Session regenerated" });
       setRegeneratingDay(null);
     },
@@ -614,10 +613,6 @@ export default function WorkoutView() {
             </Badge>
           )}
         </div>
-      </div>
-
-      <div className="mb-6">
-        <AllowancePanel />
       </div>
 
       {plan && (plan.adaptiveSnapshot as AdaptiveSnapshot | null) && (

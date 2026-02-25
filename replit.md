@@ -15,11 +15,11 @@ Key features include:
 -   **Personalized Plan Generation**: AI-generated 7-day meal and workout plans based on user profiles and preferences. Meal plans are configurable for 2 or 3 meals daily, and workout plans consider various factors like goals, location, and experience.
 -   **Goal-Oriented Planning**: A `GoalPlan` entity manages the sequential generation of workout and meal plans, supporting diverse fitness goals.
 -   **Feedback Loop & Adaption**: Users can provide tri-state feedback on meals and workouts, influencing future AI-generated plans and tracking preferences.
--   **Grocery Management**: AI-estimated grocery pricing, dynamic grocery lists, and tracking of owned items.
+-   **Grocery Management**: Dynamic grocery lists and tracking of owned items.
 -   **Scheduling & Calendar**: Plans are schedulable with conflict awareness and displayed in a unified calendar view.
 -   **Wellness Context**: A shared server-side `WellnessContext` ensures nutritional adaptation based on workout schedules.
 -   **Check-ins**: Weekly logging for weight, energy, compliance, and notes.
--   **Adaptive Swap/Regen Economy**: A dynamic allowance system for meal swaps and plan regens, with adaptive bonuses/penalties based on user behavior.
+-   **Unlimited Swaps & Regens**: Meal swaps, day regenerations, and workout session regenerations are unlimited with no budget or cooldown restrictions.
 -   **Profile (Performance Blueprint)**: A mandatory, comprehensive user profile capturing physical stats, goals, health conditions, training capacity, nutrition preferences, and equipment availability. This profile is a single source of truth for AI generation.
 -   **Constraint Engine v1**: A deterministic layer for pre-checking user profiles against safety rules and post-validating AI output, ensuring adherence to constraints.
 -   **Performance Core v1**: A weekly performance summary system triggered by check-ins, computing adherence scores, momentum states, insights, and adjustment actions that influence future AI prompts.
@@ -42,7 +42,7 @@ The `docs/` folder contains a comprehensive documentation pack for rebuilding th
 -   `docs/data-models.md` — TypeScript type definitions for all entities (for Swift replication)
 -   `docs/auth-guide.md` — JWT authentication flow guide with mobile implementation patterns
 -   `docs/mobile-architecture.md` — Screen map, navigation structure, and feature parity guide
--   `docs/plan-lifecycle.md` — Plan lifecycle guide covering storage, viewing, scheduling, deletion, completions, feedback, allowances, and grocery lists for iOS feature parity
+-   `docs/plan-lifecycle.md` — Plan lifecycle guide covering storage, viewing, scheduling, deletion, completions, feedback, and grocery lists for iOS feature parity
 
 ## External Dependencies
 -   **OpenAI**: Used for generating personalized meal plans and workout programs.

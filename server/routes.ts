@@ -3,12 +3,11 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type GroceryPricing, type WorkoutPlanOutput } from "@shared/schema";
-import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateGroceryPricing, generateWorkoutPlan, generateWorkoutSession, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput } from "@shared/schema";
+import { generateFullPlan, generateSwapMeal, generateDayMeals, rebuildGroceryList, generateWorkoutPlan, generateWorkoutSession, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import { buildWellnessContext } from "./wellness-context";
-import { checkMealSwapAllowed, checkMealRegenAllowed, recordMealSwap, recordMealRegen, checkWorkoutRegenAllowed, recordWorkoutRegen, getAllowanceState, redeemFlexToken, createAllowanceForGoalPlan, computeBehaviorSummary } from "./allowance";
 import { evaluateConstraints, buildConstraintPromptBlock } from "./constraints/engine";
 import { postValidateMealPlan, postValidateWorkoutPlan } from "./constraints/post-validation";
 import type { RuleContext, PlanKind } from "./constraints/types";
@@ -64,22 +63,6 @@ async function computeAdaptiveForUser(userId: string, pace?: string | null): Pro
   return { snapshot, promptBlock };
 }
 
-async function runGroceryPricing(planId: string, planJson: PlanOutput, prefs: Preferences): Promise<void> {
-  try {
-    await storage.updatePricingStatus(planId, "pending");
-    log(`Generating grocery pricing for plan ${planId}`, "openai");
-    const pricing = await generateGroceryPricing(
-      planJson.groceryList.sections,
-      prefs.householdSize,
-      prefs.prepStyle,
-    );
-    await storage.updateGroceryPricing(planId, pricing);
-    log(`Grocery pricing generated for plan ${planId}`, "openai");
-  } catch (err) {
-    await storage.updatePricingStatus(planId, "failed");
-    log(`Grocery pricing failed for plan ${planId}: ${err instanceof Error ? err.message : String(err)}`, "openai");
-  }
-}
 
 function requireAuth(req: Request, res: Response, next: Function) {
   const authHeader = req.headers.authorization;
@@ -456,7 +439,6 @@ export async function registerRoutes(
           await storage.updatePlanStatus(pendingPlan.id, "ready", planJson);
           await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingPlan.id });
           log(`Plan ${pendingPlan.id} generated successfully`, "openai");
-          await runGroceryPricing(pendingPlan.id, planJson, parsed.data);
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           log(`Plan generation error for ${pendingPlan.id}: ${errMsg}`, "openai");
@@ -474,7 +456,7 @@ export async function registerRoutes(
     if (!plan || plan.userId !== req.userId || plan.deletedAt) {
       return res.status(404).json({ message: "Plan not found" });
     }
-    return res.json({ id: plan.id, status: plan.status, pricingStatus: plan.pricingStatus });
+    return res.json({ id: plan.id, status: plan.status });
   });
 
   app.get("/api/plan/:id", requireAuth, async (req: Request, res: Response) => {
@@ -516,15 +498,6 @@ export async function registerRoutes(
 
       const userId = req.userId!;
 
-      const { allowance, result: swapCheck } = await checkMealSwapAllowed(userId, plan.id);
-      if (!swapCheck.allowed) {
-        return res.status(403).json({ message: swapCheck.reason, nextResetAt: swapCheck.nextResetAt });
-      }
-
-      if (!allowance && plan.swapCount >= 3) {
-        return res.status(403).json({ message: "Maximum swaps (3) reached for this plan" });
-      }
-
       const aiCalls = await storage.getAiCallCountToday(userId);
       if (aiCalls >= 10) {
         return res.status(429).json({ message: "Daily AI call limit reached" });
@@ -553,15 +526,7 @@ export async function registerRoutes(
 
       (day.meals as any)[mealType] = newMeal;
       const updated = await storage.updateMealPlanJson(plan.id, planJson);
-      await storage.incrementSwapCount(plan.id);
       await storage.logAction(userId, "ai_call_swap_meal", { planId: plan.id, dayIndex, mealType });
-
-      if (allowance) {
-        await recordMealSwap(allowance, userId, { planId: plan.id, dayIndex, mealType });
-      }
-
-      await storage.updateGroceryPricing(plan.id, null);
-      runGroceryPricing(plan.id, planJson, prefs).catch(() => {});
 
       return res.json(updated);
     } catch (err) {
@@ -578,19 +543,6 @@ export async function registerRoutes(
       }
 
       const userId = req.userId!;
-
-      const { allowance, result: regenCheck } = await checkMealRegenAllowed(userId, plan.id);
-      if (!regenCheck.allowed) {
-        return res.status(403).json({
-          message: regenCheck.reason,
-          cooldownMinutesRemaining: regenCheck.cooldownMinutesRemaining,
-          nextResetAt: regenCheck.nextResetAt,
-        });
-      }
-
-      if (!allowance && plan.regenDayCount >= 1) {
-        return res.status(403).json({ message: "Maximum day regenerations (1) reached for this plan" });
-      }
 
       const aiCalls = await storage.getAiCallCountToday(userId);
       if (aiCalls >= 10) {
@@ -615,15 +567,7 @@ export async function registerRoutes(
       }
 
       const updated = await storage.updateMealPlanJson(plan.id, planJson);
-      await storage.incrementRegenDayCount(plan.id);
       await storage.logAction(userId, "ai_call_regen_day", { planId: plan.id, dayIndex });
-
-      if (allowance) {
-        await recordMealRegen(allowance, userId, { planId: plan.id, dayIndex });
-      }
-
-      await storage.updateGroceryPricing(plan.id, null);
-      runGroceryPricing(plan.id, planJson, prefs).catch(() => {});
 
       return res.json(updated);
     } catch (err) {
@@ -750,9 +694,6 @@ export async function registerRoutes(
 
       const updated = await storage.updateMealPlanJson(plan.id, planJson);
 
-      await storage.updateGroceryPricing(plan.id, null);
-      runGroceryPricing(plan.id, planJson, prefs).catch(() => {});
-
       return res.json(updated);
     } catch (err) {
       log(`Grocery rebuild error: ${err}`, "openai");
@@ -769,35 +710,15 @@ export async function registerRoutes(
 
       const userId = req.userId!;
       const planJson = plan.planJson as PlanOutput;
-      const pricing = plan.groceryPricingJson as GroceryPricing | null;
       const ownedItems = await storage.getOwnedGroceryItems(userId, plan.id);
       const ownedMap: Record<string, boolean> = {};
       for (const item of ownedItems) {
         ownedMap[item.itemKey] = item.isOwned === 1;
       }
 
-      let totalMin = 0, totalMax = 0, ownedAdjustedMin = 0, ownedAdjustedMax = 0;
-      if (pricing?.items) {
-        for (const pi of pricing.items) {
-          totalMin += pi.estimatedRange.min;
-          totalMax += pi.estimatedRange.max;
-          if (!ownedMap[pi.itemKey]) {
-            ownedAdjustedMin += pi.estimatedRange.min;
-            ownedAdjustedMax += pi.estimatedRange.max;
-          }
-        }
-      }
-
       return res.json({
         groceryList: planJson?.groceryList || { sections: [] },
-        pricing: pricing || null,
         ownedItems: ownedMap,
-        totals: {
-          totalMin: Math.round(totalMin * 100) / 100,
-          totalMax: Math.round(totalMax * 100) / 100,
-          ownedAdjustedMin: Math.round(ownedAdjustedMin * 100) / 100,
-          ownedAdjustedMax: Math.round(ownedAdjustedMax * 100) / 100,
-        },
       });
     } catch (err) {
       log(`Grocery fetch error: ${err}`, "openai");
@@ -1214,15 +1135,6 @@ export async function registerRoutes(
 
       const userId = req.userId!;
 
-      const { allowance, result: regenCheck } = await checkWorkoutRegenAllowed(userId, plan.id);
-      if (!regenCheck.allowed) {
-        return res.status(403).json({
-          message: regenCheck.reason,
-          cooldownMinutesRemaining: regenCheck.cooldownMinutesRemaining,
-          nextResetAt: regenCheck.nextResetAt,
-        });
-      }
-
       const aiCalls = await storage.getAiCallCountToday(userId);
       if (aiCalls >= 10) {
         return res.status(429).json({ message: "Daily AI call limit reached" });
@@ -1257,10 +1169,6 @@ export async function registerRoutes(
 
       const updated = await storage.updateWorkoutPlanStatus(plan.id, plan.status, updatedPlanJson);
       await storage.logAction(userId, "ai_call_regen_workout_session", { planId: plan.id, dayIndex });
-
-      if (allowance) {
-        await recordWorkoutRegen(allowance, userId, { planId: plan.id, dayIndex });
-      }
 
       return res.json(updated);
     } catch (err) {
@@ -1627,7 +1535,6 @@ export async function registerRoutes(
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingMeal.id, type: "meal" });
             log(`Goal gen: meal plan ${pendingMeal.id} ready`, "openai");
 
-            runGroceryPricing(pendingMeal.id, finalMealJson, parsedMeal.data).catch(() => {});
           }
 
           await storage.updateGoalPlan(goalPlan.id, {
@@ -1675,13 +1582,6 @@ export async function registerRoutes(
               },
             },
           });
-
-          try {
-            await createAllowanceForGoalPlan(userId, goalPlan.id, validStartDate || undefined);
-            log(`Goal gen: allowance created for goal plan ${goalPlan.id}`, "openai");
-          } catch (allowanceErr) {
-            log(`Goal gen: allowance creation failed for ${goalPlan.id}: ${allowanceErr}`, "openai");
-          }
 
           log(`Goal gen: goal plan ${goalPlan.id} completed`, "openai");
         } catch (err) {
@@ -1793,33 +1693,6 @@ export async function registerRoutes(
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ message: "Failed to delete goal plan" });
-    }
-  });
-
-  app.get("/api/allowance/current", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const mealPlanId = req.query.mealPlanId as string | undefined;
-      const state = await getAllowanceState(userId, mealPlanId);
-      if (!state) {
-        return res.json(null);
-      }
-      return res.json(state);
-    } catch (err) {
-      return res.status(500).json({ message: "Failed to get allowance state" });
-    }
-  });
-
-  app.post("/api/allowance/redeem-flex-token", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const result = await redeemFlexToken(userId);
-      if (!result.success) {
-        return res.status(400).json({ message: result.message });
-      }
-      return res.json(result);
-    } catch (err) {
-      return res.status(500).json({ message: "Failed to redeem flex token" });
     }
   });
 

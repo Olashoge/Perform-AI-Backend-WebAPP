@@ -26,12 +26,11 @@ import {
   AlertCircle, Zap, Dumbbell, Heart, Trophy, Activity,
   ThumbsUp, ThumbsDown, CalendarIcon, MoreVertical, Trash2,
   CalendarPlus, CalendarMinus, CalendarClock, ArrowLeft,
-  Repeat, RotateCcw, Timer, Sparkles, Gift, Info,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { AllowancePanel } from "@/components/allowance-panel";
+
 import { AdaptiveInsightsCard } from "@/components/adaptive-insights-card";
 import { CompletionCheckbox } from "@/components/completion-checkbox";
 import { useCompletions } from "@/hooks/use-completions";
@@ -60,12 +59,11 @@ function generateMealFingerprint(mealName: string, cuisineTag: string, ingredien
   return `${namePart}|${cuisinePart}|${proteinPart}`;
 }
 
-function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, onFeedback, dateStr, isCompleted, onToggleCompletion }: {
+function MealCard({ meal, dayIndex, mealType, planId, feedbackState, onFeedback, dateStr, isCompleted, onToggleCompletion }: {
   meal: Meal;
   dayIndex: number;
   mealType: string;
   planId: string;
-  swapCount: number;
   feedbackState?: "like" | "dislike" | null;
   onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
   dateStr: string | null;
@@ -87,14 +85,12 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
       queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/week-data") || k?.startsWith("/api/weekly-summary"); }});
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/workouts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/allowance/current", planId] });
       toast({ title: "Meal swapped successfully" });
     },
     onError: (err: Error) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/allowance/current", planId] });
       toast({
         title: "Swap failed",
-        description: err.message?.includes("403") ? "You've used all your swaps for today." : "Failed to swap meal. Please try again.",
+        description: "Failed to swap meal. Please try again.",
         variant: "destructive",
       });
     },
@@ -181,8 +177,8 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
                     e.stopPropagation();
                     swapMutation.mutate();
                   }}
-                  disabled={swapMutation.isPending || swapCount >= 3}
-                  title={swapCount >= 3 ? "No swaps remaining" : "Swap this meal"}
+                  disabled={swapMutation.isPending}
+                  title="Swap this meal"
                   data-testid={`button-swap-${dayIndex}-${mealType}`}
                 >
                   {swapMutation.isPending ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
@@ -236,11 +232,9 @@ function MealCard({ meal, dayIndex, mealType, planId, swapCount, feedbackState, 
   );
 }
 
-function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedback, planStartDate, checkCompleted, onToggle }: {
+function DayCard({ day, planId, feedbackMap, onFeedback, planStartDate, checkCompleted, onToggle }: {
   day: Day;
   planId: string;
-  swapCount: number;
-  regenDayCount: number;
   feedbackMap: Record<string, "like" | "dislike" | null>;
   onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
   planStartDate?: string | null;
@@ -260,14 +254,12 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
       queryClient.invalidateQueries({ predicate: (q) => { const k = q.queryKey[0] as string; return k?.startsWith("/api/week-data") || k?.startsWith("/api/weekly-summary"); }});
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/workouts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/allowance/current", planId] });
       toast({ title: `${day.dayName} regenerated successfully` });
     },
     onError: (err: Error) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/allowance/current", planId] });
       toast({
         title: "Regeneration failed",
-        description: err.message?.includes("403") ? "You've reached the regen limit. Check your budget panel." : "Failed to regenerate day. Please try again.",
+        description: "Failed to regenerate day. Please try again.",
         variant: "destructive",
       });
     },
@@ -297,8 +289,8 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
           variant="outline"
           size="sm"
           onClick={() => regenDayMutation.mutate()}
-          disabled={regenDayMutation.isPending || regenDayCount >= 1}
-          title={regenDayCount >= 1 ? "No day regenerations remaining" : "Regenerate this day"}
+          disabled={regenDayMutation.isPending}
+          title="Regenerate this day"
           data-testid={`button-regen-day-${day.dayIndex}`}
         >
           {regenDayMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
@@ -319,7 +311,6 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
               dayIndex={day.dayIndex}
               mealType={mealType}
               planId={planId}
-              swapCount={swapCount}
               feedbackState={feedbackMap[fp] || null}
               onFeedback={onFeedback}
               dateStr={dayDateStr}
@@ -335,9 +326,7 @@ function DayCard({ day, planId, swapCount, regenDayCount, feedbackMap, onFeedbac
 
 interface GroceryData {
   groceryList: { sections: { name: string; items: { item: string; quantity: string; notes?: string }[] }[] };
-  pricing: { currency: string; assumptions: { note: string }; items: { itemKey: string; displayName: string; unitHint: string; estimatedRange: { min: number; max: number }; confidence: string }[] } | null;
   ownedItems: Record<string, boolean>;
-  totals: { totalMin: number; totalMax: number; ownedAdjustedMin: number; ownedAdjustedMax: number };
 }
 
 function normalizeItemKeyClient(item: string): string {
@@ -350,18 +339,9 @@ function normalizeItemKeyClient(item: string): string {
 
 function GroceryListView({ planId }: { planId: string }) {
   const { toast } = useToast();
-  const [pollCount, setPollCount] = useState(0);
 
   const { data: groceryData, isLoading: groceryLoading } = useQuery<GroceryData>({
     queryKey: ["/api/plan", planId, "grocery"],
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (data && !data.pricing && pollCount < 10) {
-        setPollCount(c => c + 1);
-        return 3000;
-      }
-      return false;
-    },
   });
 
   const [localOwned, setLocalOwned] = useState<Record<string, boolean>>({});
@@ -391,7 +371,6 @@ function GroceryListView({ planId }: { planId: string }) {
       return await res.json();
     },
     onSuccess: () => {
-      setPollCount(0);
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId] });
       queryClient.invalidateQueries({ queryKey: ["/api/plan", planId, "grocery"] });
       queryClient.invalidateQueries({ queryKey: ["/api/calendar/all"] });
@@ -411,32 +390,6 @@ function GroceryListView({ planId }: { planId: string }) {
     ownedMutation.mutate({ itemKey, isOwned: newVal });
   };
 
-  const pricingMap: Record<string, { min: number; max: number }> = {};
-  if (groceryData?.pricing?.items) {
-    for (const pi of groceryData.pricing.items) {
-      pricingMap[pi.itemKey] = pi.estimatedRange;
-    }
-  }
-
-  const computedTotals = (() => {
-    if (!groceryData?.pricing?.items) return groceryData?.totals || { totalMin: 0, totalMax: 0, ownedAdjustedMin: 0, ownedAdjustedMax: 0 };
-    let totalMin = 0, totalMax = 0, adjMin = 0, adjMax = 0;
-    for (const pi of groceryData.pricing.items) {
-      totalMin += pi.estimatedRange.min;
-      totalMax += pi.estimatedRange.max;
-      if (!mergedOwned[pi.itemKey]) {
-        adjMin += pi.estimatedRange.min;
-        adjMax += pi.estimatedRange.max;
-      }
-    }
-    return {
-      totalMin: Math.round(totalMin * 100) / 100,
-      totalMax: Math.round(totalMax * 100) / 100,
-      ownedAdjustedMin: Math.round(adjMin * 100) / 100,
-      ownedAdjustedMax: Math.round(adjMax * 100) / 100,
-    };
-  })();
-
   if (groceryLoading) {
     return (
       <div className="space-y-4">
@@ -447,7 +400,6 @@ function GroceryListView({ planId }: { planId: string }) {
   }
 
   const sections = groceryData?.groceryList?.sections || [];
-  const hasPricing = !!groceryData?.pricing;
 
   return (
     <div className="space-y-4">
@@ -468,41 +420,6 @@ function GroceryListView({ planId }: { planId: string }) {
         </Button>
       </div>
 
-      {hasPricing ? (
-        <Card data-testid="card-grocery-totals">
-          <CardContent className="p-4 sm:p-5 space-y-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-sm font-medium">Estimated Total</span>
-              <span className="text-sm font-semibold" data-testid="text-total-range">
-                ${computedTotals.totalMin.toFixed(2)} – ${computedTotals.totalMax.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-sm font-medium">After Owned Items</span>
-              <span className="text-sm font-semibold text-primary" data-testid="text-adjusted-range">
-                ${computedTotals.ownedAdjustedMin.toFixed(2)} – ${computedTotals.ownedAdjustedMax.toFixed(2)}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground" data-testid="text-pricing-note">
-              {groceryData?.pricing?.assumptions?.note || "Estimates vary by brand and store."}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-4 sm:p-5 flex items-center gap-2">
-            {pollCount < 10 ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                <span className="text-sm text-muted-foreground" data-testid="text-pricing-loading">Estimating prices...</span>
-              </>
-            ) : (
-              <span className="text-sm text-muted-foreground" data-testid="text-pricing-unavailable">Price estimates unavailable</span>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {sections.map((section) => (
         <Card key={section.name}>
           <CardHeader className="p-4 sm:p-5 pb-2">
@@ -513,7 +430,6 @@ function GroceryListView({ planId }: { planId: string }) {
               {section.items.map((item, i) => {
                 const itemKey = normalizeItemKeyClient(item.item);
                 const isOwned = mergedOwned[itemKey] || false;
-                const priceRange = pricingMap[itemKey];
                 return (
                   <li key={`${section.name}-${i}`} className="flex items-center gap-3 p-3" data-testid={`grocery-item-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}>
                     <Checkbox
@@ -527,9 +443,6 @@ function GroceryListView({ planId }: { planId: string }) {
                       <span className="text-muted-foreground"> — {item.quantity}</span>
                       {item.notes && <span className="text-xs text-muted-foreground ml-1">({item.notes})</span>}
                     </div>
-                    <span className="text-xs shrink-0 tabular-nums text-muted-foreground/70" data-testid={`text-price-${section.name.toLowerCase().replace(/\s+/g, "-")}-${i}`}>
-                      {isOwned ? "$0" : priceRange ? `$${priceRange.min.toFixed(2)}–$${priceRange.max.toFixed(2)}` : ""}
-                    </span>
                   </li>
                 );
               })}
@@ -763,8 +676,6 @@ export default function PlanView() {
 
   const planStatus = (data as any)?.status as string | undefined;
   const plan = planStatus === "ready" ? (data?.planJson as PlanOutput | undefined) : undefined;
-  const swapCount = data?.swapCount ?? 0;
-  const regenDayCount = data?.regenDayCount ?? 0;
   const prefs = data?.preferencesJson as any | undefined;
 
   const handlePrint = () => {
@@ -784,11 +695,6 @@ export default function PlanView() {
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back to Goal Summary
         </Button>
-      )}
-      {plan && params.id && (
-        <div className="mb-6 print:hidden">
-          <AllowancePanel planId={params.id} />
-        </div>
       )}
       {plan && (plan.adaptiveSnapshot as AdaptiveSnapshot | null) && (
         <div className="mb-6 print:hidden">
@@ -1052,14 +958,6 @@ export default function PlanView() {
                           <span className="font-medium capitalize">{prefs.authenticityMode === "weeknight" ? "Weeknight Easy" : prefs.authenticityMode}</span>
                         </div>
                       )}
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="text-muted-foreground">Swaps remaining:</span>
-                        <span className="font-medium">{3 - swapCount}/3</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="text-muted-foreground">Day regens remaining:</span>
-                        <span className="font-medium">{1 - regenDayCount}/1</span>
-                      </div>
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
@@ -1084,8 +982,6 @@ export default function PlanView() {
                     key={day.dayIndex}
                     day={day}
                     planId={params.id!}
-                    swapCount={swapCount}
-                    regenDayCount={regenDayCount}
                     feedbackMap={mergedFeedback}
                     onFeedback={handleFeedback}
                     planStartDate={data?.planStartDate}

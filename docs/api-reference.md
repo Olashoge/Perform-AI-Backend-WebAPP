@@ -19,7 +19,6 @@ All endpoints return JSON. Dates use `YYYY-MM-DD` format. IDs are UUIDs.
 - [Exercise Preferences](#exercise-preferences)
 - [Goal Plans](#goal-plans)
 - [Calendar](#calendar)
-- [Allowance System](#allowance-system)
 - [Ingredient Proposals](#ingredient-proposals)
 - [Check-ins](#check-ins)
 - [Performance](#performance)
@@ -379,14 +378,11 @@ Poll plan generation status.
 ```json
 {
   "id": "plan-uuid-...",
-  "status": "ready",
-  "pricingStatus": "pending"
+  "status": "ready"
 }
 ```
 
 `status` values: `"pending"`, `"generating"`, `"ready"`, `"failed"`
-
-`pricingStatus` values: `"pending"`, `"ready"`, `"failed"`
 
 ---
 
@@ -449,9 +445,7 @@ Get the full plan object including generated meals, grocery list, and nutrition 
     }
   },
   "preferencesJson": { ... },
-  "planStartDate": "2026-03-01",
-  "swapCount": 0,
-  "regenDayCount": 0
+  "planStartDate": "2026-03-01"
 }
 ```
 
@@ -493,7 +487,9 @@ Swap a single meal in a plan for a new AI-generated alternative.
 
 **Response (200):** Updated plan object.
 
-**Errors:** `403` swap limit reached, `429` daily AI limit.
+Swaps are unlimited. No budget or allowance checks are performed.
+
+**Errors:** `429` daily AI limit.
 
 ---
 
@@ -511,7 +507,9 @@ Regenerate all meals for a specific day.
 
 **Response (200):** Updated plan object.
 
-**Errors:** `403` regeneration limit reached, `429` daily AI limit.
+Day regenerations are unlimited. No budget or allowance checks are performed.
+
+**Errors:** `429` daily AI limit.
 
 ---
 
@@ -537,7 +535,7 @@ Update the plan's start date.
 
 ### GET /api/plan/:id/grocery
 
-Get the grocery list with pricing and ownership status.
+Get the grocery list with ownership status.
 
 **Response (200):**
 
@@ -553,21 +551,7 @@ Get the grocery list with pricing and ownership status.
       }
     ]
   },
-  "pricing": {
-    "currency": "USD",
-    "assumptions": { "region": "US Average", "pricingType": "retail", "note": "..." },
-    "items": [
-      {
-        "itemKey": "spinach",
-        "displayName": "Spinach",
-        "unitHint": "bag",
-        "estimatedRange": { "min": 2.50, "max": 4.00 },
-        "confidence": "high"
-      }
-    ]
-  },
-  "ownedItems": ["spinach"],
-  "totals": { ... }
+  "ownedItems": ["spinach"]
 }
 ```
 
@@ -1194,35 +1178,6 @@ Get available and occupied dates for scheduling.
 
 ---
 
-## Allowance System
-
-> **Protected** — requires `Authorization: Bearer <accessToken>`
-
-Tracks swap/regeneration budgets for goal-based plans.
-
-### GET /api/allowance/current?mealPlanId=
-
-Get the current allowance state. Pass `mealPlanId` to find the allowance associated with a specific meal plan's goal.
-
-**Response (200):** Allowance state object or `null` if no allowance exists.
-
----
-
-### POST /api/allowance/redeem-flex-token
-
-Redeem a flex token for additional regenerations.
-
-**Response (200):**
-
-```json
-{
-  "success": true,
-  "message": "Flex token redeemed successfully"
-}
-```
-
----
-
 ## Ingredient Proposals
 
 > **Protected** — requires `Authorization: Bearer <accessToken>`
@@ -1557,10 +1512,10 @@ POST /api/plan
   → 200 { id: "abc", status: "pending", ... }
 
 GET /api/plan/abc/status     (poll every 2-3s)
-  → 200 { id: "abc", status: "generating", pricingStatus: "pending" }
+  → 200 { id: "abc", status: "generating" }
 
 GET /api/plan/abc/status     (poll again)
-  → 200 { id: "abc", status: "ready", pricingStatus: "pending" }
+  → 200 { id: "abc", status: "ready" }
 
 GET /api/plan/abc            (fetch full plan)
   → 200 { id: "abc", status: "ready", planJson: { ... }, ... }
@@ -1583,10 +1538,11 @@ GET /api/plan/abc            (fetch full plan)
 | Resource             | Limit                          | Scope     | Status Code |
 |----------------------|--------------------------------|-----------|-------------|
 | AI generation calls  | 10 per day                     | Per user  | `429`       |
-| Meal swaps           | 3 per plan (or allowance-based)| Per plan  | `403`       |
-| Day regenerations    | 1 per plan (or allowance-based)| Per plan  | `403`       |
+| Meal swaps           | Unlimited                      | —         | —           |
+| Day regenerations    | Unlimited                      | —         | —           |
+| Workout session regens | Unlimited                    | —         | —           |
 
-When a goal plan with an allowance is active, swap and regeneration limits are managed by the allowance system instead of the per-plan defaults.
+Swaps and regenerations have no budget or allowance limits. Only the global daily AI call limit applies.
 
 ---
 

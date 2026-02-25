@@ -21,8 +21,7 @@
 8. [Calendar & Completions](#calendar--completions)
 9. [Performance & Adaptation](#performance--adaptation)
 10. [Feedback & Preferences](#feedback--preferences)
-11. [Allowances & Economy](#allowances--economy)
-12. [Adaptive Engine](#adaptive-engine)
+11. [Adaptive Engine](#adaptive-engine)
 
 ---
 
@@ -163,16 +162,12 @@ interface MealPlan {
   userId: string;                                      // FK → users.id
   idempotencyKey: string | null;
   status: "pending" | "generating" | "ready" | "failed";  // default: "ready"
-  pricingStatus: "pending" | "ready" | "failed";       // default: "pending"
   createdAt: Date;                                     // auto
   startedAt: Date | null;
   completedAt: Date | null;
   errorMessage: string | null;
   preferencesJson: Preferences;                        // JSON — see below
   planJson: PlanOutput | null;                         // JSON — see below
-  swapCount: number;                                   // default: 0
-  regenDayCount: number;                               // default: 0
-  groceryPricingJson: GroceryPricing | null;           // JSON — see below
   profileSnapshot: object | null;                      // JSON — frozen profile at generation time
   adaptiveSnapshot: object | null;                     // JSON — frozen adaptive state
   planStartDate: string | null;                        // YYYY-MM-DD
@@ -288,37 +283,6 @@ interface GroceryItem {
   item: string;
   quantity: string;
   notes?: string;
-}
-```
-
-### GroceryPricing
-
-Stored in `MealPlan.groceryPricingJson`.
-
-```ts
-interface GroceryPricing {
-  currency: string;                                    // e.g. "USD"
-  assumptions: {
-    region: string;
-    pricingType: string;
-    note: string;
-  };
-  items: GroceryPricingItem[];
-}
-```
-
-### GroceryPricingItem
-
-```ts
-interface GroceryPricingItem {
-  itemKey: string;
-  displayName: string;
-  unitHint: string;
-  estimatedRange: {
-    min: number;
-    max: number;
-  };
-  confidence: "low" | "medium" | "high";
 }
 ```
 
@@ -772,109 +736,6 @@ interface UserPreferenceContext {
   preferIngredients: string[];
   avoidedExercises: string[];
   dislikedExercises: string[];
-}
-```
-
----
-
-## Allowances & Economy
-
-### PlanAllowance
-
-Database table: `plan_allowances`
-
-```ts
-interface PlanAllowance {
-  id: string;                                          // auto — UUID
-  userId: string;                                      // FK → users.id
-  goalPlanId: string;                                  // FK → goal_plans.id
-  startDate: string | null;                            // YYYY-MM-DD
-  endDate: string | null;                              // YYYY-MM-DD
-
-  // Base limits (per day unless noted)
-  baseMealSwapsPerDay: number;                         // default: 2
-  baseWorkoutSwapsPerDay: number;                      // default: 2
-  baseMealDayRegensPerDay: number;                     // default: 1
-  baseWorkoutDayRegensPerDay: number;                  // default: 1
-  basePlanRegensTotal: number;                         // default: 5 (lifetime of the plan)
-
-  // Bonus (earned via good adherence)
-  bonusMealSwapsPerDay: number;                        // default: 0
-  bonusWorkoutSwapsPerDay: number;                     // default: 0
-  bonusPlanRegensTotal: number;                        // default: 0
-
-  // Penalty (deducted for poor adherence)
-  penaltyPlanRegensTotal: number;                      // default: 0
-
-  // Usage counters (reset daily)
-  mealSwapsUsedToday: number;                          // default: 0
-  workoutSwapsUsedToday: number;                       // default: 0
-  mealRegensUsedToday: number;                         // default: 0
-  workoutRegensUsedToday: number;                      // default: 0
-  regensUsedTotal: number;                             // default: 0 (cumulative)
-
-  lastDailyResetAt: Date;                              // auto
-  regenCooldownUntil: Date | null;
-  createdAt: Date;                                     // auto
-  updatedAt: Date;                                     // auto
-}
-```
-
-### PlanUsageEvent
-
-Database table: `plan_usage_events`
-
-```ts
-interface PlanUsageEvent {
-  id: string;                                          // auto — UUID
-  userId: string;                                      // FK → users.id
-  goalPlanId: string;                                  // FK → goal_plans.id
-  domain: string;                                      // "meal" | "workout"
-  actionType: string;                                  // "swap" | "regen"
-  scope: string;                                       // "day" | "plan"
-  occurredAt: Date;                                    // auto
-  metadataJson: object | null;                         // JSON
-}
-```
-
-### FlexToken
-
-Database table: `flex_tokens`
-
-```ts
-interface FlexToken {
-  id: string;                                          // auto — UUID
-  userId: string;                                      // FK → users.id
-  goalPlanId: string;                                  // FK → goal_plans.id
-  tokenType: string;                                   // default: "EXTRA_REGEN"
-  quantity: number;                                     // default: 1
-  expiresAt: Date;
-  consumedAt: Date | null;
-  createdAt: Date;                                     // auto
-}
-```
-
-### PlanBehaviorSummary
-
-Database table: `plan_behavior_summaries`
-
-```ts
-interface PlanBehaviorSummary {
-  id: string;                                          // auto — UUID
-  userId: string;                                      // FK → users.id
-  goalPlanId: string;                                  // FK → goal_plans.id
-  mealAdherenceAvg: number | null;                     // float
-  workoutAdherenceAvg: number | null;                  // float
-  combinedAdherence: number | null;                    // float
-  regenRate: number | null;                            // float
-  dislikedRateMeals: number | null;                    // float
-  dislikedRateWorkouts: number | null;                 // float
-  avoidedIngredientsCount: number | null;              // int
-  avoidedExercisesCount: number | null;                // int
-  streakDays: number | null;                           // int
-  resultingBonusJson: object | null;                   // JSON
-  resultingPenaltyJson: object | null;                 // JSON
-  computedAt: Date;                                    // auto
 }
 ```
 

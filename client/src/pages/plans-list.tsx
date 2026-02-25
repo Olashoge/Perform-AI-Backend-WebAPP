@@ -16,7 +16,7 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
-import { AllowancePanel } from "@/components/allowance-panel";
+
 
 type PlanLifecycleStatus = "draft" | "scheduled" | "active" | "completed";
 
@@ -113,10 +113,6 @@ export default function PlansList() {
             </Link>
           )}
         </div>
-      </div>
-
-      <div className="mb-6">
-        <AllowancePanel />
       </div>
 
       <div className="mb-4">

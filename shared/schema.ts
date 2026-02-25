@@ -15,16 +15,12 @@ export const mealPlans = pgTable("meal_plans", {
   userId: varchar("user_id").notNull().references(() => users.id),
   idempotencyKey: varchar("idempotency_key"),
   status: varchar("status", { length: 20 }).notNull().default("ready"),
-  pricingStatus: varchar("pricing_status", { length: 20 }).notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
   errorMessage: text("error_message"),
   preferencesJson: jsonb("preferences_json").notNull(),
   planJson: jsonb("plan_json"),
-  swapCount: integer("swap_count").default(0).notNull(),
-  regenDayCount: integer("regen_day_count").default(0).notNull(),
-  groceryPricingJson: jsonb("grocery_pricing_json"),
   profileSnapshot: jsonb("profile_snapshot"),
   adaptiveSnapshot: jsonb("adaptive_snapshot"),
   planStartDate: varchar("plan_start_date", { length: 10 }),
@@ -265,24 +261,6 @@ export const planOutputSchema = z.object({
   }),
 });
 
-export const groceryPricingItemSchema = z.object({
-  itemKey: z.string(),
-  displayName: z.string(),
-  unitHint: z.string(),
-  estimatedRange: z.object({ min: z.number(), max: z.number() }),
-  confidence: z.enum(["low", "medium", "high"]),
-});
-
-export const groceryPricingSchema = z.object({
-  currency: z.string(),
-  assumptions: z.object({
-    region: z.string(),
-    pricingType: z.string(),
-    note: z.string(),
-  }),
-  items: z.array(groceryPricingItemSchema),
-});
-
 export const workoutPreferencesSchema = z.object({
   goal: z.enum(["weight_loss", "muscle_gain", "performance", "maintenance"]),
   location: z.enum(["gym", "home", "outdoors"]).or(z.literal("")),
@@ -412,9 +390,6 @@ export type Meal = z.infer<typeof mealSchema>;
 export type Day = z.infer<typeof daySchema>;
 export type GrocerySection = z.infer<typeof grocerySectionSchema>;
 export type GroceryItem = z.infer<typeof groceryItemSchema>;
-export type GroceryPricing = z.infer<typeof groceryPricingSchema>;
-export type GroceryPricingItem = z.infer<typeof groceryPricingItemSchema>;
-
 export type WorkoutPlan = typeof workoutPlans.$inferSelect;
 export type WorkoutPreferences = z.infer<typeof workoutPreferencesSchema>;
 export type WorkoutPlanOutput = z.infer<typeof workoutPlanOutputSchema>;
@@ -441,72 +416,6 @@ export const exercisePreferenceSchema = z.object({
   exerciseKey: z.string(),
   exerciseName: z.string(),
   status: z.enum(["liked", "disliked", "avoided"]),
-});
-
-export const planAllowances = pgTable("plan_allowances", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  goalPlanId: varchar("goal_plan_id").notNull().references(() => goalPlans.id),
-  startDate: varchar("start_date", { length: 10 }),
-  endDate: varchar("end_date", { length: 10 }),
-  baseMealSwapsPerDay: integer("base_meal_swaps_per_day").notNull().default(2),
-  baseWorkoutSwapsPerDay: integer("base_workout_swaps_per_day").notNull().default(2),
-  baseMealDayRegensPerDay: integer("base_meal_day_regens_per_day").notNull().default(1),
-  baseWorkoutDayRegensPerDay: integer("base_workout_day_regens_per_day").notNull().default(1),
-  basePlanRegensTotal: integer("base_plan_regens_total").notNull().default(5),
-  bonusMealSwapsPerDay: integer("bonus_meal_swaps_per_day").notNull().default(0),
-  bonusWorkoutSwapsPerDay: integer("bonus_workout_swaps_per_day").notNull().default(0),
-  bonusPlanRegensTotal: integer("bonus_plan_regens_total").notNull().default(0),
-  penaltyPlanRegensTotal: integer("penalty_plan_regens_total").notNull().default(0),
-  mealSwapsUsedToday: integer("meal_swaps_used_today").notNull().default(0),
-  workoutSwapsUsedToday: integer("workout_swaps_used_today").notNull().default(0),
-  mealRegensUsedToday: integer("meal_regens_used_today").notNull().default(0),
-  workoutRegensUsedToday: integer("workout_regens_used_today").notNull().default(0),
-  regensUsedTotal: integer("regens_used_total").notNull().default(0),
-  lastDailyResetAt: timestamp("last_daily_reset_at").defaultNow().notNull(),
-  regenCooldownUntil: timestamp("regen_cooldown_until"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const planUsageEvents = pgTable("plan_usage_events", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  goalPlanId: varchar("goal_plan_id").notNull().references(() => goalPlans.id),
-  domain: varchar("domain", { length: 10 }).notNull(),
-  actionType: varchar("action_type", { length: 10 }).notNull(),
-  scope: varchar("scope", { length: 10 }).notNull(),
-  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
-  metadataJson: jsonb("metadata_json"),
-});
-
-export const flexTokens = pgTable("flex_tokens", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  goalPlanId: varchar("goal_plan_id").notNull().references(() => goalPlans.id),
-  tokenType: varchar("token_type", { length: 20 }).notNull().default("EXTRA_REGEN"),
-  quantity: integer("quantity").notNull().default(1),
-  expiresAt: timestamp("expires_at").notNull(),
-  consumedAt: timestamp("consumed_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const planBehaviorSummaries = pgTable("plan_behavior_summaries", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  goalPlanId: varchar("goal_plan_id").notNull().references(() => goalPlans.id),
-  mealAdherenceAvg: real("meal_adherence_avg"),
-  workoutAdherenceAvg: real("workout_adherence_avg"),
-  combinedAdherence: real("combined_adherence"),
-  regenRate: real("regen_rate"),
-  dislikedRateMeals: real("disliked_rate_meals"),
-  dislikedRateWorkouts: real("disliked_rate_workouts"),
-  avoidedIngredientsCount: integer("avoided_ingredients_count"),
-  avoidedExercisesCount: integer("avoided_exercises_count"),
-  streakDays: integer("streak_days"),
-  resultingBonusJson: jsonb("resulting_bonus_json"),
-  resultingPenaltyJson: jsonb("resulting_penalty_json"),
-  computedAt: timestamp("computed_at").defaultNow().notNull(),
 });
 
 export const userProfiles = pgTable("user_profiles", {
@@ -587,11 +496,6 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
 
 export type InsertUserProfile = z.infer<typeof insertUserProfileSchema>;
 export type UserProfile = typeof userProfiles.$inferSelect;
-
-export type PlanAllowance = typeof planAllowances.$inferSelect;
-export type PlanUsageEvent = typeof planUsageEvents.$inferSelect;
-export type FlexToken = typeof flexTokens.$inferSelect;
-export type PlanBehaviorSummary = typeof planBehaviorSummaries.$inferSelect;
 
 export const constraintViolations = pgTable("constraint_violations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

@@ -18,7 +18,6 @@ This document describes how wellness plans (GoalPlans, MealPlans, WorkoutPlans) 
 - [Soft Deletion](#soft-deletion)
 - [Completion Tracking](#completion-tracking)
 - [Feedback & Preference Learning](#feedback--preference-learning)
-- [Allowance System (Swaps & Regens)](#allowance-system-swaps--regens)
 - [Meal Swap Flow](#meal-swap-flow)
 - [Workout Session Regeneration](#workout-session-regeneration)
 - [Grocery List](#grocery-list)
@@ -40,7 +39,6 @@ MealPlan (standalone or linked to a GoalPlan)
 ├── preferencesJson → user preferences at generation time
 ├── planStartDate (YYYY-MM-DD, nullable — independent of GoalPlan.startDate)
 ├── status: "generating" | "ready" | "failed"
-├── swapCount, regenDayCount (mutation counters)
 └── deletedAt (soft delete timestamp)
 
 WorkoutPlan (standalone or linked to a GoalPlan)
@@ -244,7 +242,6 @@ interface MealEntry {
 interface GroceryItem {
     item: string;
     quantity: string;
-    estimatedPrice: number;  // USD
     owned?: boolean;
 }
 ```
@@ -609,43 +606,10 @@ Body: {
 
 ---
 
-## Allowance System (Swaps & Regens)
-
-The allowance system controls how many swaps (meals) and regenerations (workouts) a user can perform.
-
-### Check Current Allowance
-```
-GET /api/allowance/current?mealPlanId={planId}
-→ {
-    mealSwapsRemaining: 2,
-    workoutRegensRemaining: 1,
-    flexTokensAvailable: 3,
-    cooldownMinutesRemaining: 0,
-    nextResetAt: "2026-03-16T00:00:00.000Z",
-    dailyBudget: { mealSwaps: 3, workoutRegens: 2 }
-} | null (if no allowance record exists)
-```
-
-### Redeem Flex Token
-```
-POST /api/allowance/redeem-flex-token
-→ { success: true, message: "..." }
-```
-Flex tokens provide extra swaps/regens beyond the daily budget.
-
-### Rate Limiting
-All AI-powered operations (swaps, regens, plan generation) count toward a daily limit of 10 AI calls per user.
-```
-When limit reached → 429 { message: "Daily AI call limit reached" }
-```
-
----
-
 ## Meal Swap Flow
 
 1. User taps swap button on a specific meal
-2. Client checks allowance: `GET /api/allowance/current?mealPlanId={planId}`
-3. If allowed, calls:
+2. Call the swap endpoint:
 ```
 POST /api/plan/:id/swap
 Body: {
@@ -654,26 +618,25 @@ Body: {
 }
 → MealPlan (updated with new meal in that slot)
 ```
-4. If not allowed due to budget exhaustion → show "No swaps remaining" with option to redeem a flex token
-5. If not allowed due to cooldown → show remaining cooldown time
-6. On success, invalidate the plan query and show the new meal
+3. On success, invalidate the plan query and show the new meal
 
-Legacy fallback: If no allowance record exists, the swap count on the plan itself is checked (`plan.swapCount >= 3` blocks the swap).
+Swaps are unlimited — no budget or allowance checks are needed.
 
 ---
 
 ## Workout Session Regeneration
 
 1. User taps regenerate on a workout session
-2. Client checks allowance
-3. If allowed:
+2. Call the regenerate endpoint:
 ```
 POST /api/workout/:id/regenerate-session
 Body: { dayIndex: 3 }   // 1-7, must be a workout day (not rest day)
 → WorkoutPlan (updated with new session for that day)
 ```
-4. The new session respects exercise preferences (avoided/disliked exercises are excluded)
-5. On success, invalidate the workout plan query
+3. The new session respects exercise preferences (avoided/disliked exercises are excluded)
+4. On success, invalidate the workout plan query
+
+Workout session regenerations are unlimited — no budget or allowance checks are needed.
 
 ---
 
@@ -685,20 +648,19 @@ Grocery data lives inside `planJson.groceryList`:
 interface GroceryItem {
     item: string;           // "Chicken breast"
     quantity: string;       // "2 lbs"
-    estimatedPrice: number; // 8.99
     owned?: boolean;        // user marks items they already have
 }
 ```
 
 ### Update owned status
 ```
-PATCH /api/plan/:id/grocery
-Body: { groceryList: GroceryItem[] }  // full replacement
-→ MealPlan (updated)
+POST /api/plan/:id/grocery/owned
+Body: { itemKey: "chicken-breast", isOwned: true }
+→ { ok: true }
 ```
 
-### Grocery summary
-The web app shows total estimated cost with a breakdown, highlighting owned items in a different style (struck-through or dimmed).
+### Grocery display
+The web app shows the grocery list with checkboxes for marking items as owned. Owned items are displayed in a different style (struck-through or dimmed).
 
 ---
 
