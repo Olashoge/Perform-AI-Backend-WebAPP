@@ -10,6 +10,7 @@ All endpoints return JSON. Dates use `YYYY-MM-DD` format. IDs are UUIDs.
 
 - [Authentication](#authentication)
 - [Auth Check](#auth-check)
+- [Account Deletion](#account-deletion)
 - [Profile](#profile)
 - [Meal Plans](#meal-plans)
 - [Grocery](#grocery)
@@ -190,6 +191,44 @@ Returns the authenticated user's identity.
 ```
 
 **Errors:** `401` not authenticated or token expired.
+
+---
+
+## Account Deletion
+
+### DELETE /api/me
+
+> **Protected** — requires `Authorization: Bearer <accessToken>`
+
+Permanently deletes the authenticated user's account and all associated data (plans, preferences, feedback, check-ins, completions, profile, sessions, etc.). This action is irreversible.
+
+**Response (200):**
+
+```json
+{
+  "success": true
+}
+```
+
+**Errors:**
+
+| Code | HTTP | Message |
+|------|------|---------|
+| `AUTH_REQUIRED` | 401 | Your session expired. Please log in again. |
+| `USER_NOT_FOUND` | 404 | Account not found. |
+| `SERVER_ERROR` | 500 | Something went wrong on our side. Please try again. |
+
+All error responses share the shape:
+
+```json
+{
+  "success": false,
+  "code": "SOME_CODE",
+  "message": "Human readable message"
+}
+```
+
+**Tables deleted (in order):** activityCompletions, dailyWorkouts, dailyMeals, weeklyAdaptations, performanceSummaries, wellnessPlanSpecs, constraintViolations, weeklyCheckIns, exercisePreferences, ingredientAvoidProposals, workoutFeedback, mealFeedback, ingredientPreferences, ownedGroceryItems, refreshTokens, goalPlans, workoutPlans, mealPlans, auditLogs, userProfiles, user_sessions, users.
 
 ---
 

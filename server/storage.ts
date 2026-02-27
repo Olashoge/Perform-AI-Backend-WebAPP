@@ -1,5 +1,5 @@
-import { eq, desc, and, gte, isNull, lt, lte } from "drizzle-orm";
-import { db } from "./db";
+import { eq, desc, and, gte, isNull, lt, lte, sql } from "drizzle-orm";
+import { db, pool } from "./db";
 import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, weeklyAdaptations, refreshTokens, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion, type WeeklyAdaptation, type RefreshToken } from "@shared/schema";
 
 export interface IStorage {
@@ -93,6 +93,7 @@ export interface IStorage {
   revokeRefreshToken(id: string): Promise<void>;
   revokeAllRefreshTokensForUser(userId: string): Promise<void>;
   updateRefreshTokenLastUsed(id: string): Promise<void>;
+  deleteUser(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1008,6 +1009,33 @@ export class DatabaseStorage implements IStorage {
     await db.update(refreshTokens)
       .set({ lastUsedAt: new Date() })
       .where(eq(refreshTokens.id, id));
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(activityCompletions).where(eq(activityCompletions.userId, userId));
+      await tx.delete(dailyWorkouts).where(eq(dailyWorkouts.userId, userId));
+      await tx.delete(dailyMeals).where(eq(dailyMeals.userId, userId));
+      await tx.delete(weeklyAdaptations).where(eq(weeklyAdaptations.userId, userId));
+      await tx.delete(performanceSummaries).where(eq(performanceSummaries.userId, userId));
+      await tx.delete(wellnessPlanSpecs).where(eq(wellnessPlanSpecs.userId, userId));
+      await tx.delete(constraintViolations).where(eq(constraintViolations.userId, userId));
+      await tx.delete(weeklyCheckIns).where(eq(weeklyCheckIns.userId, userId));
+      await tx.delete(exercisePreferences).where(eq(exercisePreferences.userId, userId));
+      await tx.delete(ingredientAvoidProposals).where(eq(ingredientAvoidProposals.userId, userId));
+      await tx.delete(workoutFeedback).where(eq(workoutFeedback.userId, userId));
+      await tx.delete(mealFeedback).where(eq(mealFeedback.userId, userId));
+      await tx.delete(ingredientPreferences).where(eq(ingredientPreferences.userId, userId));
+      await tx.delete(ownedGroceryItems).where(eq(ownedGroceryItems.userId, userId));
+      await tx.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+      await tx.delete(goalPlans).where(eq(goalPlans.userId, userId));
+      await tx.delete(workoutPlans).where(eq(workoutPlans.userId, userId));
+      await tx.delete(mealPlans).where(eq(mealPlans.userId, userId));
+      await tx.delete(auditLogs).where(eq(auditLogs.userId, userId));
+      await tx.delete(userProfiles).where(eq(userProfiles.userId, userId));
+      await tx.execute(sql`DELETE FROM user_sessions WHERE sess::jsonb->>'userId' = ${userId}`);
+      await tx.delete(users).where(eq(users.id, userId));
+    });
   }
 }
 

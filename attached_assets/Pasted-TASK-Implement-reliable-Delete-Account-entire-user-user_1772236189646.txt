@@ -1,0 +1,92 @@
+TASK: Implement reliable “Delete Account” (entire user) + user-friendly errors.
+
+SCOPE:
+- Deleting the ENTIRE user account (not just a profile object).
+- Must delete all user-owned data (plans, preferences, onboarding/profile, completions, etc.).
+- Must return clear, user-friendly error messages to the mobile app.
+
+GOAL:
+Fix the current “Not found” (404) issue by ensuring the backend route exists and matches what the mobile app calls.
+
+BACKEND REQUIREMENTS (Replit backend project):
+
+1) Confirm what the mobile app is calling
+- Search the mobile codebase for the delete call (fetch/axios) and record the exact endpoint path + method.
+- The backend MUST implement that exact path.
+- If it’s inconsistent, update the mobile call to the chosen canonical endpoint below.
+
+2) Canonical endpoint to implement (recommended):
+DELETE /api/me
+- Requires authentication (same auth middleware used elsewhere).
+- Identify userId from the auth token/session (NOT from client-sent id).
+- Delete the user and all related data:
+  - profile/onboarding records
+  - meal plans/workout plans/wellness plans
+  - completions/logs/score history
+  - preferences, likes/dislikes, equipment selections
+  - any other tables/documents keyed by userId
+- Use transactions where supported (e.g., Prisma transaction) to avoid partial deletes.
+- Return: { "success": true }
+
+3) Response codes + structured error payload
+All errors must return a consistent JSON shape:
+{
+  "success": false,
+  "code": "SOME_CODE",
+  "message": "Human readable message"
+}
+
+Use these codes:
+- 401 UNAUTHORIZED:
+  code: "AUTH_REQUIRED"
+  message: "Your session expired. Please log in again."
+
+- 404 NOT FOUND (only if user truly missing):
+  code: "USER_NOT_FOUND"
+  message: "Account not found."
+
+- 409 CONFLICT (if deletion blocked by something):
+  code: "DELETE_BLOCKED"
+  message: "Account cannot be deleted right now. Please try again."
+
+- 500 INTERNAL SERVER ERROR:
+  code: "SERVER_ERROR"
+  message: "Something went wrong on our side. Please try again."
+
+Never send raw backend stack traces to the client.
+
+4) Confirm route wiring
+- Ensure the route is registered under the same router prefix used for other API endpoints (e.g., /api).
+- Verify no mismatch between /api/me vs /me or /api/user vs /api/users.
+- Add logging for the delete request path hit to confirm it’s being reached.
+
+MOBILE REQUIREMENTS (React Native / Expo project):
+
+5) Update delete-account call to match canonical endpoint
+- Call:
+  DELETE `${API_BASE_URL}/api/me`
+- Include auth token headers exactly as used in other authenticated requests.
+
+6) Friendly error display
+- When delete fails, read JSON response:
+  - If success=false, display message from server.
+- Map codes to UX:
+  - AUTH_REQUIRED → show message + route to login
+  - USER_NOT_FOUND → show message
+  - DELETE_BLOCKED → show message
+  - SERVER_ERROR → show message
+- If no response / network error:
+  message: "Unable to reach the server. Check your connection and try again."
+
+7) Confirm end-to-end
+- Test with a valid logged-in user:
+  - delete succeeds
+  - user is logged out locally
+  - app returns to auth screen
+- Test with expired token:
+  - shows session expired message
+
+DELIVERABLES:
+- Backend: implemented DELETE /api/me with cascaded deletes + structured errors.
+- Mobile: delete button calls correct endpoint and shows user-friendly messages.
+- Provide the exact endpoint path confirmed and a short summary of what tables/collections were deleted.

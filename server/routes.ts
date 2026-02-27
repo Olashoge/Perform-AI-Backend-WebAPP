@@ -74,7 +74,7 @@ function requireAuth(req: Request, res: Response, next: Function) {
       req.userId = payload.userId;
       return next();
     } catch {
-      return res.status(401).json({ message: "Invalid or expired token" });
+      return res.status(401).json({ success: false, code: "AUTH_REQUIRED", message: "Your session expired. Please log in again." });
     }
   }
 
@@ -83,7 +83,7 @@ function requireAuth(req: Request, res: Response, next: Function) {
     return next();
   }
 
-  return res.status(401).json({ message: "Not authenticated" });
+  return res.status(401).json({ success: false, code: "AUTH_REQUIRED", message: "Your session expired. Please log in again." });
 }
 
 export async function registerRoutes(
@@ -312,6 +312,38 @@ export async function registerRoutes(
     } catch (err) {
       log(`Token logout error: ${err}`, "auth");
       return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/me", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      log(`Delete account request for user ${userId}`, "auth");
+
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          code: "USER_NOT_FOUND",
+          message: "Account not found.",
+        });
+      }
+
+      await storage.deleteUser(userId);
+
+      if (req.session) {
+        req.session.destroy(() => {});
+      }
+
+      log(`Account deleted for user ${userId}`, "auth");
+      return res.json({ success: true });
+    } catch (err: any) {
+      log(`Delete account error for user ${req.userId}: ${err?.message || err}`, "error");
+      return res.status(500).json({
+        success: false,
+        code: "SERVER_ERROR",
+        message: "Something went wrong on our side. Please try again.",
+      });
     }
   });
 
