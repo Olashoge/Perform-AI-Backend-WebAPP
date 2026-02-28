@@ -1,0 +1,45 @@
+You are working in the BACKEND Replit project that serves the production URL https://mealplanai.replit.app (NOT the iOS app project).
+
+Problem:
+The mobile app calls DELETE https://mealplanai.replit.app/api/me and gets 404 (route not found). Logs confirm hasToken=true and status=404. Other endpoints like GET /api/profile work, so production is reachable, but /api/me is missing in production.
+
+Goal:
+Ensure DELETE /api/me exists in the production backend and is deployed to the same Replit deployment that powers mealplanai.replit.app.
+
+Tasks (do in this order):
+
+1) Confirm which Replit project and deployment serves mealplanai.replit.app.
+   - Verify the project’s deployment settings / target.
+   - Confirm the running server is the one we are editing.
+
+2) Confirm route existence in code:
+   - Search for “/api/me” across the backend.
+   - If DELETE /api/me is missing, implement it exactly as spec:
+     - Endpoint: DELETE /api/me
+     - Auth: requires JWT Bearer token (same middleware used for other authenticated endpoints)
+     - No request body
+     - Success: 200 { "success": true }
+     - Errors: { "success": false, "code": "...", "message": "..." }
+       - 401 AUTH_REQUIRED
+       - 404 USER_NOT_FOUND
+       - 500 SERVER_ERROR
+     - Must delete user and all related data in a single database transaction (Prisma transaction), then delete sessions/refresh tokens, then user.
+
+3) Deploy to production:
+   - Redeploy the backend to the deployment that serves mealplanai.replit.app.
+   - Ensure the deployment is rebuilt from the latest commit.
+
+4) Verify post-deploy:
+   - Add a temporary log line on server startup listing registered routes OR specifically log when DELETE /api/me handler is registered.
+   - Run a real request test (using curl in the Replit shell) after deploy:
+     curl -i -X DELETE "https://mealplanai.replit.app/api/me" -H "Authorization: Bearer <VALID_TOKEN>"
+   - Confirm it returns 200 { "success": true } (or 401 if token invalid), but NOT 404.
+
+5) Remove any temporary debug logs after confirmation.
+
+Output required:
+- Tell me exactly what was changed (files + key snippets).
+- Provide proof it’s deployed (deployment name/ID + timestamp).
+- Provide the curl output or server log confirming DELETE /api/me no longer returns 404.
+
+
