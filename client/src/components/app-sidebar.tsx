@@ -13,15 +13,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
-  LayoutDashboard, CalendarDays, UtensilsCrossed, Dumbbell, Target, Settings, UserCircle,
+  LayoutDashboard, CalendarDays, Target, Settings, UserCircle,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { title: "Calendar", icon: CalendarDays, href: "/calendar" },
   { title: "Wellness", icon: Target, href: "/goals" },
-  { title: "Nutrition", icon: UtensilsCrossed, href: "/nutrition" },
-  { title: "Training", icon: Dumbbell, href: "/training" },
   { title: "Profile", icon: UserCircle, href: "/profile" },
   { title: "Settings", icon: Settings, href: "/settings" },
 ];
@@ -50,13 +48,9 @@ export function AppSidebar() {
         <SidebarMenu className="gap-2 px-2">
           {NAV_ITEMS.map((item) => {
             const isActive = location === item.href ||
-              (item.href === "/nutrition" && location === "/plans") ||
-              (item.href === "/nutrition" && location.startsWith("/plan/")) ||
-              (item.href === "/nutrition" && location === "/new-plan") ||
-              (item.href === "/training" && location.startsWith("/workout")) ||
-              (item.href === "/training" && location === "/workouts/new") ||
               (item.href === "/settings" && location === "/preferences") ||
-              (item.href === "/settings" && location === "/check-ins");
+              (item.href === "/settings" && location === "/check-ins") ||
+              (item.href === "/goals" && location.startsWith("/goals/"));
             return (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton

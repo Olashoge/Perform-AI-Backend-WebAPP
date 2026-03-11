@@ -431,7 +431,6 @@ function DayDetailModal({
   open,
   onClose,
   onNavigate,
-  mealPlanStartDates,
   onPlanThisDay,
 }: {
   day: CalendarDay;
@@ -441,7 +440,6 @@ function DayDetailModal({
   open: boolean;
   onClose: () => void;
   onNavigate: (path: string) => void;
-  mealPlanStartDates: Record<string, string>;
   onPlanThisDay: () => void;
 }) {
   const date = new Date(day.date + "T00:00:00");
@@ -464,11 +462,7 @@ function DayDetailModal({
         <div className="space-y-5 mt-3">
           {day.workout?.isWorkoutDay && day.workout.session && (
             <div
-              className="rounded-md bg-teal-50 dark:bg-teal-950/30 p-3 cursor-pointer hover-elevate"
-              onClick={() => {
-                onClose();
-                onNavigate(`/workout/${day.workout!.workoutPlanId}`);
-              }}
+              className="rounded-md bg-teal-50 dark:bg-teal-950/30 p-3"
               data-testid="link-workout-detail"
             >
               <div className="flex items-center justify-between mb-1.5">
@@ -530,22 +524,10 @@ function DayDetailModal({
               dinner: "bg-indigo-500",
             };
 
-            const planId = day.planIds?.[0];
-            const planStart = planId ? mealPlanStartDates[planId] : null;
-            const dayIndex = planStart ? Math.round((date.getTime() - new Date(planStart + "T00:00:00").getTime()) / 86400000) : null;
-
             return (
               <div
                 key={slot}
-                className="space-y-1.5 cursor-pointer rounded-md hover-elevate p-2 -mx-2"
-                onClick={() => {
-                  onClose();
-                  if (planId && dayIndex !== null) {
-                    onNavigate(`/plan/${planId}?scrollTo=day-${dayIndex}&meal=${slot}`);
-                  } else if (planId) {
-                    onNavigate(`/plan/${planId}`);
-                  }
-                }}
+                className="space-y-1.5 rounded-md p-2 -mx-2"
                 data-testid={`link-meal-${slot}`}
               >
                 <div className="flex items-center justify-between">
@@ -629,7 +611,6 @@ function DayDetailModal({
 export default function PlanCalendar() {
   const { user, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
-
   const weekStartsOn: 0 | 1 = (() => {
     try {
       const stored = localStorage.getItem("cal_weekStart");
@@ -770,23 +751,6 @@ export default function PlanCalendar() {
     enabled: !!user,
   });
 
-  const { data: plansData } = useQuery<{ id: number; planStartDate: string | null }[]>({
-    queryKey: ["/api/plans"],
-    enabled: !!user,
-  });
-
-  const mealPlanStartDates = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (plansData) {
-      for (const p of plansData) {
-        if (p.planStartDate) {
-          map[String(p.id)] = p.planStartDate;
-        }
-      }
-    }
-    return map;
-  }, [plansData]);
-
   const avoidedIngredients = useMemo(() => {
     return (prefsData?.avoidIngredients || []).map(i => i.ingredientKey);
   }, [prefsData]);
@@ -881,9 +845,9 @@ export default function PlanCalendar() {
             <CardContent className="p-12 text-center">
               <CalendarDays className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
               <h2 className="font-semibold text-base mb-1.5" data-testid="text-no-scheduled-plans">No scheduled plans</h2>
-              <p className="text-sm text-muted-foreground mb-4">Schedule your meal or workout plans from each plan's detail page to see them here.</p>
-              <Link href="/plans">
-                <Button size="sm" data-testid="button-go-to-plans">View Plans</Button>
+              <p className="text-sm text-muted-foreground mb-4">Create a wellness plan and schedule it to see your meals and workouts here.</p>
+              <Link href="/goals">
+                <Button size="sm" data-testid="button-go-to-plans">View Wellness Plans</Button>
               </Link>
             </CardContent>
           </Card>
@@ -918,7 +882,6 @@ export default function PlanCalendar() {
           open={!!selectedDay}
           onClose={() => setSelectedDay(null)}
           onNavigate={navigate}
-          mealPlanStartDates={mealPlanStartDates}
           onPlanThisDay={() => {
             const d = new Date(selectedDay.date + "T00:00:00");
             setPlanDayDate(d);

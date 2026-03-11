@@ -2,11 +2,13 @@ import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import type { GoalPlan, MealPlan, WorkoutPlan, PlanOutput, WorkoutPlanOutput } from "@shared/schema";
+
+type GoalPlanDetail = GoalPlan & { mealPlan: MealPlan | null; workoutPlan: WorkoutPlan | null };
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Target, UtensilsCrossed, Dumbbell, CalendarDays, ArrowRight,
+  Target, UtensilsCrossed, Dumbbell, CalendarDays,
   Flame, Trophy, Heart, Zap, Sparkles, CheckCircle2, Loader2,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
@@ -40,20 +42,14 @@ export default function GoalReady() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
 
-  const { data: goalPlan, isLoading: goalLoading } = useQuery<GoalPlan>({
+  const { data: goalPlanDetail, isLoading: goalLoading } = useQuery<GoalPlanDetail>({
     queryKey: ["/api/goal-plans", id],
     enabled: !!user && !!id,
   });
 
-  const { data: mealPlan } = useQuery<MealPlan>({
-    queryKey: ["/api/plan", goalPlan?.mealPlanId],
-    enabled: !!goalPlan?.mealPlanId,
-  });
-
-  const { data: workoutPlan } = useQuery<WorkoutPlan>({
-    queryKey: ["/api/workout", goalPlan?.workoutPlanId],
-    enabled: !!goalPlan?.workoutPlanId,
-  });
+  const goalPlan = goalPlanDetail;
+  const mealPlan = goalPlanDetail?.mealPlan ?? null;
+  const workoutPlan = goalPlanDetail?.workoutPlan ?? null;
 
   if (goalLoading || !goalPlan) {
     return (
@@ -111,8 +107,7 @@ export default function GoalReady() {
           <div className="space-y-4">
             {mealPlan && (
               <div
-                className="rounded-md border p-4 cursor-pointer hover-elevate transition-colors"
-                onClick={() => navigate(`/plan/${mealPlan.id}?from=goal&goalId=${id}`)}
+                className="rounded-md border p-4"
                 data-testid="card-meal-summary"
               >
                 <div className="flex items-center gap-2 mb-3">
@@ -123,7 +118,6 @@ export default function GoalReady() {
                     <h3 className="font-medium text-sm">{mealPlanJson?.title || "Meal Plan"}</h3>
                     <p className="text-xs text-muted-foreground">{mealPrefs?.mealsPerDay || 3} meals per day</p>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {mealPrefs?.dietStyles?.filter((s: string) => s !== "No Preference").map((style: string) => (
@@ -141,8 +135,7 @@ export default function GoalReady() {
 
             {workoutPlan && (
               <div
-                className="rounded-md border p-4 cursor-pointer hover-elevate transition-colors"
-                onClick={() => navigate(`/workout/${workoutPlan.id}?from=goal&goalId=${id}`)}
+                className="rounded-md border p-4"
                 data-testid="card-workout-summary"
               >
                 <div className="flex items-center gap-2 mb-3">
@@ -156,7 +149,6 @@ export default function GoalReady() {
                       {workoutPrefs?.sessionLength ? ` · ${workoutPrefs.sessionLength} min` : ""}
                     </p>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {workoutPrefs?.trainingMode && (

@@ -11,15 +11,8 @@ import { AppSidebar, ActiveGoalBar } from "@/components/app-sidebar";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
-import NewPlan from "@/pages/new-plan";
-import PlanView from "@/pages/plan-view";
-import PlanGenerating from "@/pages/plan-generating";
-import PlansList from "@/pages/plans-list";
 import PreferencesPage from "@/pages/preferences";
 import PlanCalendar from "@/pages/plan-calendar";
-import NewWorkout from "@/pages/new-workout";
-import WorkoutView from "@/pages/workout-view";
-import WorkoutGenerating from "@/pages/workout-generating";
 import GoalPlans from "@/pages/goal-plans";
 import GoalWizard from "@/pages/goal-wizard";
 import GoalGenerating from "@/pages/goal-generating";
@@ -37,18 +30,9 @@ function AuthenticatedRouter() {
   return (
     <Switch>
       <Route path="/dashboard" component={Dashboard} />
-      <Route path="/new-plan" component={NewPlan} />
-      <Route path="/plan/:id/generating" component={PlanGenerating} />
-      <Route path="/plan/:id" component={PlanView} />
-      <Route path="/plans" component={PlansList} />
-      <Route path="/nutrition" component={PlansList} />
-      <Route path="/training" component={PlansList} />
       <Route path="/preferences" component={PreferencesPage} />
       <Route path="/preferences/exercise" component={ExercisePreferencesPage} />
       <Route path="/calendar" component={PlanCalendar} />
-      <Route path="/workouts/new" component={NewWorkout} />
-      <Route path="/workout/:id/generating" component={WorkoutGenerating} />
-      <Route path="/workout/:id" component={WorkoutView} />
       <Route path="/goals" component={GoalPlans} />
       <Route path="/goals/new" component={GoalWizard} />
       <Route path="/goals/:id/generating" component={GoalGenerating} />

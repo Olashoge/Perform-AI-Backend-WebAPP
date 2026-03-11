@@ -10,7 +10,7 @@ export interface IStorage {
   createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any, parentGoalPlanId?: string): Promise<MealPlan>;
   getMealPlan(id: string): Promise<MealPlan | undefined>;
   getMealPlansByUser(userId: string): Promise<MealPlan[]>;
-  getStandaloneMealPlansByUser(userId: string): Promise<MealPlan[]>;
+
   findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined>;
   findGeneratingPlan(userId: string): Promise<MealPlan | undefined>;
   updatePlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<MealPlan | undefined>;
@@ -33,7 +33,7 @@ export interface IStorage {
   createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any, parentGoalPlanId?: string): Promise<WorkoutPlan>;
   getWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
   getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]>;
-  getStandaloneWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]>;
+
   updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined>;
   updateWorkoutStartDate(id: string, startDate: string | null): Promise<WorkoutPlan | undefined>;
   softDeleteWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
@@ -147,10 +147,6 @@ export class DatabaseStorage implements IStorage {
 
   async getMealPlansByUser(userId: string): Promise<MealPlan[]> {
     return db.select().from(mealPlans).where(and(eq(mealPlans.userId, userId), isNull(mealPlans.deletedAt))).orderBy(desc(mealPlans.createdAt));
-  }
-
-  async getStandaloneMealPlansByUser(userId: string): Promise<MealPlan[]> {
-    return db.select().from(mealPlans).where(and(eq(mealPlans.userId, userId), isNull(mealPlans.deletedAt), isNull(mealPlans.parentGoalPlanId))).orderBy(desc(mealPlans.createdAt));
   }
 
   async findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined> {
@@ -404,10 +400,6 @@ export class DatabaseStorage implements IStorage {
 
   async getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]> {
     return db.select().from(workoutPlans).where(and(eq(workoutPlans.userId, userId), isNull(workoutPlans.deletedAt))).orderBy(desc(workoutPlans.createdAt));
-  }
-
-  async getStandaloneWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]> {
-    return db.select().from(workoutPlans).where(and(eq(workoutPlans.userId, userId), isNull(workoutPlans.deletedAt), isNull(workoutPlans.parentGoalPlanId))).orderBy(desc(workoutPlans.createdAt));
   }
 
   async updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined> {

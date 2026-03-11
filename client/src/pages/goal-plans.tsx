@@ -3,15 +3,14 @@ import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { GoalPlan, MealPlan, WorkoutPlan, PlanOutput, WorkoutPlanOutput } from "@shared/schema";
+import type { GoalPlan } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Target, Plus, Trash2, Loader2, UtensilsCrossed, Dumbbell,
-  Flame, Zap, Heart, Trophy, CalendarDays, Link2, Unlink,
+  Flame, Zap, Heart, Trophy, CalendarDays,
   ArrowUpDown, Clock, CalendarCheck, Activity, CheckCircle2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -49,15 +48,6 @@ function GoalStatusBadge({ startDate }: { startDate: string | null | undefined }
     </Badge>
   );
 }
-
-const GOAL_OPTIONS = [
-  { value: "weight_loss", label: "Weight Loss", icon: Flame },
-  { value: "muscle_gain", label: "Muscle Gain", icon: Dumbbell },
-  { value: "performance", label: "Performance", icon: Trophy },
-  { value: "maintenance", label: "Maintenance", icon: Heart },
-  { value: "energy", label: "Energy & Focus", icon: Zap },
-  { value: "general_fitness", label: "General Fitness", icon: Target },
-];
 
 const GOAL_LABELS: Record<string, string> = {
   weight_loss: "Weight Loss",
@@ -109,22 +99,10 @@ export default function GoalPlans() {
   const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [linkingPlanId, setLinkingPlanId] = useState<string | null>(null);
-  const [linkType, setLinkType] = useState<"meal" | "workout">("meal");
   const [sortAsc, setSortAsc] = useState(true);
 
   const { data: goalPlans, isLoading: goalLoading } = useQuery<GoalPlan[]>({
     queryKey: ["/api/goal-plans"],
-    enabled: !!user,
-  });
-
-  const { data: mealPlans } = useQuery<MealPlan[]>({
-    queryKey: ["/api/plans"],
-    enabled: !!user,
-  });
-
-  const { data: workoutPlans } = useQuery<WorkoutPlan[]>({
-    queryKey: ["/api/workouts"],
     enabled: !!user,
   });
 
@@ -144,31 +122,6 @@ export default function GoalPlans() {
     },
   });
 
-  const linkMutation = useMutation({
-    mutationFn: async ({ goalPlanId, planId, type }: { goalPlanId: string; planId: string; type: "meal" | "workout" }) => {
-      const body = type === "meal" ? { mealPlanId: planId } : { workoutPlanId: planId };
-      const res = await apiRequest("PATCH", `/api/goal-plans/${goalPlanId}`, body);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans"] });
-      setLinkingPlanId(null);
-      toast({ title: "Plan linked" });
-    },
-  });
-
-  const unlinkMutation = useMutation({
-    mutationFn: async ({ goalPlanId, type }: { goalPlanId: string; type: "meal" | "workout" }) => {
-      const body = type === "meal" ? { mealPlanId: null } : { workoutPlanId: null };
-      const res = await apiRequest("PATCH", `/api/goal-plans/${goalPlanId}`, body);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans"] });
-      toast({ title: "Plan unlinked" });
-    },
-  });
-
   if (isLoading || !user) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -177,29 +130,10 @@ export default function GoalPlans() {
     );
   }
 
-  const readyMealPlans = (mealPlans || []).filter(p => p.status === "ready" && !p.deletedAt);
-  const readyWorkoutPlans = (workoutPlans || []).filter(p => p.status === "ready" && !p.deletedAt);
-
-  function getMealPlanTitle(id: string | null) {
-    if (!id) return null;
-    const mp = readyMealPlans.find(p => p.id === id);
-    if (!mp) return "Unknown Plan";
-    const plan = mp.planJson as PlanOutput | null;
-    return plan?.title || "Meal Plan";
-  }
-
-  function getWorkoutPlanTitle(id: string | null) {
-    if (!id) return null;
-    const wp = readyWorkoutPlans.find(p => p.id === id);
-    if (!wp) return "Unknown Plan";
-    const plan = wp.planJson as WorkoutPlanOutput | null;
-    return plan?.title || "Workout Plan";
-  }
-
   return (
     <div className="px-4 sm:px-6 py-8">
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Wellness Plans</h1>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight" data-testid="text-page-title">Wellness Plans</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -245,9 +179,9 @@ export default function GoalPlans() {
               <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-5">
                 <Target className="h-8 w-8 text-primary" />
               </div>
-              <h2 className="font-semibold text-lg mb-2">No wellness plans yet</h2>
+              <h2 className="font-semibold text-lg mb-2" data-testid="text-empty-title">No wellness plans yet</h2>
               <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
-                Create a wellness plan to link your meal and workout plans together for unified tracking.
+                Create a wellness plan to get personalized meal and workout plans aligned with your goals.
               </p>
               <Link href="/goals/new">
                 <Button data-testid="button-create-first-goal">
@@ -269,6 +203,7 @@ export default function GoalPlans() {
             }).map((gp, idx) => {
               const GoalIcon = GOAL_ICONS[gp.goalType] || Target;
               const goalTitle = generateGoalTitle(gp.goalType, gp.startDate, idx);
+              const planType = gp.planType || "both";
               return (
                 <Card key={gp.id} data-testid={`card-goal-${gp.id}`}>
                   <CardContent className="p-5 sm:p-6">
@@ -313,79 +248,28 @@ export default function GoalPlans() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="rounded-md border p-4">
-                        <div className="flex items-center justify-between gap-2 mb-3">
-                          <div className="flex items-center gap-2 text-sm font-medium">
-                            <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
+                      {(planType === "both" || planType === "meal") && (
+                        <div className="rounded-md border p-4">
+                          <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                            <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                             Meal Plan
                           </div>
-                          {gp.mealPlanId ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => unlinkMutation.mutate({ goalPlanId: gp.id, type: "meal" })}
-                              data-testid={`button-unlink-meal-${gp.id}`}
-                            >
-                              <Unlink className="h-3.5 w-3.5 text-muted-foreground" />
-                            </Button>
-                          ) : null}
+                          <p className="text-xs text-muted-foreground">
+                            {gp.mealPlanId ? "Included" : "Generating..."}
+                          </p>
                         </div>
-                        {gp.mealPlanId ? (
-                          <Link href={`/plan/${gp.mealPlanId}`}>
-                            <p className="text-sm text-primary hover:underline cursor-pointer font-medium" data-testid={`text-linked-meal-${gp.id}`}>
-                              {getMealPlanTitle(gp.mealPlanId)}
-                            </p>
-                          </Link>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => { setLinkingPlanId(gp.id); setLinkType("meal"); }}
-                            data-testid={`button-link-meal-${gp.id}`}
-                          >
-                            <Link2 className="h-3.5 w-3.5 mr-1.5" />
-                            Link Meal Plan
-                          </Button>
-                        )}
-                      </div>
-
-                      <div className="rounded-md border p-4">
-                        <div className="flex items-center justify-between gap-2 mb-3">
-                          <div className="flex items-center gap-2 text-sm font-medium">
-                            <Dumbbell className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      {(planType === "both" || planType === "workout") && (
+                        <div className="rounded-md border p-4">
+                          <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                            <Dumbbell className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                             Workout Plan
                           </div>
-                          {gp.workoutPlanId ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => unlinkMutation.mutate({ goalPlanId: gp.id, type: "workout" })}
-                              data-testid={`button-unlink-workout-${gp.id}`}
-                            >
-                              <Unlink className="h-3.5 w-3.5 text-muted-foreground" />
-                            </Button>
-                          ) : null}
+                          <p className="text-xs text-muted-foreground">
+                            {gp.workoutPlanId ? "Included" : "Generating..."}
+                          </p>
                         </div>
-                        {gp.workoutPlanId ? (
-                          <Link href={`/workout/${gp.workoutPlanId}`}>
-                            <p className="text-sm text-primary hover:underline cursor-pointer font-medium" data-testid={`text-linked-workout-${gp.id}`}>
-                              {getWorkoutPlanTitle(gp.workoutPlanId)}
-                            </p>
-                          </Link>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => { setLinkingPlanId(gp.id); setLinkType("workout"); }}
-                            data-testid={`button-link-workout-${gp.id}`}
-                          >
-                            <Link2 className="h-3.5 w-3.5 mr-1.5" />
-                            Link Workout Plan
-                          </Button>
-                        )}
-                      </div>
+                      )}
                     </div>
 
                     <div className="mt-4 pt-4 border-t flex gap-2">
@@ -402,69 +286,6 @@ export default function GoalPlans() {
           </div>
         )}
       </div>
-
-      <Dialog open={!!linkingPlanId} onOpenChange={(open) => { if (!open) setLinkingPlanId(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Link {linkType === "meal" ? "Meal" : "Workout"} Plan</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 pt-2">
-            {linkType === "meal" ? (
-              readyMealPlans.length === 0 ? (
-                <div className="text-center py-8">
-                  <UtensilsCrossed className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">No meal plans available. Create one first.</p>
-                </div>
-              ) : (
-                readyMealPlans.map(mp => {
-                  const plan = mp.planJson as PlanOutput | null;
-                  return (
-                    <Card
-                      key={mp.id}
-                      className="hover-elevate cursor-pointer"
-                      onClick={() => linkingPlanId && linkMutation.mutate({ goalPlanId: linkingPlanId, planId: mp.id, type: "meal" })}
-                      data-testid={`card-link-meal-${mp.id}`}
-                    >
-                      <CardContent className="p-4 flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                          <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <span className="text-sm font-medium">{plan?.title || "Meal Plan"}</span>
-                      </CardContent>
-                    </Card>
-                  );
-                })
-              )
-            ) : (
-              readyWorkoutPlans.length === 0 ? (
-                <div className="text-center py-8">
-                  <Dumbbell className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">No workout plans available. Create one first.</p>
-                </div>
-              ) : (
-                readyWorkoutPlans.map(wp => {
-                  const plan = wp.planJson as WorkoutPlanOutput | null;
-                  return (
-                    <Card
-                      key={wp.id}
-                      className="hover-elevate cursor-pointer"
-                      onClick={() => linkingPlanId && linkMutation.mutate({ goalPlanId: linkingPlanId, planId: wp.id, type: "workout" })}
-                      data-testid={`card-link-workout-${wp.id}`}
-                    >
-                      <CardContent className="p-4 flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                          <Dumbbell className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <span className="text-sm font-medium">{plan?.title || "Workout Plan"}</span>
-                      </CardContent>
-                    </Card>
-                  );
-                })
-              )
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 # Perform AI
 
 ## Overview
-Perform AI is an AI-powered personal performance system designed to generate personalized 7-day meal and workout plans. It caters to individuals seeking to optimize their health and fitness routines by providing intelligent, adaptive planning. Users input dietary and fitness preferences, along with personal data (age, weight, workout frequency), to receive customized meal plans with recipes and grocery lists, as well as tailored workout programs. The project's vision is to offer a comprehensive solution for personal health optimization.
+Perform AI is an AI-powered personal performance system focused on three core features: **Wellness Plans** (primary), **Daily Meal generation**, and **Daily Workout generation**. Users create Wellness Plans that pair AI-generated 7-day meal and workout plans aligned with their goals. Daily planning allows single-day meal and workout generation. The system provides intelligent, adaptive planning based on user profiles, preferences, and performance data.
 
 ## User Preferences
 I prefer iterative development with clear communication at each stage. Please ask before making any major architectural changes or significant modifications to existing features. I value concise explanations but appreciate detailed justifications for complex decisions. For styling, I prefer the Inter font, a deep emerald primary color (#0E3B2E), an amber accent for meal-related UI (#A16207), an emerald accent for workout-related UI, and warm neutral backgrounds (#FAFAF8). Full dark mode support is essential, with a theme toggle (light/dark/system) persisted via local storage.
@@ -11,20 +11,19 @@ The application uses a modern web stack for a responsive and intuitive user expe
 
 The backend is an Express server in TypeScript with dual authentication: cookie-based sessions (for web, 30-day persistence via connect-pg-simple) and JWT Bearer tokens (for mobile/API clients). PostgreSQL is the primary database, managed via Drizzle ORM.
 
+**Note:** Standalone 7-day meal plan and workout plan features have been removed. All plan creation now flows through Wellness Plans (Goal Plans) or Daily Planning. The standalone routes (`POST/GET/DELETE /api/plan*`, `POST/GET/DELETE /api/workout*`, grocery routes) and their frontend pages have been removed.
+
 Key features include:
--   **Personalized Plan Generation**: AI-generated 7-day meal and workout plans based on user profiles and preferences. Meal plans are configurable for 2 or 3 meals daily, and workout plans consider various factors like goals, location, and experience.
--   **Goal-Oriented Planning (Wellness Plans)**: A `GoalPlan` entity is the parent container for paired meal and workout plans. Child plans have a `parentGoalPlanId` column linking them to their parent. `GET /api/plans` and `GET /api/workouts` return only standalone plans (no `parentGoalPlanId`); goal-owned plans are accessed via `GET /api/goal-plans/:id` which embeds full `mealPlan` and `workoutPlan` objects. Schedule, unschedule, and delete operations cascade from parent to children via `POST /api/goal-plans/:id/schedule`, `/unschedule`, and `DELETE /api/goal-plans/:id`.
+-   **Wellness Plans (Goal Plans)**: The primary feature. A `GoalPlan` entity is the parent container for paired meal and workout plans. Child plans have a `parentGoalPlanId` column linking them to their parent. Goal-owned plans are accessed via `GET /api/goal-plans/:id` which embeds full `mealPlan` and `workoutPlan` objects. Schedule, unschedule, and delete operations cascade from parent to children via `POST /api/goal-plans/:id/schedule`, `/unschedule`, and `DELETE /api/goal-plans/:id`.
+-   **Daily Planning**: Allows users to generate single-day meal and workout plans via a dedicated UI.
 -   **Feedback Loop & Adaption**: Users can provide tri-state feedback on meals and workouts, influencing future AI-generated plans and tracking preferences.
--   **Grocery Management**: Dynamic grocery lists and tracking of owned items.
 -   **Scheduling & Calendar**: Plans are schedulable with conflict awareness and displayed in a unified calendar view.
 -   **Wellness Context**: A shared server-side `WellnessContext` ensures nutritional adaptation based on workout schedules.
 -   **Check-ins**: Weekly logging for weight, energy, compliance, and notes.
--   **Unlimited Swaps & Regens**: Meal swaps, day regenerations, and workout session regenerations are unlimited with no budget or cooldown restrictions.
 -   **Profile (Performance Blueprint)**: A mandatory, comprehensive user profile capturing physical stats, goals, health conditions, training capacity, nutrition preferences, and equipment availability. This profile is a single source of truth for AI generation.
 -   **Constraint Engine v1**: A deterministic layer for pre-checking user profiles against safety rules and post-validating AI output, ensuring adherence to constraints.
 -   **Performance Core v1**: A weekly performance summary system triggered by check-ins, computing adherence scores, momentum states, insights, and adjustment actions that influence future AI prompts.
 -   **Performance State Engine v1**: A deterministic (no LLM) weighted composite score system. Computes a `performanceState` object for any given week including PCS (0–1), label (`on_track`/`building_momentum`/`recovering`/`at_risk`/`declining`), week-over-week delta, 4-week trend slope, streak days, and rule-based explanation strings. Weights: 45% weekly score, 25% delta, 20% trend, 10% streak. Served via `GET /api/weekly-summary` response. Module: `server/performance/performanceState.ts`. Tests: `server/performance/performanceState.test.ts`.
--   **Daily Planning**: Allows users to generate single-day meal and workout plans via a dedicated UI.
 -   **Adaptive Engine v1**: A rule-based system that automatically adjusts plan difficulty, volume, and complexity based on user performance history and check-ins, storing `AdaptiveModifiers` for AI prompt injection.
 -   **Unified Context Builder**: Extracts all profile fields and form overrides into structured prompt blocks for AI generation, ensuring all user data influences the output.
 -   **Favorite Meals**: Users can specify preferred meals, treated as soft constraints by the AI.

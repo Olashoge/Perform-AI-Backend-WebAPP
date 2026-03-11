@@ -2,28 +2,21 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import type { MealPlan, WorkoutPlan, PlanOutput, WorkoutPlanOutput, Meal, WorkoutSession, WeeklyCheckIn } from "@shared/schema";
+import type { Meal, WorkoutSession, WeeklyCheckIn } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   CalendarDays, ChevronLeft, ChevronRight,
-  Dumbbell, UtensilsCrossed,
+  Target, UtensilsCrossed, Dumbbell,
   ClipboardCheck, ArrowRight, Plus,
 } from "lucide-react";
-import { format, startOfWeek, addDays, isWithinInterval, isSameDay } from "date-fns";
+import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { PlanThisDay } from "@/components/plan-this-day";
 import { CompletionCheckbox } from "@/components/completion-checkbox";
 import { useCompletions, useWeeklyAdherence } from "@/hooks/use-completions";
 import { WeeklyScorecard } from "@/components/weekly-scorecard";
 
-
-function isActivePlan(startDate: string | null | undefined, referenceDate: Date): boolean {
-  if (!startDate) return false;
-  const planStart = new Date(startDate + "T00:00:00");
-  const planEnd = addDays(planStart, 6);
-  return isWithinInterval(referenceDate, { start: planStart, end: planEnd });
-}
 
 const DAY_ABBR_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_ABBR_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -55,16 +48,6 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
-
-  const { data: mealPlans } = useQuery<MealPlan[]>({
-    queryKey: ["/api/plans"],
-    enabled: !!user,
-  });
-
-  const { data: workoutPlans } = useQuery<WorkoutPlan[]>({
-    queryKey: ["/api/workouts"],
-    enabled: !!user,
-  });
 
   const { data: checkIns } = useQuery<WeeklyCheckIn[]>({
     queryKey: ["/api/check-ins", "all"],
@@ -106,11 +89,6 @@ export default function Dashboard() {
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const stats = useMemo(() => {
-    const activeMeals = (mealPlans || []).filter(p => !p.deletedAt && p.status === "ready" && isActivePlan(p.planStartDate, now));
-    const activeWorkouts = (workoutPlans || []).filter(p => !p.deletedAt && p.status === "ready" && isActivePlan(p.planStartDate, now));
-    return { activeMeals, activeWorkouts };
-  }, [mealPlans, workoutPlans, now]);
 
 
   const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
@@ -267,20 +245,7 @@ export default function Dashboard() {
                     return (
                       <div
                         key={slot}
-                        className={`border-t pt-4 first:border-t-0 first:pt-0 cursor-pointer rounded-md hover-elevate p-2 -mx-2 ${mealCompleted ? "opacity-60" : ""}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (planId) {
-                            const matchingPlan = (mealPlans || []).find(p => String(p.id) === String(planId));
-                            if (matchingPlan?.planStartDate) {
-                              const planStart = new Date(matchingPlan.planStartDate + "T00:00:00");
-                              const diffDays = Math.round((selectedDate.getTime() - planStart.getTime()) / 86400000);
-                              navigate(`/plan/${planId}?scrollTo=day-${diffDays}&meal=${slot}`);
-                            } else {
-                              navigate(`/plan/${planId}`);
-                            }
-                          }
-                        }}
+                        className={`border-t pt-4 first:border-t-0 first:pt-0 rounded-md p-2 -mx-2 ${mealCompleted ? "opacity-60" : ""}`}
                         data-testid={`meal-slot-${slot}`}
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -321,7 +286,7 @@ export default function Dashboard() {
           )}
 
           {dayWorkout && dayWorkout.session && (
-            <Card className={`mb-4 hover-elevate cursor-pointer ${isCompleted(selectedDateStr, "workout", "workout_plan", dayWorkout.workoutPlanId, "workout") ? "opacity-60" : ""}`} onClick={() => navigate(`/workout/${dayWorkout.workoutPlanId}`)} data-testid="card-day-workout">
+            <Card className={`mb-4 ${isCompleted(selectedDateStr, "workout", "workout_plan", dayWorkout.workoutPlanId, "workout") ? "opacity-60" : ""}`} data-testid="card-day-workout">
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
@@ -496,70 +461,9 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="w-full lg:w-[36rem] shrink-0 space-y-4">
-          <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Active Plans</h3>
-
-          {stats.activeMeals.map(mp => {
-            const plan = mp.planJson as PlanOutput | null;
-            const prefs = mp.preferencesJson as any;
-            return (
-              <Card key={mp.id} className="hover-elevate cursor-pointer" onClick={() => navigate(`/plan/${mp.id}`)} data-testid={`active-meal-${mp.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                      <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold truncate">{plan?.title || "Meal Plan"}</div>
-                      <Badge size="sm" variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 mt-0.5">Active</Badge>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <CalendarDays className="h-3 w-3" />
-                    {format(new Date(mp.planStartDate + "T00:00:00"), "MMM d")} → {format(addDays(new Date(mp.planStartDate + "T00:00:00"), 6), "MMM d")}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-
-          {stats.activeWorkouts.map(wp => {
-            const plan = wp.planJson as WorkoutPlanOutput | null;
-            return (
-              <Card key={wp.id} className="hover-elevate cursor-pointer" onClick={() => navigate(`/workout/${wp.id}`)} data-testid={`active-workout-${wp.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
-                      <Dumbbell className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold truncate">{plan?.title || "Workout Plan"}</div>
-                      <Badge size="sm" variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 mt-0.5">Active</Badge>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <CalendarDays className="h-3 w-3" />
-                    {format(new Date(wp.planStartDate + "T00:00:00"), "MMM d")} → {format(addDays(new Date(wp.planStartDate + "T00:00:00"), 6), "MMM d")}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-
-          {stats.activeMeals.length === 0 && stats.activeWorkouts.length === 0 && (
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-xs text-muted-foreground mb-3">No active plans this week</p>
-              </CardContent>
-            </Card>
-          )}
-
-        </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-6">
         <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/calendar")} data-testid="quick-view-week">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
@@ -572,28 +476,16 @@ export default function Dashboard() {
             <div className="text-xs text-muted-foreground">See your schedule</div>
           </CardContent>
         </Card>
-        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/nutrition")} data-testid="quick-meal-plan">
+        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/goals")} data-testid="quick-wellness">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <Target className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
               <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
-            <div className="text-sm font-semibold">Meal Plan</div>
-            <div className="text-xs text-muted-foreground">Adjust nutrition</div>
-          </CardContent>
-        </Card>
-        <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/training")} data-testid="quick-workouts">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
-                <Dumbbell className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-              </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div className="text-sm font-semibold">Workouts</div>
-            <div className="text-xs text-muted-foreground">View training</div>
+            <div className="text-sm font-semibold">Wellness Plans</div>
+            <div className="text-xs text-muted-foreground">Manage your goals</div>
           </CardContent>
         </Card>
         <Card className="hover-elevate cursor-pointer" onClick={() => navigate("/check-ins")} data-testid="quick-checkin">

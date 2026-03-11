@@ -190,8 +190,6 @@ export default function GoalGenerating() {
   useEffect(() => {
     if (allSuccess) {
       queryClient.invalidateQueries({ queryKey: ["/api/goal-plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
     }
   }, [allSuccess]);
 
