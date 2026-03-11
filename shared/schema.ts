@@ -24,6 +24,7 @@ export const mealPlans = pgTable("meal_plans", {
   profileSnapshot: jsonb("profile_snapshot"),
   adaptiveSnapshot: jsonb("adaptive_snapshot"),
   planStartDate: varchar("plan_start_date", { length: 10 }),
+  parentGoalPlanId: varchar("parent_goal_plan_id"),
   deletedAt: timestamp("deleted_at"),
 });
 
@@ -76,6 +77,7 @@ export const workoutPlans = pgTable("workout_plans", {
   profileSnapshot: jsonb("profile_snapshot"),
   adaptiveSnapshot: jsonb("adaptive_snapshot"),
   planStartDate: varchar("plan_start_date", { length: 10 }),
+  parentGoalPlanId: varchar("parent_goal_plan_id"),
   deletedAt: timestamp("deleted_at"),
 });
 

@@ -1,0 +1,103 @@
+Refactor Wellness Plans so they are true standalone parent plans instead of behaving like separate meal and workout plans that also appear independently in other plan sections.
+
+CURRENT PROBLEM
+When a user creates a Wellness Plan, the system effectively exposes:
+- a meal plan in Nutrition
+- a workout plan in Training
+- a wellness plan in Wellness
+
+This makes the same plan feel duplicated and fragmented.
+
+TARGET BEHAVIOR
+A Wellness Plan must be a first-class parent entity that owns BOTH:
+- meal plan content
+- workout plan content
+
+A wellness plan should be managed as ONE integrated plan.
+
+BACKEND REQUIREMENTS
+
+1. WELLNESS PLAN DATA MODEL
+Refactor the backend so a wellness plan is treated as a parent object with its own identity and metadata.
+
+The wellness plan should own:
+- id
+- title
+- goal
+- status (draft / scheduled / active / completed if supported)
+- startDate
+- endDate if applicable
+- createdAt
+- updatedAt
+- schedule state
+- meal plan data or meal plan child reference
+- workout plan data or workout plan child reference
+
+Do NOT treat wellness-generated meal/workout plans as unrelated first-class plans for list ownership purposes.
+
+2. OWNERSHIP RULES
+Implement clear ownership rules:
+
+- Wellness page/list should return only wellness plans
+- Nutrition page/list should return only meal-only plans
+- Training page/list should return only workout-only plans
+
+If a meal/workout is created as part of a wellness plan, it must NOT appear as a standalone nutrition or training plan in those separate lists.
+
+3. CREATE WELLNESS PLAN
+Refactor the create wellness plan flow so:
+- one wellness plan parent is created
+- meal content and workout content are attached to that wellness plan
+- duplication into separate top-level plan lists does not happen
+
+4. WELLNESS PLAN DETAIL ENDPOINT
+Create or refactor a single endpoint to fetch one full wellness plan including both meal and workout content.
+
+Example desired behavior:
+GET /api/wellness-plans/:id
+
+Response should include:
+- wellness plan metadata
+- embedded or linked meal plan data
+- embedded or linked workout plan data
+- status
+- schedule info
+- any summary fields needed by mobile UI
+
+5. WELLNESS PLAN LIST ENDPOINT
+Create or refactor the wellness plan list endpoint so it returns only true wellness plans.
+
+6. PLAN ACTIONS
+Support these actions on the wellness plan parent object:
+- reschedule
+- unschedule
+- delete
+
+These actions should operate at the wellness plan parent level.
+
+If delete is called on the wellness plan:
+- delete or properly cascade-delete all child meal/workout content owned by that wellness plan
+- do not leave orphaned child records behind
+
+7. REGENERATE SUPPORT
+Preserve current regenerate functionality where appropriate.
+If regeneration operates on day-level meal/workout content, ensure it still works under the wellness plan parent.
+
+8. NO DUPLICATE SURFACING
+Audit all list/query logic and remove any behavior that causes a wellness-owned meal plan to appear in Nutrition or a wellness-owned workout plan to appear in Training.
+
+9. API CONTRACT DOCUMENTATION
+At the end, provide:
+- updated/created endpoints
+- request/response shape
+- model or schema changes
+- list of files changed
+
+10. IMPLEMENTATION QUALITY
+Base changes on the real current codebase.
+Do not produce a conceptual summary only.
+Actually implement the backend changes.
+
+Important:
+The goal is not to visually hide duplicates on the frontend.
+The goal is to structurally make Wellness Plans first-class integrated plans at the backend/data level.

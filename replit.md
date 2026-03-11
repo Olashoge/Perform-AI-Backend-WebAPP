@@ -13,7 +13,7 @@ The backend is an Express server in TypeScript with dual authentication: cookie-
 
 Key features include:
 -   **Personalized Plan Generation**: AI-generated 7-day meal and workout plans based on user profiles and preferences. Meal plans are configurable for 2 or 3 meals daily, and workout plans consider various factors like goals, location, and experience.
--   **Goal-Oriented Planning**: A `GoalPlan` entity manages the sequential generation of workout and meal plans, supporting diverse fitness goals.
+-   **Goal-Oriented Planning (Wellness Plans)**: A `GoalPlan` entity is the parent container for paired meal and workout plans. Child plans have a `parentGoalPlanId` column linking them to their parent. `GET /api/plans` and `GET /api/workouts` return only standalone plans (no `parentGoalPlanId`); goal-owned plans are accessed via `GET /api/goal-plans/:id` which embeds full `mealPlan` and `workoutPlan` objects. Schedule, unschedule, and delete operations cascade from parent to children via `POST /api/goal-plans/:id/schedule`, `/unschedule`, and `DELETE /api/goal-plans/:id`.
 -   **Feedback Loop & Adaption**: Users can provide tri-state feedback on meals and workouts, influencing future AI-generated plans and tracking preferences.
 -   **Grocery Management**: Dynamic grocery lists and tracking of owned items.
 -   **Scheduling & Calendar**: Plans are schedulable with conflict awareness and displayed in a unified calendar view.

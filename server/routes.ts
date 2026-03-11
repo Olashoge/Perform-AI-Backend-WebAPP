@@ -501,7 +501,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/plans", requireAuth, async (req: Request, res: Response) => {
-    const plans = await storage.getMealPlansByUser(req.userId!);
+    const plans = await storage.getStandaloneMealPlansByUser(req.userId!);
     return res.json(plans);
   });
 
@@ -1125,7 +1125,7 @@ export async function registerRoutes(
 
   app.get("/api/workouts", requireAuth, async (req: Request, res: Response) => {
     try {
-      const plans = await storage.getWorkoutPlansByUser(req.userId!);
+      const plans = await storage.getStandaloneWorkoutPlansByUser(req.userId!);
       return res.json(plans);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load workout plans" });
@@ -1474,7 +1474,7 @@ export async function registerRoutes(
               throw new Error("Invalid workout preferences");
             }
             const wIdempotencyKey = crypto.randomUUID();
-            const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, validStartDate, userProfile, adaptive.snapshot);
+            const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, validStartDate, userProfile, adaptive.snapshot, goalPlan.id);
             workoutPlanId = pendingWorkout.id;
             await storage.updateGoalPlan(goalPlan.id, { workoutPlanId });
 
@@ -1534,7 +1534,7 @@ export async function registerRoutes(
               throw new Error("Invalid meal preferences");
             }
             const mealIdempotencyKey = crypto.randomUUID();
-            const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, validStartDate, userProfile, adaptive.snapshot);
+            const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, validStartDate, userProfile, adaptive.snapshot, goalPlan.id);
             mealPlanId = pendingMeal.id;
             await storage.updateGoalPlan(goalPlan.id, { mealPlanId });
 
@@ -1692,7 +1692,15 @@ export async function registerRoutes(
       if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Goal plan not found" });
       }
-      return res.json(plan);
+      const [embeddedMealPlan, embeddedWorkoutPlan] = await Promise.all([
+        plan.mealPlanId ? storage.getMealPlan(plan.mealPlanId) : Promise.resolve(null),
+        plan.workoutPlanId ? storage.getWorkoutPlan(plan.workoutPlanId) : Promise.resolve(null),
+      ]);
+      return res.json({
+        ...plan,
+        mealPlan: embeddedMealPlan || null,
+        workoutPlan: embeddedWorkoutPlan || null,
+      });
     } catch (err) {
       return res.status(500).json({ message: "Failed to load goal plan" });
     }
@@ -1704,11 +1712,9 @@ export async function registerRoutes(
       if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Goal plan not found" });
       }
-      const { startDate, mealPlanId, workoutPlanId } = req.body;
+      const { startDate } = req.body;
       const updates: any = {};
       if (startDate !== undefined) updates.startDate = startDate;
-      if (mealPlanId !== undefined) updates.mealPlanId = mealPlanId;
-      if (workoutPlanId !== undefined) updates.workoutPlanId = workoutPlanId;
       const updated = await storage.updateGoalPlan(plan.id, updates);
       return res.json(updated);
     } catch (err) {
@@ -1722,10 +1728,63 @@ export async function registerRoutes(
       if (!plan || plan.userId !== req.userId) {
         return res.status(404).json({ message: "Goal plan not found" });
       }
+      if (plan.mealPlanId) {
+        await storage.softDeletePlan(plan.mealPlanId);
+      }
+      if (plan.workoutPlanId) {
+        await storage.softDeleteWorkoutPlan(plan.workoutPlanId);
+      }
       await storage.softDeleteGoalPlan(plan.id);
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ message: "Failed to delete goal plan" });
+    }
+  });
+
+  app.post("/api/goal-plans/:id/schedule", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getGoalPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      const { startDate } = req.body;
+      if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+        return res.status(400).json({ message: "startDate is required (YYYY-MM-DD)" });
+      }
+      const endDate = (() => {
+        const d = new Date(startDate + "T00:00:00");
+        d.setDate(d.getDate() + 6);
+        return d.toISOString().split("T")[0];
+      })();
+      if (plan.mealPlanId) {
+        await storage.updatePlanStartDate(plan.mealPlanId, startDate);
+      }
+      if (plan.workoutPlanId) {
+        await storage.updateWorkoutStartDate(plan.workoutPlanId, startDate);
+      }
+      const updated = await storage.updateGoalPlan(plan.id, { startDate, endDate });
+      return res.json(updated);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to schedule goal plan" });
+    }
+  });
+
+  app.post("/api/goal-plans/:id/unschedule", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const plan = await storage.getGoalPlan(req.params.id as string);
+      if (!plan || plan.userId !== req.userId || plan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      if (plan.mealPlanId) {
+        await storage.updatePlanStartDate(plan.mealPlanId, null);
+      }
+      if (plan.workoutPlanId) {
+        await storage.updateWorkoutStartDate(plan.workoutPlanId, null);
+      }
+      const updated = await storage.updateGoalPlan(plan.id, { startDate: null, endDate: null });
+      return res.json(updated);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to unschedule goal plan" });
     }
   });
 
@@ -1971,7 +2030,7 @@ export async function registerRoutes(
             if (!parsedWorkout.success) throw new Error("Invalid recovery workout preferences");
 
             const wIdempotencyKey = crypto.randomUUID();
-            const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, targetStartStr, userProfile, adaptive.snapshot);
+            const pendingWorkout = await storage.createPendingWorkoutPlan(userId, wIdempotencyKey, parsedWorkout.data, targetStartStr, userProfile, adaptive.snapshot, goalPlan.id);
             workoutPlanId = pendingWorkout.id;
             await storage.updateGoalPlan(goalPlan.id, { workoutPlanId });
 
@@ -2006,7 +2065,7 @@ export async function registerRoutes(
             if (!parsedMeal.success) throw new Error("Invalid recovery meal preferences");
 
             const mealIdempotencyKey = crypto.randomUUID();
-            const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, targetStartStr, userProfile, adaptive.snapshot);
+            const pendingMeal = await storage.createPendingMealPlan(userId, mealIdempotencyKey, parsedMeal.data, targetStartStr, userProfile, adaptive.snapshot, goalPlan.id);
             mealPlanId = pendingMeal.id;
             await storage.updateGoalPlan(goalPlan.id, { mealPlanId });
 

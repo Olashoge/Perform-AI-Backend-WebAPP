@@ -7,9 +7,10 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(email: string, passwordHash: string): Promise<User>;
   createMealPlan(userId: string, preferencesJson: any, planJson: any): Promise<MealPlan>;
-  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any): Promise<MealPlan>;
+  createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any, parentGoalPlanId?: string): Promise<MealPlan>;
   getMealPlan(id: string): Promise<MealPlan | undefined>;
   getMealPlansByUser(userId: string): Promise<MealPlan[]>;
+  getStandaloneMealPlansByUser(userId: string): Promise<MealPlan[]>;
   findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined>;
   findGeneratingPlan(userId: string): Promise<MealPlan | undefined>;
   updatePlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<MealPlan | undefined>;
@@ -29,9 +30,10 @@ export interface IStorage {
   updatePlanStartDate(id: string, startDate: string | null): Promise<MealPlan | undefined>;
   getScheduledPlans(userId: string): Promise<MealPlan[]>;
   softDeletePlan(id: string): Promise<MealPlan | undefined>;
-  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any): Promise<WorkoutPlan>;
+  createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any, parentGoalPlanId?: string): Promise<WorkoutPlan>;
   getWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
   getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]>;
+  getStandaloneWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]>;
   updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined>;
   updateWorkoutStartDate(id: string, startDate: string | null): Promise<WorkoutPlan | undefined>;
   softDeleteWorkoutPlan(id: string): Promise<WorkoutPlan | undefined>;
@@ -122,7 +124,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any): Promise<MealPlan> {
+  async createPendingMealPlan(userId: string, idempotencyKey: string, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any, parentGoalPlanId?: string): Promise<MealPlan> {
     const [plan] = await db.insert(mealPlans).values({
       userId,
       idempotencyKey,
@@ -133,6 +135,7 @@ export class DatabaseStorage implements IStorage {
       planStartDate: startDate || null,
       profileSnapshot: profileSnapshot || null,
       adaptiveSnapshot: adaptiveSnapshot || null,
+      parentGoalPlanId: parentGoalPlanId || null,
     }).returning();
     return plan;
   }
@@ -144,6 +147,10 @@ export class DatabaseStorage implements IStorage {
 
   async getMealPlansByUser(userId: string): Promise<MealPlan[]> {
     return db.select().from(mealPlans).where(and(eq(mealPlans.userId, userId), isNull(mealPlans.deletedAt))).orderBy(desc(mealPlans.createdAt));
+  }
+
+  async getStandaloneMealPlansByUser(userId: string): Promise<MealPlan[]> {
+    return db.select().from(mealPlans).where(and(eq(mealPlans.userId, userId), isNull(mealPlans.deletedAt), isNull(mealPlans.parentGoalPlanId))).orderBy(desc(mealPlans.createdAt));
   }
 
   async findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MealPlan | undefined> {
@@ -374,7 +381,7 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
-  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any): Promise<WorkoutPlan> {
+  async createPendingWorkoutPlan(userId: string, idempotencyKey: string | null, preferencesJson: any, startDate?: string, profileSnapshot?: any, adaptiveSnapshot?: any, parentGoalPlanId?: string): Promise<WorkoutPlan> {
     const [plan] = await db.insert(workoutPlans).values({
       userId,
       idempotencyKey,
@@ -385,6 +392,7 @@ export class DatabaseStorage implements IStorage {
       planStartDate: startDate || null,
       profileSnapshot: profileSnapshot || null,
       adaptiveSnapshot: adaptiveSnapshot || null,
+      parentGoalPlanId: parentGoalPlanId || null,
     }).returning();
     return plan;
   }
@@ -396,6 +404,10 @@ export class DatabaseStorage implements IStorage {
 
   async getWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]> {
     return db.select().from(workoutPlans).where(and(eq(workoutPlans.userId, userId), isNull(workoutPlans.deletedAt))).orderBy(desc(workoutPlans.createdAt));
+  }
+
+  async getStandaloneWorkoutPlansByUser(userId: string): Promise<WorkoutPlan[]> {
+    return db.select().from(workoutPlans).where(and(eq(workoutPlans.userId, userId), isNull(workoutPlans.deletedAt), isNull(workoutPlans.parentGoalPlanId))).orderBy(desc(workoutPlans.createdAt));
   }
 
   async updateWorkoutPlanStatus(id: string, status: string, planJson?: any, errorMessage?: string): Promise<WorkoutPlan | undefined> {
@@ -485,7 +497,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(goalPlans.createdAt));
   }
 
-  async updateGoalPlan(id: string, updates: Partial<{ startDate: string | null; mealPlanId: string | null; workoutPlanId: string | null }>): Promise<GoalPlan | undefined> {
+  async updateGoalPlan(id: string, updates: Partial<{ startDate: string | null; endDate: string | null; mealPlanId: string | null; workoutPlanId: string | null; status: string; progress: any; title: string | null; planType: string | null }>): Promise<GoalPlan | undefined> {
     const [plan] = await db.update(goalPlans)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(goalPlans.id, id))

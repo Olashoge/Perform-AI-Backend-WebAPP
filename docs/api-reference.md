@@ -493,7 +493,7 @@ Get the full plan object including generated meals, grocery list, and nutrition 
 
 ### GET /api/plans
 
-Get all of the current user's meal plans (excludes soft-deleted).
+Get the current user's **standalone** meal plans (excludes soft-deleted and plans owned by a wellness/goal plan). Plans with a `parentGoalPlanId` are filtered out — those are accessible via the parent goal plan's detail endpoint instead.
 
 **Response (200):** Array of plan objects.
 
@@ -827,7 +827,7 @@ Poll workout plan generation status.
 
 ### GET /api/workouts
 
-Get all of the current user's workout plans (excludes soft-deleted).
+Get the current user's **standalone** workout plans (excludes soft-deleted and plans owned by a wellness/goal plan). Plans with a `parentGoalPlanId` are filtered out — those are accessible via the parent goal plan's detail endpoint instead.
 
 **Response (200):** Array of workout plan objects.
 
@@ -1080,7 +1080,31 @@ Get all goal plans for the current user.
 
 ### GET /api/goal-plans/:id
 
-Get a single goal plan.
+Get a single goal plan with embedded child plans.
+
+**Response (200):**
+
+```json
+{
+  "id": "goal-uuid-...",
+  "userId": "user-uuid-...",
+  "goalType": "weight_loss",
+  "planType": "both",
+  "startDate": "2026-03-08",
+  "endDate": "2026-03-14",
+  "title": "Cut Phase · Mar 8",
+  "status": "ready",
+  "progress": { "stage": "FINALIZING", "stageStatuses": { ... } },
+  "mealPlanId": "meal-uuid-...",
+  "workoutPlanId": "workout-uuid-...",
+  "mealPlan": { /* full MealPlan object or null */ },
+  "workoutPlan": { /* full WorkoutPlan object or null */ },
+  "createdAt": "...",
+  "updatedAt": "..."
+}
+```
+
+The `mealPlan` and `workoutPlan` fields embed the full child plan objects (or `null` if that plan type was not generated). This allows clients to fetch all data for a wellness plan in a single request.
 
 ---
 
@@ -1102,9 +1126,33 @@ All fields are optional.
 
 ---
 
+### POST /api/goal-plans/:id/schedule
+
+Schedule a wellness plan and cascade dates to child meal and workout plans.
+
+**Request:**
+
+```json
+{
+  "startDate": "2026-03-15"
+}
+```
+
+**Response (200):** Updated goal plan object. Sets `startDate` and `endDate` (startDate + 6 days) on the goal plan, and cascades `planStartDate` to both child meal and workout plans.
+
+---
+
+### POST /api/goal-plans/:id/unschedule
+
+Unschedule a wellness plan and clear dates from child plans.
+
+**Response (200):** Updated goal plan object with `startDate` and `endDate` set to `null`. Clears `planStartDate` on both child meal and workout plans.
+
+---
+
 ### DELETE /api/goal-plans/:id
 
-Soft-delete a goal plan.
+Soft-delete a goal plan and cascade to child plans. Soft-deletes the associated meal plan and workout plan (if they exist) before soft-deleting the goal plan itself.
 
 **Response (200):** `{ "ok": true }`
 
