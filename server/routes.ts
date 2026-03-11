@@ -793,9 +793,7 @@ export async function registerRoutes(
       };
       const prefixes = GOAL_TITLE_PREFIXES[goalType] || GOAL_TITLE_PREFIXES["general_fitness"];
       const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-      const goalTitle = validStartDate
-        ? `${prefix} · ${new Date(validStartDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-        : prefix;
+      const goalTitle = prefix;
 
       const initialProgress = {
         stage: needsWorkout ? "TRAINING" : (needsMeal ? "NUTRITION" : "FINALIZING"),
@@ -1397,7 +1395,7 @@ export async function registerRoutes(
       const needsWorkout = sourceGoalPlan.planType === "both" || sourceGoalPlan.planType === "workout";
       const needsMeal = sourceGoalPlan.planType === "both" || sourceGoalPlan.planType === "meal";
 
-      const goalTitle = `Recovery Week · ${targetWeekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+      const goalTitle = "Recovery Week";
 
       const adaptive = await computeAdaptiveForUser(userId);
       const planKind: PlanKind = sourceGoalPlan.planType === "both" ? "both" : sourceGoalPlan.planType === "meal" ? "meal" : "workout";
