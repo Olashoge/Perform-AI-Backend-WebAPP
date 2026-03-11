@@ -1,0 +1,81 @@
+We need to fix three critical wellness-plan data integrity issues in the backend.
+
+Context:
+- Wellness Plans are now the parent concept
+- Meal and workout content are nested under the parent goal/wellness plan
+- The integrated wellness detail page is working
+- However regenerate, reschedule, and grocery list behavior are not correct
+
+Issues observed:
+
+1. REGENERATE DOES NOT REFLECT NEW DATA
+When regenerating meal days or workout days from the wellness detail page, the UI does not show truly refreshed updated content consistently.
+
+2. RESCHEDULE IS ONLY PARTIALLY WORKING
+When rescheduling a wellness plan:
+- the start date may change
+- but end date does not update correctly
+- child meal dates do not shift correctly
+- child workout dates do not shift correctly
+- calendar-driven data does not reflect the new shifted dates
+
+3. GROCERY LIST IS MISSING
+The grocery list tab shows no grocery list available for a wellness plan meal plan.
+
+TASK:
+Audit and fix backend behavior so wellness plans behave like true parent plans whose mutations cascade correctly.
+
+BACKEND REQUIREMENTS
+
+1. FIX RESCHEDULE AT THE PARENT LEVEL
+Rescheduling a wellness plan must:
+- update wellness plan startDate
+- recalculate wellness plan endDate
+- shift all nested meal day dates
+- shift all nested workout day/session dates
+- shift any derived schedule/calendar records associated with that wellness plan
+- preserve day ordering and sequence while changing dates
+
+This must be implemented as a true plan-wide date shift, not just editing the parent start date.
+
+2. FIX END DATE CALCULATION
+Ensure endDate is recalculated consistently from the shifted schedule based on the actual duration of the plan.
+
+3. FIX REGENERATE INTEGRITY
+Audit all wellness-owned regenerate/swap flows:
+- meal day regenerate
+- workout day regenerate
+- swap operations if applicable
+
+Ensure they update the nested child data stored under the wellness plan and return data that can be immediately reflected by the frontend after parent refetch.
+
+4. FIX GROCERY LIST GENERATION
+Ensure wellness-owned meal plans have grocery list support.
+If grocery list data is derived rather than stored:
+- provide a reliable backend path to build it from the current nested meal plan data
+If grocery list data is stored:
+- ensure it is created and returned for wellness-owned meal plans
+
+5. VERIFY WELLNESS DETAIL ENDPOINT
+Confirm that GET /api/goal-plans/:id returns fully updated parent data after:
+- reschedule
+- regenerate
+- grocery rebuild
+
+6. RETURN CONTRACT
+At the end provide:
+- root cause for regenerate issue
+- root cause for reschedule issue
+- root cause for grocery list issue
+- files changed
+- endpoints used for:
+  - reschedule
+  - regenerate meal day
+  - regenerate workout day
+  - grocery list fetch/rebuild
+- exact fields returned in GET /api/goal-plans/:id related to:
+  - startDate
+  - endDate
+  - mealPlan day dates
+  - workoutPlan day/session dates
+  - grocery list

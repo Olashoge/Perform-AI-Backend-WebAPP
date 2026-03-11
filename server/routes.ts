@@ -3,8 +3,8 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput } from "@shared/schema";
-import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
+import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput, type WorkoutSession } from "@shared/schema";
+import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout, generateDayMeals, generateWorkoutSession } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import { buildWellnessContext } from "./wellness-context";
@@ -84,6 +84,39 @@ function requireAuth(req: Request, res: Response, next: Function) {
   }
 
   return res.status(401).json({ success: false, code: "AUTH_REQUIRED", message: "Your session expired. Please log in again." });
+}
+
+function rebuildGroceryList(days: any[]): { sections: { name: string; items: { item: string; quantity: string; notes?: string }[] }[] } {
+  const categoryMap = new Map<string, Map<string, { item: string; quantity: string }>>();
+  const proteinItems = new Set(["chicken", "beef", "pork", "fish", "salmon", "tuna", "shrimp", "turkey", "lamb", "tofu", "tempeh", "egg"]);
+
+  for (const day of days) {
+    if (!day.meals) continue;
+    for (const [, meal] of Object.entries(day.meals)) {
+      if (!meal) continue;
+      const m = meal as any;
+      if (!m.ingredients) continue;
+      for (const ing of m.ingredients) {
+        const lower = ing.toLowerCase();
+        let category = "Other";
+        if (proteinItems.has(lower.split(" ")[0]) || proteinItems.has(lower.split(",")[0].trim())) category = "Proteins";
+        else if (lower.includes("oil") || lower.includes("vinegar") || lower.includes("sauce") || lower.includes("spice") || lower.includes("salt") || lower.includes("pepper") || lower.includes("cumin") || lower.includes("paprika") || lower.includes("oregano") || lower.includes("thyme")) category = "Pantry & Spices";
+        else if (lower.includes("rice") || lower.includes("pasta") || lower.includes("bread") || lower.includes("quinoa") || lower.includes("oats") || lower.includes("flour") || lower.includes("couscous")) category = "Grains & Starches";
+        else category = "Produce";
+
+        if (!categoryMap.has(category)) categoryMap.set(category, new Map());
+        const items = categoryMap.get(category)!;
+        const key = ing.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!items.has(key)) items.set(key, { item: ing, quantity: ing });
+      }
+    }
+  }
+
+  const sections: { name: string; items: { item: string; quantity: string }[] }[] = [];
+  for (const [name, items] of categoryMap) {
+    sections.push({ name, items: Array.from(items.values()) });
+  }
+  return { sections };
 }
 
 export async function registerRoutes(
@@ -1162,9 +1195,32 @@ export async function registerRoutes(
       }
       const { startDate } = req.body;
       const updates: any = {};
-      if (startDate !== undefined) updates.startDate = startDate;
+      if (startDate !== undefined) {
+        updates.startDate = startDate;
+        if (startDate) {
+          const d = new Date(startDate + "T00:00:00");
+          d.setDate(d.getDate() + 6);
+          updates.endDate = d.toISOString().split("T")[0];
+        } else {
+          updates.endDate = null;
+        }
+        if (plan.mealPlanId) {
+          await storage.updatePlanStartDate(plan.mealPlanId, startDate || null);
+        }
+        if (plan.workoutPlanId) {
+          await storage.updateWorkoutStartDate(plan.workoutPlanId, startDate || null);
+        }
+      }
       const updated = await storage.updateGoalPlan(plan.id, updates);
-      return res.json(updated);
+      const [embeddedMealPlan, embeddedWorkoutPlan] = await Promise.all([
+        updated?.mealPlanId ? storage.getMealPlan(updated.mealPlanId) : Promise.resolve(null),
+        updated?.workoutPlanId ? storage.getWorkoutPlan(updated.workoutPlanId) : Promise.resolve(null),
+      ]);
+      return res.json({
+        ...updated,
+        mealPlan: embeddedMealPlan || null,
+        workoutPlan: embeddedWorkoutPlan || null,
+      });
     } catch (err) {
       return res.status(500).json({ message: "Failed to update goal plan" });
     }
@@ -1211,7 +1267,15 @@ export async function registerRoutes(
         await storage.updateWorkoutStartDate(plan.workoutPlanId, startDate);
       }
       const updated = await storage.updateGoalPlan(plan.id, { startDate, endDate });
-      return res.json(updated);
+      const [embeddedMealPlan, embeddedWorkoutPlan] = await Promise.all([
+        updated?.mealPlanId ? storage.getMealPlan(updated.mealPlanId) : Promise.resolve(null),
+        updated?.workoutPlanId ? storage.getWorkoutPlan(updated.workoutPlanId) : Promise.resolve(null),
+      ]);
+      return res.json({
+        ...updated,
+        mealPlan: embeddedMealPlan || null,
+        workoutPlan: embeddedWorkoutPlan || null,
+      });
     } catch (err) {
       return res.status(500).json({ message: "Failed to schedule goal plan" });
     }
@@ -1230,9 +1294,125 @@ export async function registerRoutes(
         await storage.updateWorkoutStartDate(plan.workoutPlanId, null);
       }
       const updated = await storage.updateGoalPlan(plan.id, { startDate: null, endDate: null });
-      return res.json(updated);
+      return res.json({
+        ...updated,
+        mealPlan: null,
+        workoutPlan: null,
+      });
     } catch (err) {
       return res.status(500).json({ message: "Failed to unschedule goal plan" });
+    }
+  });
+
+  app.post("/api/goal-plans/:id/regenerate-meal-day", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const goalPlan = await storage.getGoalPlan(req.params.id as string);
+      if (!goalPlan || goalPlan.userId !== userId || goalPlan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      if (!goalPlan.mealPlanId) {
+        return res.status(400).json({ message: "No meal plan associated with this wellness plan" });
+      }
+      const { dayIndex } = req.body;
+      if (dayIndex === undefined || typeof dayIndex !== "number" || dayIndex < 0 || dayIndex > 6) {
+        return res.status(400).json({ message: "dayIndex is required (0-6)" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) {
+        return res.status(429).json({ message: "AI generation limit reached (10/day)" });
+      }
+
+      const mealPlan = await storage.getMealPlan(goalPlan.mealPlanId);
+      if (!mealPlan || !mealPlan.planJson) {
+        return res.status(400).json({ message: "Meal plan data not found" });
+      }
+
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const prefs = (mealPlan.preferencesJson || {}) as Preferences;
+      const prefCtx = await storage.getUserPreferenceContext(userId);
+      const newDay = await generateDayMeals(prefs, dayIndex, prefCtx);
+
+      const planJson = mealPlan.planJson as PlanOutput;
+      const updatedDays = [...planJson.days];
+      updatedDays[dayIndex] = newDay;
+
+      const updatedGrocery = rebuildGroceryList(updatedDays);
+      const updatedPlanJson = { ...planJson, days: updatedDays, groceryList: updatedGrocery };
+      await storage.updateMealPlanJson(goalPlan.mealPlanId!, updatedPlanJson);
+      await storage.logAction(userId, "ai_call_regenerate_meal_day", { goalPlanId: goalPlan.id, mealPlanId: goalPlan.mealPlanId, dayIndex });
+      log(`Wellness meal day ${dayIndex} regenerated for goal ${goalPlan.id}`, "openai");
+
+      const updatedGoalPlan = await storage.getGoalPlan(goalPlan.id);
+      const updatedMealPlan = goalPlan.mealPlanId ? await storage.getMealPlan(goalPlan.mealPlanId) : null;
+      const updatedWorkoutPlan = goalPlan.workoutPlanId ? await storage.getWorkoutPlan(goalPlan.workoutPlanId) : null;
+      res.json({ ...updatedGoalPlan, mealPlan: updatedMealPlan, workoutPlan: updatedWorkoutPlan });
+    } catch (err) {
+      log(`Regenerate meal day error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to regenerate meal day" });
+    }
+  });
+
+  app.post("/api/goal-plans/:id/regenerate-workout-session", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const goalPlan = await storage.getGoalPlan(req.params.id as string);
+      if (!goalPlan || goalPlan.userId !== userId || goalPlan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      if (!goalPlan.workoutPlanId) {
+        return res.status(400).json({ message: "No workout plan associated with this wellness plan" });
+      }
+      const { dayIndex } = req.body;
+      if (dayIndex === undefined || typeof dayIndex !== "number" || dayIndex < 0 || dayIndex > 6) {
+        return res.status(400).json({ message: "dayIndex is required (0-6)" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) {
+        return res.status(429).json({ message: "AI generation limit reached (10/day)" });
+      }
+
+      const workoutPlan = await storage.getWorkoutPlan(goalPlan.workoutPlanId);
+      if (!workoutPlan || !workoutPlan.planJson) {
+        return res.status(400).json({ message: "Workout plan data not found" });
+      }
+
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const planJson = workoutPlan.planJson as WorkoutPlanOutput;
+      const currentDay = planJson.days[dayIndex];
+      if (!currentDay || !currentDay.isWorkoutDay || !currentDay.session) {
+        return res.status(400).json({ message: "Selected day is not a workout day" });
+      }
+
+      const prefs = (workoutPlan.preferencesJson || {}) as any;
+      const exercisePrefs = await storage.getExercisePreferences(userId);
+      const exerciseContext = {
+        avoidedExercises: exercisePrefs.filter((p: any) => p.status === "avoided" || p.preference === "avoid").map((p: any) => p.exerciseName),
+        dislikedExercises: exercisePrefs.filter((p: any) => p.status === "disliked" || p.preference === "dislike").map((p: any) => p.exerciseName),
+      };
+
+      const newSession = await generateWorkoutSession(prefs, dayIndex, currentDay.session, exerciseContext);
+
+      const updatedDays = [...planJson.days];
+      updatedDays[dayIndex] = { ...currentDay, session: newSession };
+      const updatedPlanJson = { ...planJson, days: updatedDays };
+      await storage.updateWorkoutPlanStatus(goalPlan.workoutPlanId!, "ready", updatedPlanJson);
+      await storage.logAction(userId, "ai_call_regenerate_workout_session", { goalPlanId: goalPlan.id, workoutPlanId: goalPlan.workoutPlanId, dayIndex });
+      log(`Wellness workout session day ${dayIndex} regenerated for goal ${goalPlan.id}`, "openai");
+
+      const updatedGoalPlan = await storage.getGoalPlan(goalPlan.id);
+      const updatedMealPlan = goalPlan.mealPlanId ? await storage.getMealPlan(goalPlan.mealPlanId) : null;
+      const updatedWorkoutPlan = goalPlan.workoutPlanId ? await storage.getWorkoutPlan(goalPlan.workoutPlanId) : null;
+      res.json({ ...updatedGoalPlan, mealPlan: updatedMealPlan, workoutPlan: updatedWorkoutPlan });
+    } catch (err) {
+      log(`Regenerate workout session error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to regenerate workout session" });
     }
   });
 

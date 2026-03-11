@@ -19,7 +19,7 @@ import { CompletionCheckbox } from "@/components/completion-checkbox";
 import {
   ArrowLeft, Target, UtensilsCrossed, Dumbbell, CalendarDays,
   Flame, Trophy, Heart, Zap, Clock, ChevronDown, Loader2,
-  ThumbsUp, ThumbsDown, Sparkles, CheckCircle2,
+  ThumbsUp, ThumbsDown, Sparkles, CheckCircle2, RefreshCw,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 
@@ -327,6 +327,34 @@ export default function GoalDetail() {
     exercisePrefMutation.mutate({ exerciseKey: key, exerciseName: name, status: feedback });
   }, [exercisePrefMutation]);
 
+  const regenMealMutation = useMutation({
+    mutationFn: async (dayIndex: number) => {
+      const res = await apiRequest("POST", `/api/goal-plans/${id}/regenerate-meal-day`, { dayIndex });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Meal day regenerated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans", id] });
+    },
+    onError: () => {
+      toast({ title: "Failed to regenerate meal day", variant: "destructive" });
+    },
+  });
+
+  const regenWorkoutMutation = useMutation({
+    mutationFn: async (dayIndex: number) => {
+      const res = await apiRequest("POST", `/api/goal-plans/${id}/regenerate-workout-session`, { dayIndex });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Workout session regenerated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans", id] });
+    },
+    onError: () => {
+      toast({ title: "Failed to regenerate workout session", variant: "destructive" });
+    },
+  });
+
   const firstWorkoutDayIndex = useMemo(() => {
     if (!workoutPlanJson) return 0;
     return workoutPlanJson.days.findIndex(d => d.isWorkoutDay && d.session);
@@ -527,6 +555,22 @@ export default function GoalDetail() {
                 const slots = Object.entries(day.meals).filter(([, meal]) => meal);
                 return (
                   <div className="space-y-3" data-testid="meals-day-content">
+                    <div className="flex justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={regenMealMutation.isPending}
+                        onClick={() => regenMealMutation.mutate(selectedMealDay)}
+                        data-testid="button-regenerate-meal-day"
+                      >
+                        {regenMealMutation.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                        )}
+                        Regenerate Day
+                      </Button>
+                    </div>
                     {slots.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground text-sm">No meals planned for this day</div>
                     )}
@@ -554,7 +598,7 @@ export default function GoalDetail() {
                     {mealPlanJson.groceryList.sections.map((section, si) => (
                       <Card key={si}>
                         <CardContent className="p-4">
-                          <h4 className="font-medium text-sm mb-2 capitalize">{section.category}</h4>
+                          <h4 className="font-medium text-sm mb-2 capitalize">{section.name}</h4>
                           <ul className="space-y-1">
                             {section.items.map((item, ii) => (
                               <li key={ii} className="text-sm text-muted-foreground flex justify-between">
@@ -610,6 +654,22 @@ export default function GoalDetail() {
 
                 return (
                   <div className="space-y-4" data-testid="workout-day-content">
+                    <div className="flex justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={regenWorkoutMutation.isPending}
+                        onClick={() => regenWorkoutMutation.mutate(initialWorkoutDay)}
+                        data-testid="button-regenerate-workout-session"
+                      >
+                        {regenWorkoutMutation.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                        )}
+                        Regenerate Session
+                      </Button>
+                    </div>
                     <Card className={workoutCompleted ? "opacity-60" : ""}>
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between mb-4">
