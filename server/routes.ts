@@ -2020,6 +2020,7 @@ export async function registerRoutes(
           const result = await generateSingleDayWorkout({
             date,
             goal: profile.primaryGoal || "general_fitness",
+            secondaryFocus: (profile as any).secondaryFocus ?? null,
             location: profile.workoutLocationDefault || "gym",
             trainingMode: "both",
             focusAreas: ["full_body"],
@@ -2148,6 +2149,7 @@ export async function registerRoutes(
           const result = await generateSingleDayWorkout({
             date,
             goal: profile.primaryGoal || "general_fitness",
+            secondaryFocus: (profile as any).secondaryFocus ?? null,
             location: profile.workoutLocationDefault || "gym",
             trainingMode: "both",
             focusAreas: ["full_body"],
