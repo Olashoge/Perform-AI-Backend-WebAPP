@@ -14,6 +14,7 @@ import Signup from "@/pages/signup";
 import PreferencesPage from "@/pages/preferences";
 import PlanCalendar from "@/pages/plan-calendar";
 import GoalPlans from "@/pages/goal-plans";
+import GoalDetail from "@/pages/goal-detail";
 import GoalWizard from "@/pages/goal-wizard";
 import GoalGenerating from "@/pages/goal-generating";
 import GoalReady from "@/pages/goal-ready";
@@ -37,6 +38,7 @@ function AuthenticatedRouter() {
       <Route path="/goals/new" component={GoalWizard} />
       <Route path="/goals/:id/generating" component={GoalGenerating} />
       <Route path="/goals/:id/ready" component={GoalReady} />
+      <Route path="/goals/:id" component={GoalDetail} />
       <Route path="/check-ins" component={CheckIns} />
       <Route path="/daily-meal/:date" component={DailyMealView} />
       <Route path="/daily-workout/:date" component={DailyWorkoutView} />

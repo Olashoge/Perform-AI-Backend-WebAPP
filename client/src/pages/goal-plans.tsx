@@ -205,7 +205,7 @@ export default function GoalPlans() {
               const goalTitle = generateGoalTitle(gp.goalType, gp.startDate, idx);
               const planType = gp.planType || "both";
               return (
-                <Card key={gp.id} data-testid={`card-goal-${gp.id}`}>
+                <Card key={gp.id} className="cursor-pointer transition-colors hover:border-primary/30" onClick={() => navigate(`/goals/${gp.id}`)} data-testid={`card-goal-${gp.id}`}>
                   <CardContent className="p-5 sm:p-6">
                     <div className="flex items-start justify-between gap-3 mb-5">
                       <div className="flex items-center gap-3">
@@ -235,7 +235,7 @@ export default function GoalPlans() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => deleteMutation.mutate(gp.id)}
+                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(gp.id); }}
                         disabled={deleteMutation.isPending}
                         data-testid={`button-delete-goal-${gp.id}`}
                       >
@@ -273,7 +273,7 @@ export default function GoalPlans() {
                     </div>
 
                     <div className="mt-4 pt-4 border-t flex gap-2">
-                      <Link href={`/check-ins?goalPlanId=${gp.id}`}>
+                      <Link href={`/check-ins?goalPlanId=${gp.id}`} onClick={(e: any) => e.stopPropagation()}>
                         <Button variant="outline" size="sm" data-testid={`button-checkins-${gp.id}`}>
                           Weekly Check-ins
                         </Button>

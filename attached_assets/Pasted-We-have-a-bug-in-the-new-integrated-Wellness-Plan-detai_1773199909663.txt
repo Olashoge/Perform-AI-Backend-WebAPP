@@ -1,0 +1,48 @@
+We have a bug in the new integrated Wellness Plan detail flow.
+
+Symptoms:
+- Overview tab loads correctly
+- Meals tab returns 404
+- Workouts tab returns 404
+- This started after removing standalone 7-day meal and workout plan routes and refactoring Wellness Plans to be the parent concept
+
+Most likely cause:
+The frontend is now expecting integrated wellness-owned meal/workout content, but the backend response for the wellness detail page does not yet provide the full embedded data needed by the Meals and Workouts tabs, or the child endpoints being called no longer exist.
+
+Task:
+Audit the current backend implementation for Wellness Plan detail and fix it so the integrated wellness detail page can render meals and workouts without depending on removed standalone plan routes.
+
+Requirements:
+
+1. Verify the current wellness detail endpoint.
+Expected endpoint should be something like:
+GET /api/wellness-plans/:id
+
+2. Ensure the response for a wellness plan includes all data needed for:
+- overview
+- meals tab
+- workouts tab
+
+3. The response should include embedded or directly retrievable wellness-owned child data, for example:
+- mealPlan
+- workoutPlan
+or equivalent nested structures
+
+4. If the mobile app is currently calling old removed endpoints for meal/workout child content, provide a clear response contract that supports rendering everything from the parent wellness plan payload.
+
+5. Do NOT restore standalone 7-day meal/workout feature ownership.
+This must stay wellness-first.
+
+6. Audit any removed endpoints and determine whether the integrated page still depends on them indirectly.
+If so, replace that dependency with proper wellness-owned data access.
+
+7. Confirm exactly which endpoint(s) the frontend should use now for:
+- wellness detail
+- meals content inside wellness
+- workouts content inside wellness
+
+8. Return:
+- current bug cause
+- backend changes made
+- exact response shape for the wellness detail endpoint
+- files changed
