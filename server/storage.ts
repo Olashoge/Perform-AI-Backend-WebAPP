@@ -95,6 +95,7 @@ export interface IStorage {
   revokeRefreshToken(id: string): Promise<void>;
   revokeAllRefreshTokensForUser(userId: string): Promise<void>;
   updateRefreshTokenLastUsed(id: string): Promise<void>;
+  updateUser(userId: string, data: { firstName?: string; email?: string; passwordHash?: string }): Promise<User | undefined>;
   deleteUser(userId: string): Promise<void>;
 }
 
@@ -109,8 +110,17 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async createUser(email: string, passwordHash: string): Promise<User> {
-    const [user] = await db.insert(users).values({ email, passwordHash }).returning();
+  async createUser(email: string, passwordHash: string, firstName?: string): Promise<User> {
+    const [user] = await db.insert(users).values({ email, passwordHash, firstName: firstName ?? null }).returning();
+    return user;
+  }
+
+  async updateUser(userId: string, data: { firstName?: string; email?: string; passwordHash?: string }): Promise<User | undefined> {
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (data.firstName !== undefined) updates.firstName = data.firstName;
+    if (data.email !== undefined) updates.email = data.email;
+    if (data.passwordHash !== undefined) updates.passwordHash = data.passwordHash;
+    const [user] = await db.update(users).set(updates).where(eq(users.id, userId)).returning();
     return user;
   }
 

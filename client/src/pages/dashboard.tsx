@@ -140,11 +140,20 @@ export default function Dashboard() {
     );
   }
 
+  const greeting = (() => {
+    const h = now.getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  })();
+
   return (
     <div className="px-4 sm:px-6 py-8">
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-dashboard-title">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-dashboard-title">
+            {user.firstName ? `${greeting}, ${user.firstName}` : "Dashboard"}
+          </h1>
           <p className="text-sm text-muted-foreground">{format(now, "EEEE, MMMM d")}</p>
         </div>
       </div>

@@ -6,8 +6,10 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
+  firstName: text("first_name"),
   passwordHash: text("password_hash").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const mealPlans = pgTable("meal_plans", {
@@ -168,6 +170,7 @@ export const insertUserSchema = createInsertSchema(users).omit({
 });
 
 export const signupSchema = z.object({
+  firstName: z.string().min(1, "First name is required").max(50, "First name is too long").trim(),
   email: z.string().email("Please enter a valid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
@@ -175,6 +178,16 @@ export const signupSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
   password: z.string().min(1, "Password is required"),
+});
+
+export const updateAccountSchema = z.object({
+  firstName: z.string().min(1, "First name is required").max(50, "First name is too long").trim().optional(),
+  email: z.string().email("Please enter a valid email").optional(),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(6, "New password must be at least 6 characters"),
 });
 
 const mealSlotEnum = z.enum(["breakfast", "lunch", "dinner"]);

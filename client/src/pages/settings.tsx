@@ -1,17 +1,23 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
+import { apiRequest } from "@/lib/queryClient";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { updateAccountSchema, changePasswordSchema } from "@shared/schema";
 import type { GoalPlan } from "@shared/schema";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
-  User, Target, Heart, ClipboardCheck, UtensilsCrossed, Dumbbell,
-  Flame, Zap, Trophy, Settings, LogOut, ChevronRight, Sun, Moon, Monitor,
-  CalendarDays,
+  User, Target, Heart, ClipboardCheck, Dumbbell,
+  Sun, Moon, Monitor, LogOut, ChevronRight, CalendarDays, Lock, Check,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const GOAL_LABELS: Record<string, string> = {
   weight_loss: "Weight Loss",
@@ -33,10 +39,21 @@ const WEEK_START_OPTIONS = [
   { value: 1 as const, label: "Monday" },
 ];
 
+type AccountForm = z.infer<typeof updateAccountSchema>;
+
+const changePasswordClientSchema = changePasswordSchema.extend({
+  confirmNewPassword: z.string().min(1, "Please confirm your new password"),
+}).refine(data => data.newPassword === data.confirmNewPassword, {
+  message: "Passwords do not match",
+  path: ["confirmNewPassword"],
+});
+type ChangePasswordForm = z.infer<typeof changePasswordClientSchema>;
+
 export default function SettingsPage() {
-  const { user, logout, isLoading } = useAuth();
+  const { user, logout, isLoading, updateUser, refreshUser } = useAuth();
   const { preference, setPreference } = useTheme();
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(() => {
     try {
       const stored = localStorage.getItem("cal_weekStart");
@@ -53,6 +70,61 @@ export default function SettingsPage() {
     if (!isLoading && !user) navigate("/login");
   }, [isLoading, user, navigate]);
 
+  const accountForm = useForm<AccountForm>({
+    resolver: zodResolver(updateAccountSchema),
+    defaultValues: { firstName: user?.firstName ?? "", email: user?.email ?? "" },
+  });
+
+  useEffect(() => {
+    if (user) {
+      accountForm.reset({ firstName: user.firstName ?? "", email: user.email ?? "" });
+    }
+  }, [user]);
+
+  const passwordForm = useForm<ChangePasswordForm>({
+    resolver: zodResolver(changePasswordClientSchema),
+    defaultValues: { currentPassword: "", newPassword: "", confirmNewPassword: "" },
+  });
+
+  const updateAccountMutation = useMutation({
+    mutationFn: async (data: AccountForm) => {
+      const res = await apiRequest("PATCH", "/api/account", data);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to update account");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      updateUser({ firstName: data.firstName, email: data.email });
+      toast({ title: "Profile updated", description: "Your account information has been saved." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: ChangePasswordForm) => {
+      const res = await apiRequest("POST", "/api/account/change-password", {
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to change password");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      passwordForm.reset();
+      toast({ title: "Password changed", description: "Your password has been updated successfully." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Password change failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   if (isLoading || !user) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -67,7 +139,7 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-settings-title">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your profile and preferences</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage your account and preferences</p>
       </div>
 
       <div className="space-y-6">
@@ -75,14 +147,123 @@ export default function SettingsPage() {
           <CardContent className="p-5 sm:p-6">
             <div className="flex items-center gap-3 mb-5">
               <User className="h-5 w-5 text-muted-foreground" />
-              <h2 className="font-semibold text-base">Profile</h2>
+              <h2 className="font-semibold text-base">Account</h2>
             </div>
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Email</div>
-                <div className="text-sm font-medium" data-testid="text-user-email">{user.email}</div>
+            {!user.firstName && (
+              <div className="mb-4 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
+                Add your first name so we can personalise your experience.
               </div>
+            )}
+            <Form {...accountForm}>
+              <form onSubmit={accountForm.handleSubmit(d => updateAccountMutation.mutate(d))} className="space-y-4">
+                <FormField
+                  control={accountForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="Your first name" data-testid="input-first-name" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={accountForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="you@example.com" data-testid="input-email" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  disabled={updateAccountMutation.isPending}
+                  data-testid="button-save-profile"
+                >
+                  {updateAccountMutation.isPending ? (
+                    <div className="h-3.5 w-3.5 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 mr-2" />
+                  )}
+                  Save Profile
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <Lock className="h-5 w-5 text-muted-foreground" />
+              <h2 className="font-semibold text-base">Security</h2>
             </div>
+            <Form {...passwordForm}>
+              <form onSubmit={passwordForm.handleSubmit(d => changePasswordMutation.mutate(d))} className="space-y-4">
+                <FormField
+                  control={passwordForm.control}
+                  name="currentPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Current Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Enter current password" data-testid="input-current-password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={passwordForm.control}
+                  name="newPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>New Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="At least 6 characters" data-testid="input-new-password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={passwordForm.control}
+                  name="confirmNewPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm New Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Repeat new password" data-testid="input-confirm-password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  disabled={changePasswordMutation.isPending}
+                  data-testid="button-change-password"
+                >
+                  {changePasswordMutation.isPending ? (
+                    <div className="h-3.5 w-3.5 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 mr-2" />
+                  )}
+                  Change Password
+                </Button>
+              </form>
+            </Form>
           </CardContent>
         </Card>
 

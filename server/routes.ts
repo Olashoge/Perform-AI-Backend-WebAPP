@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput } from "@shared/schema";
+import { signupSchema, loginSchema, updateAccountSchema, changePasswordSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput } from "@shared/schema";
 import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
@@ -125,7 +125,7 @@ export async function registerRoutes(
       }
 
       const passwordHash = await hash(parsed.data.password, 10);
-      const user = await storage.createUser(parsed.data.email, passwordHash);
+      const user = await storage.createUser(parsed.data.email, passwordHash, parsed.data.firstName);
 
       req.session.userId = user.id;
       req.session.save((err) => {
@@ -133,7 +133,7 @@ export async function registerRoutes(
           log(`Session save error on signup: ${err}`, "auth");
           return res.status(500).json({ message: "Internal server error" });
         }
-        return res.json({ id: user.id, email: user.email });
+        return res.json({ id: user.id, email: user.email, firstName: user.firstName ?? null });
       });
     } catch (err) {
       log(`Signup error: ${err}`, "auth");
@@ -164,7 +164,7 @@ export async function registerRoutes(
           log(`Session save error on login: ${err}`, "auth");
           return res.status(500).json({ message: "Internal server error" });
         }
-        return res.json({ id: user.id, email: user.email });
+        return res.json({ id: user.id, email: user.email, firstName: user.firstName ?? null });
       });
     } catch (err) {
       log(`Login error: ${err}`, "auth");
@@ -201,7 +201,55 @@ export async function registerRoutes(
     if (!user) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    return res.json({ id: user.id, email: user.email });
+    return res.json({ id: user.id, email: user.email, firstName: user.firstName ?? null });
+  });
+
+  app.patch("/api/account", requireAuth, async (req: Request, res: Response) => {
+    if (!req.userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const parsed = updateAccountSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid input" });
+      }
+      const { firstName, email } = parsed.data;
+      if (!firstName && !email) {
+        return res.status(400).json({ message: "No fields to update" });
+      }
+      if (email) {
+        const existing = await storage.getUserByEmail(email);
+        if (existing && existing.id !== req.userId) {
+          return res.status(409).json({ message: "Email already in use" });
+        }
+      }
+      const updated = await storage.updateUser(req.userId, { firstName, email });
+      if (!updated) return res.status(404).json({ message: "User not found" });
+      return res.json({ id: updated.id, email: updated.email, firstName: updated.firstName ?? null });
+    } catch (err) {
+      log(`Account update error: ${err}`, "auth");
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/account/change-password", requireAuth, async (req: Request, res: Response) => {
+    if (!req.userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const parsed = changePasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid input" });
+      }
+      const user = await storage.getUserById(req.userId);
+      if (!user) return res.status(401).json({ message: "Not authenticated" });
+      const valid = await compare(parsed.data.currentPassword, user.passwordHash);
+      if (!valid) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+      const newHash = await hash(parsed.data.newPassword, 10);
+      await storage.updateUser(req.userId, { passwordHash: newHash });
+      return res.json({ ok: true });
+    } catch (err) {
+      log(`Password change error: ${err}`, "auth");
+      return res.status(500).json({ message: "Internal server error" });
+    }
   });
 
   app.post("/api/auth/token-login", async (req: Request, res: Response) => {
@@ -237,7 +285,7 @@ export async function registerRoutes(
       return res.json({
         accessToken,
         refreshToken: rawRefreshToken,
-        user: { id: user.id, email: user.email },
+        user: { id: user.id, email: user.email, firstName: user.firstName ?? null },
       });
     } catch (err) {
       log(`Token login error: ${err}`, "auth");

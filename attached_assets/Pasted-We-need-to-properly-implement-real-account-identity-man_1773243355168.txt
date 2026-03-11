@@ -1,0 +1,172 @@
+We need to properly implement real account identity management across backend + frontend for Perform AI. This must NOT be a frontend-only patch. Audit current auth/account flow first, then implement the changes below cleanly and consistently.
+
+OBJECTIVE
+Replace “Full Name” with “First Name” at signup, persist firstName in backend, use firstName throughout the app UI, allow changing first name and email in Settings, and fix password change so it works end-to-end.
+
+IMPORTANT
+Do not do quick hacks or email-prefix fallbacks as the primary identity source.
+The app should use backend-stored firstName as the canonical user identity.
+Maintain existing auth flow unless changes are required to support this properly.
+
+TASKS
+
+1) AUDIT CURRENT STATE
+- Inspect current backend user/account schema
+- Inspect signup/register flow
+- Inspect auth/me or equivalent current-user endpoint
+- Inspect settings/profile update flow
+- Inspect current password change implementation
+- Identify where UI is currently using email prefix / username / placeholder instead of real name
+
+Return a short summary of:
+- what exists now
+- what is missing
+- what you are going to change
+
+2) BACKEND DATA MODEL
+Add support for a persisted firstName field on the user/account model.
+Requirements:
+- field name should be consistent across backend/frontend: firstName
+- database column can be first_name if needed, but API response should use firstName
+- keep email unique
+- do not break existing users
+- write migration if needed
+
+Minimum user/account fields:
+- id
+- email
+- firstName
+- passwordHash
+- createdAt
+- updatedAt
+
+3) SIGNUP / REGISTER
+Update registration so create account collects:
+- firstName
+- email
+- password
+
+Do NOT collect full name anymore.
+
+Validation:
+- firstName required
+- trim whitespace
+- reasonable max length
+- email required and unique
+- password existing rules remain or improve them if needed
+
+Ensure backend register endpoint saves firstName correctly.
+
+4) CURRENT USER ENDPOINT
+Ensure the authenticated current-user endpoint returns:
+- id
+- firstName
+- email
+
+Use this as the source for app identity display.
+
+5) SETTINGS: PROFILE & ACCOUNT MANAGEMENT
+Update Settings page so it supports:
+A) Account/Profile section
+- First Name (editable)
+- Email (editable)
+
+B) Security section
+- Current Password
+- New Password
+- Confirm New Password
+
+Use separate save actions:
+- Save Profile (for firstName/email)
+- Change Password (for password update)
+
+Do not combine them into a single submit flow.
+
+6) UPDATE PROFILE ENDPOINT
+Implement or fix endpoint to update the authenticated user’s:
+- firstName
+- email
+
+Requirements:
+- auth required
+- validate firstName
+- validate email
+- prevent duplicate email collisions
+- if email changes, update persisted account record correctly
+- if needed, require current password before email change; if current architecture supports this cleanly, implement it
+- return updated user object after save
+
+7) PASSWORD CHANGE
+Fix password change end-to-end.
+Requirements:
+- authenticated route
+- require currentPassword
+- require newPassword
+- require confirmNewPassword on frontend, matched before submit
+- backend verifies current password against stored hash
+- backend hashes and saves new password securely
+- proper success and error responses
+- frontend shows clear inline errors and success state
+
+8) FRONTEND ACCOUNT UX
+Update Create Account screen:
+- replace “Full Name” with “First Name”
+- submit firstName to backend
+- use returned/current-user data after signup
+
+Update all top-of-page user identity displays to use firstName from backend:
+- Dashboard greeting (“Good morning, {firstName}”)
+- More page top identity
+- Profile page title/header
+- Settings page header/account section
+
+Never use raw email prefix as the primary displayed name.
+
+9) LEGACY USER HANDLING
+For users who already exist and have no firstName:
+- app should not display email prefix as if it were a real profile name
+- use a safe fallback temporarily
+- ideally prompt user in settings/profile to add first name
+- do not block app usage, but keep experience clean
+
+10) UI / COPY CLEANUP
+Make copy more polished:
+- “Create Account” page field should be “First Name”
+- Settings section label should be “Account” or “Profile & Account” instead of “Login Information” if appropriate
+- keep Profile page for physical stats/goals
+- keep Settings page for account/security/preferences
+
+11) STATE MANAGEMENT
+After saving firstName/email:
+- refresh current user state globally
+- immediately update all headers/greetings without requiring manual refresh
+- ensure persisted state remains correct on app reopen/login
+
+12) TESTING
+Test the following flows:
+- new signup with firstName
+- login after signup
+- dashboard shows firstName
+- more page shows firstName
+- settings shows firstName and email
+- editing firstName works and updates UI globally
+- editing email works
+- changing password works with correct current password
+- changing password fails properly with wrong current password
+- legacy user with null firstName has graceful fallback
+
+13) OUTPUT FORMAT
+When done, provide:
+1. backend files changed
+2. frontend files changed
+3. migration/schema changes
+4. endpoints added/updated
+5. any follow-up manual steps I need to take
+6. concise test checklist with actual tested results
+
+IMPLEMENTATION NOTES
+- Prefer clean, production-style architecture over patches
+- Keep naming consistent: firstName everywhere in API and frontend
+- Avoid duplicate identity logic in multiple components
+- Centralize current-user/account data if possible
+- Do not remove existing profile stats/goals data; this task is for account identity and settings management

@@ -22,13 +22,13 @@ export default function Signup() {
 
   const form = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { firstName: "", email: "", password: "" },
   });
 
   async function onSubmit(data: SignupForm) {
     setIsPending(true);
     try {
-      await signup(data.email, data.password);
+      await signup(data.firstName, data.email, data.password);
       setTimeout(() => navigate("/dashboard"), 50);
     } catch (err: any) {
       toast({
@@ -60,6 +60,19 @@ export default function Signup() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                <FormField
+                  control={form.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="Your first name" data-testid="input-first-name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="email"
