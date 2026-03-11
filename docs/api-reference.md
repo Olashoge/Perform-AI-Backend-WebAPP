@@ -1051,21 +1051,6 @@ Get daily meals within a date range.
 
 ---
 
-### POST /api/daily-meal/:date/regenerate
-
-Regenerate a daily meal plan for the specified date.
-
-**Response (200):**
-
-```json
-{
-  "id": "daily-meal-uuid-...",
-  "status": "pending"
-}
-```
-
----
-
 ### POST /api/daily-workout
 
 Generate a daily workout.
@@ -1100,12 +1085,6 @@ Get a daily workout by date.
 ### GET /api/daily-workouts?start=&end=
 
 Get daily workouts within a date range.
-
----
-
-### POST /api/daily-workout/:date/regenerate
-
-Regenerate a daily workout for the specified date.
 
 ---
 
@@ -1226,11 +1205,8 @@ GET /api/plan/abc            (fetch full plan)
 | Resource             | Limit                          | Scope     | Status Code |
 |----------------------|--------------------------------|-----------|-------------|
 | AI generation calls  | 10 per day                     | Per user  | `429`       |
-| Meal swaps           | Unlimited                      | —         | —           |
-| Day regenerations    | Unlimited                      | —         | —           |
-| Workout session regens | Unlimited                    | —         | —           |
 
-Swaps and regenerations have no budget or allowance limits. Only the global daily AI call limit applies.
+Swap and regeneration endpoints have been intentionally removed for launch simplification.
 
 ---
 

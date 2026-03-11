@@ -2,6 +2,8 @@
 
 This document describes how wellness plans (GoalPlans, MealPlans, WorkoutPlans) are created, stored, viewed, scheduled, mutated, and deleted. Use it to replicate the web app's behavior in the iOS client.
 
+> **⚠️ Deprecation Notice:** All meal swap, meal day regeneration, workout session regeneration, daily plan regeneration, and allowance/budget endpoints have been **intentionally removed** for launch simplification. Any references to these features below are outdated and should be ignored. These features may return in a future release.
+
 > **Companion docs:** [api-reference.md](./api-reference.md) for endpoint details, [data-models.md](./data-models.md) for type definitions.
 
 ---

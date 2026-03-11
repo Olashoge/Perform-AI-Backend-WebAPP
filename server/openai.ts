@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { planOutputSchema, mealSchema, daySchema, workoutPlanOutputSchema, workoutSessionSchema, type Preferences, type PlanOutput, type Meal, type Day, type UserPreferenceContext, type WorkoutPreferences, type WorkoutPlanOutput, type WorkoutSession } from "@shared/schema";
+import { planOutputSchema, workoutPlanOutputSchema, workoutSessionSchema, type Preferences, type PlanOutput, type UserPreferenceContext, type WorkoutPreferences, type WorkoutPlanOutput, type WorkoutSession } from "@shared/schema";
 import { type WellnessContext, buildMealWellnessBlock, buildWorkoutWellnessBlock } from "./wellness-context";
 
 if (!process.env.OPENAI_API_KEY) {
@@ -223,71 +223,6 @@ Meal object structure:
 }${buildPreferenceContextBlock(prefCtx)}`;
 }
 
-function buildSwapMealPrompt(prefs: Preferences, mealType: string, dayIndex: number, existingMealName: string, prefCtx?: UserPreferenceContext): string {
-  return `Generate a SINGLE replacement ${mealType} meal for Day ${dayIndex} of a meal plan.
-
-The current meal "${existingMealName}" needs to be replaced with something different.
-
-Preferences:
-Goal: ${prefs.goal === "weight_loss" ? "Weight Loss" : prefs.goal}
-Diet/Cuisine Styles: ${formatDietStyles(prefs)}
-Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") : "None"}
-Household Size: ${prefs.householdSize}
-Budget Mode: ${prefs.budgetMode}
-Cooking Time: ${prefs.cookingTime}
-Spice Level: ${prefs.spiceLevel || "medium"}
-Authenticity Mode: ${prefs.authenticityMode || "mixed"}
-Allergies & Intolerances: ${prefs.allergies || "None"}
-${buildPersonalizationBlock(prefs)}
-
-INGREDIENT GUIDELINES:
-- Use ingredients readily available at US grocery stores.
-- For culturally-specific cuisines, prefer ingredients found in well-stocked US supermarkets.
-
-Return ONLY a JSON meal object:
-{
-  "name": "string",
-  "cuisineTag": "string",
-  "prepTimeMinutes": number,
-  "servings": ${prefs.householdSize},
-  "ingredients": ["short string with quantity"],
-  "steps": ["step 1", ..., max 6-8 steps],
-  "nutritionEstimateRange": { "calories": "string", "protein_g": "string", "carbs_g": "string", "fat_g": "string" },
-  "whyItHelpsGoal": "1 brief sentence"
-}${buildPreferenceContextBlock(prefCtx)}`;
-}
-
-function buildRegenDayPrompt(prefs: Preferences, dayIndex: number, prefCtx?: UserPreferenceContext): string {
-  const mealSlots = getMealSlotsForPrefs(prefs);
-  const slotsLabel = mealSlots.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ");
-  const mealsNote = `Generate only ${slotsLabel}.`;
-
-  return `Generate meals for a SINGLE day (Day ${dayIndex}) of a meal plan. ${mealsNote}
-
-Preferences:
-Goal: ${prefs.goal === "weight_loss" ? "Weight Loss" : prefs.goal}
-Diet/Cuisine Styles: ${formatDietStyles(prefs)}
-Foods to Avoid: ${prefs.foodsToAvoid.length > 0 ? prefs.foodsToAvoid.join(", ") : "None"}
-Household Size: ${prefs.householdSize}
-Budget Mode: ${prefs.budgetMode}
-Cooking Time: ${prefs.cookingTime}
-Spice Level: ${prefs.spiceLevel || "medium"}
-Authenticity Mode: ${prefs.authenticityMode || "mixed"}
-Allergies & Intolerances: ${prefs.allergies || "None"}
-${buildPersonalizationBlock(prefs)}
-
-Return ONLY a JSON object:
-{
-  "dayIndex": ${dayIndex},
-  "dayName": "Day ${dayIndex}",
-  "meals": {
-    ${buildMealsStructure(prefs)}
-  }
-}
-
-Meal object: { "name", "cuisineTag", "prepTimeMinutes", "servings": ${prefs.householdSize}, "ingredients": ["short string with qty"], "steps": [...max 6-8], "nutritionEstimateRange": { "calories", "protein_g", "carbs_g", "fat_g" }, "whyItHelpsGoal": "1 brief sentence" }${buildPreferenceContextBlock(prefCtx)}`;
-}
-
 async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<string> {
   const response = await openai.chat.completions.create({
     model: "gpt-4.1-mini",
@@ -363,42 +298,6 @@ ${cleaned}`;
     cleaned = cleanJsonString(raw);
     const parsed = JSON.parse(cleaned);
     return planOutputSchema.parse(parsed);
-  }
-}
-
-export async function generateSwapMeal(prefs: Preferences, mealType: string, dayIndex: number, existingMealName: string, prefCtx?: UserPreferenceContext): Promise<Meal> {
-  const systemPrompt = buildSystemPrompt(prefs);
-  const userPrompt = buildSwapMealPrompt(prefs, mealType, dayIndex, existingMealName, prefCtx);
-
-  let raw = await callOpenAI(systemPrompt, userPrompt);
-  let cleaned = cleanJsonString(raw);
-
-  try {
-    const parsed = JSON.parse(cleaned);
-    return mealSchema.parse(parsed);
-  } catch (firstErr) {
-    const repairPrompt = `Fix this JSON meal object. Return ONLY valid JSON. Error: ${firstErr instanceof Error ? firstErr.message : "Parse error"}\n\n${cleaned}`;
-    raw = await callOpenAI(systemPrompt, repairPrompt);
-    cleaned = cleanJsonString(raw);
-    return mealSchema.parse(JSON.parse(cleaned));
-  }
-}
-
-export async function generateDayMeals(prefs: Preferences, dayIndex: number, prefCtx?: UserPreferenceContext): Promise<Day> {
-  const systemPrompt = buildSystemPrompt(prefs);
-  const userPrompt = buildRegenDayPrompt(prefs, dayIndex, prefCtx);
-
-  let raw = await callOpenAI(systemPrompt, userPrompt);
-  let cleaned = cleanJsonString(raw);
-
-  try {
-    const parsed = JSON.parse(cleaned);
-    return daySchema.parse(parsed);
-  } catch (firstErr) {
-    const repairPrompt = `Fix this JSON day object. Return ONLY valid JSON. Error: ${firstErr instanceof Error ? firstErr.message : "Parse error"}\n\n${cleaned}`;
-    raw = await callOpenAI(systemPrompt, repairPrompt);
-    cleaned = cleanJsonString(raw);
-    return daySchema.parse(JSON.parse(cleaned));
   }
 }
 
@@ -538,82 +437,6 @@ ${cleaned}`;
     cleaned = cleanJsonString(raw);
     const parsed = JSON.parse(cleaned);
     return workoutPlanOutputSchema.parse(parsed);
-  }
-}
-
-export async function generateWorkoutSession(
-  prefs: WorkoutPreferences,
-  dayIndex: number,
-  currentSession: WorkoutSession,
-  exerciseContext?: { avoidedExercises: string[]; dislikedExercises: string[] },
-): Promise<WorkoutSession> {
-  const systemPrompt = buildWorkoutSystemPrompt();
-
-  const locationLabels: Record<string, string> = {
-    gym: "Gym",
-    home: "Home",
-    outdoors: "Outdoors",
-  };
-
-  const userPrompt = `Regenerate a SINGLE workout session for Day ${dayIndex} of a 7-day workout plan.
-
-The current session for this day was:
-- Focus: ${currentSession.focus}
-- Mode: ${currentSession.mode}
-- Duration: ${currentSession.durationMinutes} min
-- Intensity: ${currentSession.intensity}
-- Exercises: ${currentSession.main.map(e => e.name).join(", ")}
-
-Generate a DIFFERENT session that keeps the same general intent but uses different exercises and structure. Make it feel fresh.
-
-User Preferences:
-Goal: ${prefs.goal.replace("_", " ")}
-Location: ${locationLabels[prefs.location] || prefs.location}
-Training Mode: ${prefs.trainingMode}
-Focus Areas: ${prefs.focusAreas.join(", ")}
-Session Length: ${prefs.sessionLength} minutes
-Experience Level: ${prefs.experienceLevel}
-Limitations/Injuries: ${prefs.limitations || "None"}
-${exerciseContext && (exerciseContext.avoidedExercises.length > 0 || exerciseContext.dislikedExercises.length > 0) ? `
-EXERCISE PREFERENCES:
-${exerciseContext.avoidedExercises.length > 0 ? `- AVOIDED exercises (NEVER include these): ${exerciseContext.avoidedExercises.join(", ")}` : ""}
-${exerciseContext.dislikedExercises.length > 0 ? `- Disliked exercises (deprioritize): ${exerciseContext.dislikedExercises.join(", ")}` : ""}
-` : ""}
-Return ONLY a JSON object for the session (NOT the full plan) with this structure:
-{
-  "mode": "strength"|"cardio"|"mixed",
-  "focus": "string describing session focus",
-  "durationMinutes": number,
-  "intensity": "easy"|"moderate"|"hard",
-  "warmup": ["warm-up item 1", ...] (3-5 items),
-  "main": [
-    {
-      "name": "exercise name",
-      "type": "strength"|"cardio"|"mobility",
-      "sets": number or null,
-      "reps": "string or null",
-      "time": "string or null",
-      "restSeconds": number or null,
-      "notes": "string or null"
-    }
-  ],
-  "finisher": ["optional finisher item"],
-  "cooldown": ["cool-down item 1", ...] (2-4 items),
-  "coachingCues": ["cue 1", "cue 2"] (max 3)
-}`;
-
-  let raw = await callOpenAI(systemPrompt, userPrompt);
-  let cleaned = cleanJsonString(raw);
-
-  try {
-    const parsed = JSON.parse(cleaned);
-    return workoutSessionSchema.parse(parsed);
-  } catch (firstErr) {
-    const repairPrompt = `The following JSON was invalid. Fix it and return ONLY valid JSON matching the required workout session schema. Error: ${firstErr instanceof Error ? firstErr.message : "Parse error"}\n\nOriginal JSON:\n${cleaned}`;
-    raw = await callOpenAI(systemPrompt, repairPrompt);
-    cleaned = cleanJsonString(raw);
-    const parsed = JSON.parse(cleaned);
-    return workoutSessionSchema.parse(parsed);
   }
 }
 

@@ -18,8 +18,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { CompletionCheckbox } from "@/components/completion-checkbox";
 import {
   ArrowLeft, Target, UtensilsCrossed, Dumbbell, CalendarDays,
-  Flame, Trophy, Heart, Zap, Clock, ChevronDown, Loader2,
-  ThumbsUp, ThumbsDown, Sparkles, CheckCircle2, RefreshCw,
+  Flame, Trophy, Heart, Zap, Clock, ChevronDown,
+  ThumbsUp, ThumbsDown, Sparkles, CheckCircle2,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 
@@ -68,7 +68,7 @@ function generateExerciseKey(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
-function MealCard({ slot, meal, dayDate, mealPlanId, feedbackState, onFeedback, completed, onToggleCompletion, onSwap, swapping }: {
+function MealCard({ slot, meal, dayDate, mealPlanId, feedbackState, onFeedback, completed, onToggleCompletion }: {
   slot: string;
   meal: any;
   dayDate: string;
@@ -77,8 +77,6 @@ function MealCard({ slot, meal, dayDate, mealPlanId, feedbackState, onFeedback, 
   onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
   completed: boolean;
   onToggleCompletion: (input: any) => void;
-  onSwap?: () => void;
-  swapping?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const fingerprint = generateMealFingerprint(meal.name, meal.cuisineTag || "", meal.ingredients);
@@ -131,18 +129,6 @@ function MealCard({ slot, meal, dayDate, mealPlanId, feedbackState, onFeedback, 
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {onSwap && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground"
-                disabled={swapping}
-                onClick={(e) => { e.stopPropagation(); onSwap(); }}
-                data-testid={`button-swap-${slot}`}
-              >
-                {swapping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="icon"
@@ -340,52 +326,6 @@ export default function GoalDetail() {
     setOptimisticExPrefs(prev => ({ ...prev, [key]: feedback === "neutral" ? null : feedback }));
     exercisePrefMutation.mutate({ exerciseKey: key, exerciseName: name, status: feedback });
   }, [exercisePrefMutation]);
-
-  const regenMealMutation = useMutation({
-    mutationFn: async (dayIndex: number) => {
-      const res = await apiRequest("POST", `/api/goal-plans/${id}/regenerate-meal-day`, { dayIndex });
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Meal day regenerated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans", id] });
-    },
-    onError: () => {
-      toast({ title: "Failed to regenerate meal day", variant: "destructive" });
-    },
-  });
-
-  const regenWorkoutMutation = useMutation({
-    mutationFn: async (dayIndex: number) => {
-      const res = await apiRequest("POST", `/api/goal-plans/${id}/regenerate-workout-session`, { dayIndex });
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Workout session regenerated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans", id] });
-    },
-    onError: () => {
-      toast({ title: "Failed to regenerate workout session", variant: "destructive" });
-    },
-  });
-
-  const [swappingSlot, setSwappingSlot] = useState<string | null>(null);
-  const swapMealMutation = useMutation({
-    mutationFn: async ({ dayIndex, mealType }: { dayIndex: number; mealType: string }) => {
-      setSwappingSlot(mealType);
-      const res = await apiRequest("POST", `/api/goal-plans/${id}/swap-meal`, { dayIndex, mealType });
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Meal swapped successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans", id] });
-      setSwappingSlot(null);
-    },
-    onError: () => {
-      toast({ title: "Failed to swap meal", variant: "destructive" });
-      setSwappingSlot(null);
-    },
-  });
 
   const firstWorkoutDayIndex = useMemo(() => {
     if (!workoutPlanJson) return 0;
@@ -587,22 +527,6 @@ export default function GoalDetail() {
                 const slots = Object.entries(day.meals).filter(([, meal]) => meal);
                 return (
                   <div className="space-y-3" data-testid="meals-day-content">
-                    <div className="flex justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={regenMealMutation.isPending}
-                        onClick={() => regenMealMutation.mutate(selectedMealDay)}
-                        data-testid="button-regenerate-meal-day"
-                      >
-                        {regenMealMutation.isPending ? (
-                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                        )}
-                        Regenerate Day
-                      </Button>
-                    </div>
                     {slots.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground text-sm">No meals planned for this day</div>
                     )}
@@ -617,8 +541,6 @@ export default function GoalDetail() {
                         onFeedback={handleMealFeedback}
                         completed={dayDate ? isCompleted(dayDate, "meal", "meal_plan", mealPlan.id, slot) : false}
                         onToggleCompletion={toggle}
-                        onSwap={() => swapMealMutation.mutate({ dayIndex: selectedMealDay, mealType: slot })}
-                        swapping={swapMealMutation.isPending && swappingSlot === slot}
                       />
                     ))}
                   </div>
@@ -688,22 +610,6 @@ export default function GoalDetail() {
 
                 return (
                   <div className="space-y-4" data-testid="workout-day-content">
-                    <div className="flex justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={regenWorkoutMutation.isPending}
-                        onClick={() => regenWorkoutMutation.mutate(initialWorkoutDay)}
-                        data-testid="button-regenerate-workout-session"
-                      >
-                        {regenWorkoutMutation.isPending ? (
-                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                        )}
-                        Regenerate Session
-                      </Button>
-                    </div>
                     <Card className={workoutCompleted ? "opacity-60" : ""}>
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between mb-4">

@@ -1,6 +1,8 @@
-# iOS Guide: Like, Dislike, Regenerate & Preferences — Complete Implementation Reference
+# iOS Guide: Like, Dislike & Preferences — Complete Implementation Reference
 
-This document is the definitive guide for implementing the Like/Dislike/Regenerate button behaviors and the Meal Preferences and Exercise Preferences screens in the iOS app. It traces every user action from button tap through API call through preference storage.
+This document is the definitive guide for implementing the Like/Dislike button behaviors and the Meal Preferences and Exercise Preferences screens in the iOS app. It traces every user action from button tap through API call through preference storage.
+
+> **Note:** Meal swap, meal day regeneration, workout session regeneration, and daily plan regeneration features have been intentionally removed to simplify the launch product. These may be reintroduced in a future release.
 
 ---
 
@@ -8,17 +10,13 @@ This document is the definitive guide for implementing the Like/Dislike/Regenera
 
 1. [Meal Like/Dislike (7-Day & Daily Plans)](#1-meal-likedislike)
 2. [Ingredient Proposal Flow (After Meal Dislike)](#2-ingredient-proposal-flow)
-3. [Meal Swap Button](#3-meal-swap-button)
-4. [Meal Day Regeneration](#4-meal-day-regeneration)
-5. [Workout Session Like/Dislike](#5-workout-session-likedislike)
-6. [Exercise Like/Dislike (Individual Exercises)](#6-exercise-likedislike)
-7. [Exercise Avoid Modal (After Exercise Dislike)](#7-exercise-avoid-modal)
-8. [Workout Session Regeneration](#8-workout-session-regeneration)
-9. [Daily Plan Regeneration](#9-daily-plan-regeneration)
-10. [Meal Preferences Page](#10-meal-preferences-page)
-11. [Exercise Preferences Page](#11-exercise-preferences-page)
-12. [How Preferences Feed Into AI Generation](#12-how-preferences-feed-into-ai)
-13. [Complete API Reference Table](#13-complete-api-reference)
+3. [Workout Session Like/Dislike](#3-workout-session-likedislike)
+4. [Exercise Like/Dislike (Individual Exercises)](#4-exercise-likedislike)
+5. [Exercise Avoid Modal (After Exercise Dislike)](#5-exercise-avoid-modal)
+6. [Meal Preferences Page](#6-meal-preferences-page)
+7. [Exercise Preferences Page](#7-exercise-preferences-page)
+8. [How Preferences Feed Into AI Generation](#8-how-preferences-feed-into-ai)
+9. [Complete API Reference Table](#9-complete-api-reference)
 
 ---
 
@@ -242,79 +240,7 @@ The Meal Preferences page shows these as a "Pending Ingredient Review" card at t
 
 ---
 
-## 3. Meal Swap Button
-
-### Where It Appears
-- Each MealCard on the 7-day meal plan view has a swap (refresh) button
-
-### Button State
-- Shows a refresh/swap icon (RefreshCw)
-- Disabled when `swapCount >= 3` (legacy limit without allowance system)
-- Shows spinner while the API call is in progress
-- Tooltip: "No swaps remaining" when disabled
-
-### API Call
-```
-POST /api/plan/:planId/swap
-
-Body:
-{
-  "dayIndex": 1,       // 1-7
-  "mealType": "lunch"  // "breakfast" | "lunch" | "dinner"
-}
-```
-
-### Response
-Returns the **entire updated meal plan** with the swapped meal already replaced in the JSON.
-
-### Error Handling
-- `403` — Swap budget exceeded (daily or plan limit)
-- `429` — AI rate limit (10 calls/day)
-- On error, show toast: "You've used all your swaps for today" or "Failed to swap meal"
-
-### After Success
-- Refresh the plan data
-- Refresh the calendar
-- Refresh the allowance panel
-- Show toast: "Meal swapped successfully"
-
----
-
-## 4. Meal Day Regeneration
-
-### Where It Appears
-- Each DayCard on the 7-day meal plan has a "Regenerate Day" button
-
-### Button State
-- Shows refresh icon + "Regenerate Day" text
-- Disabled when `regenDayCount >= 1` (legacy limit without allowance system)
-- Shows spinner during API call
-
-### API Call
-```
-POST /api/plan/:planId/regenerate-day
-
-Body:
-{
-  "dayIndex": 3  // 1-7
-}
-```
-
-### Response
-Returns the **entire updated meal plan** with all meals for that day replaced.
-
-### Error Handling
-- `403` with `cooldownMinutesRemaining` — cooldown active
-- `403` with `nextResetAt` — daily limit hit
-- `403` — plan lifetime limit hit
-- `429` — AI rate limit
-
-### Remaining Counter Display
-The web shows: **"{remaining}/1 Day Regens"** where remaining = `1 - regenDayCount`.
-
----
-
-## 5. Workout Session Like/Dislike
+## 3. Workout Session Like/Dislike
 
 ### Where It Appears
 - **7-day workout plan view only** — each SessionCard has thumbs-up/thumbs-down
@@ -361,7 +287,7 @@ Response — map of session key → feedback:
 
 ---
 
-## 6. Exercise Like/Dislike (Individual Exercises)
+## 4. Exercise Like/Dislike (Individual Exercises)
 
 ### Where It Appears
 - **7-day workout plan view** — each ExerciseRow has thumbs-up/thumbs-down
@@ -455,7 +381,7 @@ Build a local lookup dictionary: `[exerciseKey: status]` by iterating all three 
 
 ---
 
-## 7. Exercise Avoid Modal
+## 5. Exercise Avoid Modal
 
 This modal appears when a user taps the dislike button on an exercise that is currently neutral or liked.
 
@@ -485,67 +411,7 @@ Body: { "exerciseKey": "burpees", "exerciseName": "Burpees", "status": "avoided"
 
 ---
 
-## 8. Workout Session Regeneration
-
-### Where It Appears
-- Each session in the 7-day workout plan view has a "Regenerate" button
-
-### API Call
-```
-POST /api/workout/:planId/regenerate-session
-
-Body:
-{
-  "dayIndex": 2  // 1-7
-}
-```
-
-### What Happens on Backend
-1. Checks allowance budget
-2. Checks AI rate limit (10/day)
-3. Loads the user's exercise preferences
-4. Calls AI to generate a new session, explicitly passing `avoidedExercises` and `dislikedExercises`
-5. Replaces the session in the plan JSON
-6. Records the regen in the allowance system
-
-### Response
-Returns the **entire updated workout plan** with the regenerated session.
-
-### Error Handling
-Same as meal regen: `403` for budget/cooldown, `429` for AI rate limit.
-
----
-
-## 9. Daily Plan Regeneration
-
-### Daily Meal Regeneration
-```
-POST /api/daily-meal/:date/regenerate
-```
-- No request body needed
-- Sets status to `"generating"`
-- **Must poll** `GET /api/daily-meal/:date` until `status === "ready"` or `"failed"`
-
-### Daily Workout Regeneration
-```
-POST /api/daily-workout/:date/regenerate
-```
-- No request body needed
-- Sets status to `"generating"`
-- **Must poll** `GET /api/daily-workout/:date` until `status === "ready"` or `"failed"`
-
-### Polling Pattern
-```
-1. POST regenerate → get { status: "generating" }
-2. Poll GET every 2-3 seconds
-3. When status === "ready" → display the new plan
-4. When status === "failed" → show error, offer retry
-5. Timeout after ~60 seconds → show error
-```
-
----
-
-## 10. Meal Preferences Page
+## 6. Meal Preferences Page
 
 ### What It Is
 A dedicated page showing all accumulated meal feedback and ingredient preferences. This is the central hub where users can see and manage everything they've liked, disliked, and chosen to avoid.
@@ -665,7 +531,7 @@ After deletion, refresh the `/api/preferences` query. Show toast: "Preference re
 
 ---
 
-## 11. Exercise Preferences Page
+## 7. Exercise Preferences Page
 
 ### What It Is
 A dedicated page showing all accumulated exercise preferences (liked, disliked, avoided).
@@ -748,7 +614,7 @@ After deletion, refresh the `/api/preferences/exercise` query. Show toast: "Pref
 
 ---
 
-## 12. How Preferences Feed Into AI Generation
+## 8. How Preferences Feed Into AI Generation
 
 All preferences are fetched by the backend before every AI generation call via `storage.getUserPreferenceContext(userId)`. This returns:
 
@@ -776,7 +642,7 @@ This context is injected into AI prompts for:
 
 ---
 
-## 13. Complete API Reference
+## 9. Complete API Reference
 
 ### Meal Feedback
 
@@ -806,14 +672,6 @@ This context is injected into AI prompts for:
 | Like/Dislike session | POST | `/api/feedback/workout` | `{workoutPlanId, sessionKey, feedback}` | Upsert |
 | Get feedback for plan | GET | `/api/feedback/workout/:planId` | — | Returns `{sessionKey: "like"/"dislike"}` map |
 
-### Swap & Regeneration
+### Swap & Regeneration (Removed)
 
-| Action | Method | Endpoint | Body | Notes |
-|:-------|:-------|:---------|:-----|:------|
-| Swap single meal | POST | `/api/plan/:id/swap` | `{dayIndex, mealType}` | Returns full updated plan |
-| Regen meal day | POST | `/api/plan/:id/regenerate-day` | `{dayIndex}` | Returns full updated plan |
-| Regen workout session | POST | `/api/workout/:id/regenerate-session` | `{dayIndex}` | Returns full updated plan |
-| Regen daily meal | POST | `/api/daily-meal/:date/regenerate` | — | Async; must poll |
-| Regen daily workout | POST | `/api/daily-workout/:date/regenerate` | — | Async; must poll |
-| Get allowance state | GET | `/api/allowance` | — | Current swap/regen budget |
-| Redeem flex token | POST | `/api/flex-tokens/:tokenId/redeem` | — | +1 meal regen |
+> Swap, regeneration, and allowance endpoints have been intentionally removed for launch simplification. These features may return in a future release.

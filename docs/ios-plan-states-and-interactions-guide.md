@@ -1,8 +1,10 @@
-# iOS Guide: Plan States & Like/Dislike/Regenerate Behavior
+# iOS Guide: Plan States & Like/Dislike Behavior
 
 This document covers two critical systems for iOS feature parity:
 1. **Plan Lifecycle States** — How plans are categorized as Active, Scheduled, Draft (Unscheduled), or Completed
-2. **Like, Dislike & Regenerate** — How feedback buttons and regeneration work across all plan types
+2. **Like & Dislike** — How feedback buttons work across all plan types
+
+> **⚠️ Deprecation Notice:** All meal swap, meal day regeneration, workout session regeneration, and allowance/budget features have been **intentionally removed** for launch simplification. Any references to swap, regeneration, or allowance below are outdated and should be ignored. These features may return in a future release.
 
 ---
 

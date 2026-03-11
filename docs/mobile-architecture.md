@@ -2,6 +2,8 @@
 
 This document provides a comprehensive architecture reference for rebuilding Perform AI as a React Native iOS application. It maps every web app screen to its mobile equivalent, defines the navigation structure, describes key UX patterns, and outlines the design system, offline strategy, and API client architecture.
 
+> **⚠️ Deprecation Notice:** All meal swap, meal day regeneration, workout session regeneration, daily plan regeneration, and allowance/budget endpoints have been **intentionally removed** for launch simplification. Any references to these features below (including `/api/plan/:id/swap`, `/api/plan/:id/regenerate-day`, `/api/workout/:id/regenerate-session`, `/api/daily-meal/:date/regenerate`, `/api/daily-workout/:date/regenerate`, `/api/allowance/current`) are outdated and should be ignored. These features may return in a future release.
+
 > **Companion docs:** See [auth-guide.md](./auth-guide.md) for JWT authentication details and [api-reference.md](./api-reference.md) for full endpoint documentation.
 
 ---
