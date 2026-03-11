@@ -32,12 +32,9 @@ const DIET_STYLES = [
 const GOAL_OPTIONS = [
   { value: "weight_loss", label: "Weight Loss" },
   { value: "muscle_gain", label: "Muscle Gain" },
-  { value: "performance", label: "Performance" },
+  { value: "body_recomposition", label: "Body Recomposition" },
   { value: "general_fitness", label: "General Fitness" },
-  { value: "mobility", label: "Mobility" },
-  { value: "endurance", label: "Endurance" },
-  { value: "strength", label: "Strength" },
-  { value: "energy", label: "Energy & Focus" },
+  { value: "athletic_performance", label: "Athletic Performance" },
 ];
 
 const PLAN_TYPE_OPTIONS = [
@@ -98,19 +95,38 @@ const STEP_INFO = [
   { title: "Review", description: "Review your plan before generating" },
 ];
 
-function mapGoalForMeal(goalType: string): "weight_loss" | "muscle_gain" | "energy" | "maintenance" | "performance" {
-  if (goalType === "general_fitness" || goalType === "mobility") return "maintenance";
-  if (goalType === "energy") return "energy";
-  if (goalType === "endurance") return "performance";
-  if (goalType === "strength") return "muscle_gain";
-  return goalType as "weight_loss" | "muscle_gain" | "maintenance" | "performance";
+function mapGoalForMeal(goalType: string): "weight_loss" | "muscle_gain" | "body_recomposition" | "general_fitness" | "athletic_performance" {
+  switch (goalType) {
+    case "weight_loss": return "weight_loss";
+    case "muscle_gain": return "muscle_gain";
+    case "body_recomposition": return "body_recomposition";
+    case "athletic_performance": return "athletic_performance";
+    // legacy
+    case "performance": return "athletic_performance";
+    case "maintenance": return "general_fitness";
+    case "energy": return "general_fitness";
+    case "mobility": return "general_fitness";
+    case "endurance": return "general_fitness";
+    case "strength": return "muscle_gain";
+    default: return "general_fitness";
+  }
 }
 
-function mapGoalForWorkout(goalType: string): "weight_loss" | "muscle_gain" | "performance" | "maintenance" {
-  if (goalType === "general_fitness" || goalType === "energy" || goalType === "mobility") return "maintenance";
-  if (goalType === "endurance") return "performance";
-  if (goalType === "strength") return "muscle_gain";
-  return goalType as "weight_loss" | "muscle_gain" | "performance" | "maintenance";
+function mapGoalForWorkout(goalType: string): "weight_loss" | "muscle_gain" | "body_recomposition" | "general_fitness" | "athletic_performance" {
+  switch (goalType) {
+    case "weight_loss": return "weight_loss";
+    case "muscle_gain": return "muscle_gain";
+    case "body_recomposition": return "body_recomposition";
+    case "athletic_performance": return "athletic_performance";
+    // legacy
+    case "performance": return "athletic_performance";
+    case "maintenance": return "general_fitness";
+    case "energy": return "general_fitness";
+    case "mobility": return "general_fitness";
+    case "endurance": return "general_fitness";
+    case "strength": return "muscle_gain";
+    default: return "general_fitness";
+  }
 }
 
 export default function GoalWizard() {
@@ -162,7 +178,7 @@ export default function GoalWizard() {
   const mealForm = useForm<Preferences>({
     resolver: zodResolver(preferencesSchema),
     defaultValues: {
-      goal: "maintenance",
+      goal: "general_fitness",
       dietStyles: ["No Preference"],
       foodsToAvoid: [],
       householdSize: 1,
@@ -186,7 +202,7 @@ export default function GoalWizard() {
   const workoutForm = useForm<WorkoutPreferences>({
     resolver: zodResolver(workoutPreferencesSchema),
     defaultValues: {
-      goal: "maintenance",
+      goal: "general_fitness",
       location: "",
       trainingMode: "both",
       focusAreas: ["Full Body"],

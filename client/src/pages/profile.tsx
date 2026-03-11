@@ -61,10 +61,9 @@ function ftInToCm(feet: number, inches: number): number {
 const GOAL_OPTIONS = [
   { value: "weight_loss", label: "Weight Loss" },
   { value: "muscle_gain", label: "Muscle Gain" },
-  { value: "performance", label: "Performance" },
-  { value: "maintenance", label: "Maintenance" },
-  { value: "energy", label: "Energy & Focus" },
+  { value: "body_recomposition", label: "Body Recomposition" },
   { value: "general_fitness", label: "General Fitness" },
+  { value: "athletic_performance", label: "Athletic Performance" },
 ];
 
 const EXPERIENCE_OPTIONS = [
@@ -313,7 +312,7 @@ export default function ProfilePage() {
         heightCm: profile.heightCm || null,
         weightKg: profile.weightKg,
         targetWeightKg: profile.targetWeightKg || null,
-        primaryGoal: profile.primaryGoal,
+        primaryGoal: profile.primaryGoal as "weight_loss" | "muscle_gain" | "body_recomposition" | "general_fitness" | "athletic_performance",
         trainingExperience: profile.trainingExperience as "beginner" | "intermediate" | "advanced",
         injuries: (profile.injuries as string[]) || [],
         mobilityLimitations: (profile.mobilityLimitations as string[]) || [],
@@ -322,7 +321,7 @@ export default function ProfilePage() {
         sleepHours: profile.sleepHours || null,
         stressLevel: (profile.stressLevel as "low" | "moderate" | "high") || null,
         activityLevel: (profile.activityLevel as "sedentary" | "moderate" | "active") || null,
-        trainingDaysOfWeek: (profile.trainingDaysOfWeek as string[]) || [],
+        trainingDaysOfWeek: (profile.trainingDaysOfWeek as ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[]) || [],
         sessionDurationMinutes: profile.sessionDurationMinutes || null,
         allergies: (profile.allergies as string[]) || [],
         intolerances: (profile.intolerances as string[]) || [],

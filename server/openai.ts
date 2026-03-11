@@ -127,8 +127,12 @@ function buildPersonalizationBlock(prefs: Preferences): string {
     block += `\n- On rest days: slightly lighter carbs, emphasize vegetables, healthy fats, and lean proteins. Keep within the calorie range for the user's goal.`;
     if (prefs.goal === "weight_loss") {
       block += `\n- For weight loss: still keep within calorie range on all days. On workout days, shift macros toward more carbs/protein rather than adding extra calories.`;
-    } else if (prefs.goal === "muscle_gain" || prefs.goal === "performance") {
-      block += `\n- For ${prefs.goal}: include adequate carbs on workout days to fuel performance and recovery. Post-workout friendly meals encouraged.`;
+    } else if (prefs.goal === "muscle_gain") {
+      block += `\n- For muscle gain: include adequate carbs on workout days to fuel training and recovery. Post-workout meals with fast-digesting carbs + protein encouraged. Maintain caloric surplus on training days.`;
+    } else if (prefs.goal === "body_recomposition") {
+      block += `\n- For body recomposition: cycle carbs — higher on training days, lower on rest days. Overall calories near maintenance. Prioritize lean protein at every meal.`;
+    } else if (prefs.goal === "athletic_performance" || prefs.goal === "performance") {
+      block += `\n- For athletic performance: carb timing is key. Prioritize pre- and post-workout carb availability. Match calorie intake to training load.`;
     }
     block += `\n- In whyItHelpsGoal for workout-day meals, briefly mention the fueling rationale (e.g., "Higher-carb dinner to support training recovery").`;
   } else if (workoutCount >= 4) {

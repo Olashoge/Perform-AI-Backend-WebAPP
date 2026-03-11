@@ -1,0 +1,217 @@
+We are refining the goal architecture in Perform AI to make plan generation cleaner, more controllable, and more scalable.
+
+IMPORTANT
+This backend task only covers:
+- data model updates
+- validation
+- API updates
+- plan generator input/model updates
+
+Do NOT modify frontend UI here.
+
+Also note:
+- Pill toggle behavior is already implemented
+- Workout location preset logic is already implemented
+Do not change those systems.
+
+--------------------------------------------------
+OBJECTIVE
+
+Upgrade the goal model so it clearly separates:
+
+PRIMARY GOAL = body outcome / main objective
+SECONDARY FOCUS = training emphasis / modifier
+
+Use this structure:
+
+primaryGoal (required)
+secondaryFocus (optional)
+
+Allowed PRIMARY GOALS:
+- Weight Loss
+- Muscle Gain
+- Body Recomposition
+- General Fitness
+- Athletic Performance
+
+Allowed SECONDARY FOCUS values:
+- Strength
+- Endurance
+- Mobility
+- Energy & Focus
+- Recovery
+
+This must be reflected in:
+- user/profile schema
+- profile read/update APIs
+- onboarding/profile save logic
+- wellness plan creation payloads where relevant
+- plan generator inputs
+- any backend summary/serialization logic currently using goal
+
+--------------------------------------------------
+SECTION 1 — DATA MODEL UPDATE
+
+Audit the current schema and identify everywhere the app stores or expects:
+- goal
+
+Replace or migrate to:
+
+primaryGoal: string
+secondaryFocus: string | null
+
+Requirements:
+1. primaryGoal is required
+2. secondaryFocus is optional
+3. secondaryFocus must be one of the allowed focus values
+4. primaryGoal must be one of the allowed primary goal values
+5. Keep backward compatibility/migration handling for existing users if needed
+6. Use consistent API naming:
+   - primaryGoal
+   - secondaryFocus
+
+If the database uses snake_case internally, that is fine, but API responses must use camelCase.
+
+--------------------------------------------------
+SECTION 2 — VALIDATION RULES
+
+Implement backend validation so that:
+
+- primaryGoal must be present
+- primaryGoal must be one of:
+  Weight Loss, Muscle Gain, Body Recomposition, General Fitness, Athletic Performance
+- secondaryFocus may be null
+- if present, secondaryFocus must be one of:
+  Strength, Endurance, Mobility, Energy & Focus, Recovery
+
+Return clear validation errors for invalid submissions.
+
+--------------------------------------------------
+SECTION 3 — PROFILE / USER API UPDATES
+
+Update all relevant endpoints that read or update user profile/account data so they include:
+
+primaryGoal
+secondaryFocus
+
+This includes any endpoint equivalents of:
+- GET profile/current user
+- PATCH/PUT profile
+- onboarding/profile save
+- wellness plan creation inputs if they depend on saved goals
+
+Requirements:
+1. Existing profile fetch returns both fields
+2. Existing profile update accepts both fields
+3. Responses serialize both fields consistently
+4. Any old goal field usage is removed or mapped safely
+
+Example response shape:
+
+{
+  "primaryGoal": "Muscle Gain",
+  "secondaryFocus": "Mobility"
+}
+
+--------------------------------------------------
+SECTION 4 — PLAN GENERATION INPUT UPDATE
+
+Update plan generation logic so it no longer relies on a single generic goal field.
+
+New input shape:
+
+generatePlan(primaryGoal, secondaryFocus)
+
+Logic structure:
+
+basePlan = optimize(primaryGoal)
+
+if secondaryFocus exists:
+    modify(basePlan, secondaryFocus)
+
+Interpretation model:
+- primaryGoal defines the main plan objective and nutritional/training target
+- secondaryFocus modifies training style, programming emphasis, and support work
+- secondaryFocus is NOT a second equal goal
+
+Examples:
+- primaryGoal = Muscle Gain, secondaryFocus = Mobility
+  -> muscle-building plan with mobility support
+- primaryGoal = Weight Loss, secondaryFocus = Strength
+  -> fat-loss plan that preserves/emphasizes strength
+- primaryGoal = Body Recomposition, secondaryFocus = Endurance
+  -> recomposition plan with endurance support
+- primaryGoal = Athletic Performance, secondaryFocus = Recovery
+  -> performance-focused plan with recovery bias
+
+--------------------------------------------------
+SECTION 5 — GOAL SEMANTICS / MAPPING
+
+Model the categories intentionally:
+
+PRIMARY GOAL should drive:
+- calorie strategy
+- macro emphasis if applicable
+- training volume target
+- progression bias
+- recovery demand
+
+SECONDARY FOCUS should modify:
+- exercise selection
+- cardio emphasis
+- warmup/cooldown structure
+- rest interval bias
+- accessory and support work
+
+Examples:
+- Weight Loss -> deficit-oriented nutrition + sustainable resistance/cardio balance
+- Muscle Gain -> surplus-oriented nutrition + hypertrophy/strength bias
+- Body Recomposition -> high-protein balanced structure with body-composition focus
+- General Fitness -> balanced sustainable training/nutrition
+- Athletic Performance -> performance-oriented programming
+
+Examples of secondary modifiers:
+- Strength -> heavier compounds / strength emphasis
+- Endurance -> more aerobic/conditioning support
+- Mobility -> mobility blocks / movement quality emphasis
+- Energy & Focus -> lower-friction, sustainable, mentally supportive structure
+- Recovery -> fatigue management / recovery support bias
+
+--------------------------------------------------
+SECTION 6 — BACKWARD COMPATIBILITY / MIGRATION
+
+Handle legacy users safely.
+
+Requirements:
+1. If existing users have old goal data, map it into primaryGoal where possible
+2. secondaryFocus can default to null
+3. If old data contains “Performance”, map thoughtfully to “Athletic Performance” if appropriate
+4. Do not break existing user records or plan generation for legacy profiles
+5. Add migration or fallback handling if needed
+
+--------------------------------------------------
+SECTION 7 — TESTING
+
+Please test and confirm:
+
+1. Profile with primaryGoal only saves correctly
+2. Profile with primaryGoal + secondaryFocus saves correctly
+3. Invalid primaryGoal is rejected
+4. Invalid secondaryFocus is rejected
+5. Profile fetch returns both fields
+6. Plan generation receives both fields
+7. Legacy users with only old goal data still work safely
+8. “Performance” legacy handling maps safely if applicable
+
+--------------------------------------------------
+SECTION 8 — OUTPUT
+
+When finished, provide:
+
+1. Backend files changed
+2. Schema/model changes
+3. Endpoints updated
+4. Validation rules implemented
+5. Migration/backward-compatibility handling
+6. Plan generator changes
+7. Concise tested-results checklist

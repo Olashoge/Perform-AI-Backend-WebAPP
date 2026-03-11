@@ -86,10 +86,15 @@ export function ActiveGoalBar() {
   const GOAL_LABELS: Record<string, string> = {
     weight_loss: "Weight Loss",
     muscle_gain: "Muscle Gain",
-    performance: "Performance",
-    maintenance: "Maintenance",
-    energy: "Energy & Focus",
+    body_recomposition: "Body Recomposition",
     general_fitness: "General Fitness",
+    athletic_performance: "Athletic Performance",
+    performance: "Athletic Performance",
+    maintenance: "General Fitness",
+    energy: "General Fitness",
+    mobility: "General Fitness",
+    endurance: "General Fitness",
+    strength: "Muscle Gain",
   };
 
   if (!activeGoal) return null;

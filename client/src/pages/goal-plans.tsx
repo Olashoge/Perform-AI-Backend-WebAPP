@@ -52,22 +52,28 @@ function GoalStatusBadge({ startDate }: { startDate: string | null | undefined }
 const GOAL_LABELS: Record<string, string> = {
   weight_loss: "Weight Loss",
   muscle_gain: "Muscle Gain",
-  performance: "Performance",
-  maintenance: "Maintenance",
-  energy: "Energy & Focus",
+  body_recomposition: "Body Recomposition",
   general_fitness: "General Fitness",
-  mobility: "Mobility",
-  endurance: "Endurance",
-  strength: "Strength",
+  athletic_performance: "Athletic Performance",
+  // legacy
+  performance: "Athletic Performance",
+  maintenance: "General Fitness",
+  energy: "General Fitness",
+  mobility: "General Fitness",
+  endurance: "General Fitness",
+  strength: "Muscle Gain",
 };
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
   weight_loss: Flame,
   muscle_gain: Dumbbell,
+  body_recomposition: Target,
+  general_fitness: Target,
+  athletic_performance: Trophy,
+  // legacy
   performance: Trophy,
   maintenance: Heart,
   energy: Zap,
-  general_fitness: Target,
   mobility: Heart,
   endurance: Zap,
   strength: Dumbbell,
@@ -75,11 +81,14 @@ const GOAL_ICONS: Record<string, typeof Flame> = {
 
 const GOAL_TITLE_PREFIXES: Record<string, string[]> = {
   weight_loss: ["Lean Start", "Cut Phase", "Slim Down"],
-  muscle_gain: ["Strength Sprint", "Build Phase", "Gain Mode"],
+  muscle_gain: ["Build Phase", "Gain Mode", "Mass Drive"],
+  body_recomposition: ["Recomp Phase", "Transform Mode", "Shape Shift"],
+  general_fitness: ["Fresh Start", "New Chapter", "Kickoff"],
+  athletic_performance: ["Peak Performance", "Level Up", "Go Mode"],
+  // legacy
   performance: ["Peak Performance", "Level Up", "Go Mode"],
   maintenance: ["Steady State", "Stay Strong", "Balance"],
   energy: ["Energy Boost", "Power Up", "Recharge"],
-  general_fitness: ["Fresh Start", "New Chapter", "Kickoff"],
   mobility: ["Flex Flow", "Move Better", "Limber Up"],
   endurance: ["Long Game", "Mile Maker", "Stay Going"],
   strength: ["Iron Path", "Power Phase", "Lift Off"],
@@ -87,12 +96,7 @@ const GOAL_TITLE_PREFIXES: Record<string, string[]> = {
 
 function generateGoalTitle(goalType: string, startDate: string | null, index: number): string {
   const prefixes = GOAL_TITLE_PREFIXES[goalType] || GOAL_TITLE_PREFIXES["general_fitness"];
-  const prefix = prefixes[index % prefixes.length];
-  if (startDate) {
-    const datePart = format(new Date(startDate + "T00:00:00"), "MMM d");
-    return `${prefix} · ${datePart}`;
-  }
-  return prefix;
+  return prefixes[index % prefixes.length];
 }
 
 export default function GoalPlans() {

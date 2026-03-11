@@ -193,7 +193,7 @@ export const changePasswordSchema = z.object({
 const mealSlotEnum = z.enum(["breakfast", "lunch", "dinner"]);
 
 export const preferencesSchema = z.object({
-  goal: z.enum(["weight_loss", "muscle_gain", "energy", "maintenance", "performance"]),
+  goal: z.enum(["weight_loss", "muscle_gain", "body_recomposition", "general_fitness", "athletic_performance", "energy", "maintenance", "performance"]),
   dietStyles: z.array(z.string()).min(1, "Select at least one diet/cuisine style"),
   foodsToAvoid: z.array(z.string()).default([]),
   householdSize: z.number().int().min(1).max(8),
@@ -277,7 +277,7 @@ export const planOutputSchema = z.object({
 });
 
 export const workoutPreferencesSchema = z.object({
-  goal: z.enum(["weight_loss", "muscle_gain", "performance", "maintenance"]),
+  goal: z.enum(["weight_loss", "muscle_gain", "body_recomposition", "general_fitness", "athletic_performance", "performance", "maintenance"]),
   location: z.enum(["gym", "home", "outdoors"]).or(z.literal("")),
   trainingMode: z.enum(["strength", "cardio", "both"]),
   focusAreas: z.array(z.string()).min(1, "Select at least one focus area"),
@@ -344,7 +344,7 @@ export const workoutFeedbackSchema = z.object({
 });
 
 export const goalPlanCreateSchema = z.object({
-  goalType: z.enum(["weight_loss", "muscle_gain", "performance", "maintenance", "energy", "general_fitness", "mobility", "endurance", "strength"]),
+  goalType: z.enum(["weight_loss", "muscle_gain", "body_recomposition", "general_fitness", "athletic_performance", "performance", "maintenance", "energy", "mobility", "endurance", "strength"]),
   planTypes: z.enum(["meals", "workouts", "both"]),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
@@ -442,7 +442,8 @@ export const userProfiles = pgTable("user_profiles", {
   heightCm: integer("height_cm"),
   weightKg: real("weight_kg").notNull(),
   targetWeightKg: real("target_weight_kg"),
-  primaryGoal: varchar("primary_goal", { length: 30 }).notNull(),
+  primaryGoal: varchar("primary_goal", { length: 40 }).notNull(),
+  secondaryFocus: varchar("secondary_focus", { length: 30 }),
   trainingExperience: varchar("training_experience", { length: 20 }).notNull(),
   injuries: jsonb("injuries").default([]),
   mobilityLimitations: jsonb("mobility_limitations").default([]),
@@ -480,7 +481,8 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({
   unitSystem: z.enum(["imperial", "metric"]).default("imperial"),
   age: z.coerce.number().int().min(13, "You must be at least 13 years old"),
   weightKg: z.coerce.number().positive("Weight is required"),
-  primaryGoal: z.string().min(1, "Primary goal is required"),
+  primaryGoal: z.enum(["weight_loss", "muscle_gain", "body_recomposition", "general_fitness", "athletic_performance"], { errorMap: () => ({ message: "Invalid primary goal" }) }),
+  secondaryFocus: z.enum(["strength", "endurance", "mobility", "energy_focus", "recovery"]).nullable().optional(),
   trainingExperience: z.enum(["beginner", "intermediate", "advanced"]),
   sex: z.string().nullable().optional(),
   heightCm: z.coerce.number().int().positive().nullable().optional(),

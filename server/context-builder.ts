@@ -13,6 +13,7 @@ export interface GenerationContext {
   };
   goals: {
     primaryGoal: string;
+    secondaryFocus?: string | null;
     pace?: string | null;
   };
   training: {
@@ -67,6 +68,33 @@ export interface ContextOverrides {
   appetiteLevel?: string;
 }
 
+const PRIMARY_GOAL_LABELS: Record<string, string> = {
+  weight_loss: "Weight Loss",
+  muscle_gain: "Muscle Gain",
+  body_recomposition: "Body Recomposition",
+  general_fitness: "General Fitness",
+  athletic_performance: "Athletic Performance",
+  performance: "Athletic Performance",
+  maintenance: "General Fitness",
+  energy: "General Fitness",
+};
+
+const SECONDARY_FOCUS_LABELS: Record<string, string> = {
+  strength: "Strength",
+  endurance: "Endurance",
+  mobility: "Mobility",
+  energy_focus: "Energy & Focus",
+  recovery: "Recovery",
+};
+
+export function formatGoalLabel(primaryGoal: string): string {
+  return PRIMARY_GOAL_LABELS[primaryGoal] || primaryGoal.replace(/_/g, " ");
+}
+
+export function formatSecondaryFocusLabel(focus: string): string {
+  return SECONDARY_FOCUS_LABELS[focus] || focus.replace(/_/g, " ");
+}
+
 export function buildUserContextForGeneration(
   profile: UserProfile,
   overrides?: ContextOverrides
@@ -84,6 +112,7 @@ export function buildUserContextForGeneration(
     },
     goals: {
       primaryGoal: profile.primaryGoal,
+      secondaryFocus: (profile as any).secondaryFocus ?? null,
       pace: profile.nextWeekPlanBias,
     },
     training: {
@@ -156,7 +185,10 @@ function buildMealContextBlock(ctx: GenerationContext): string {
     parts.push(`Target Weight: ${displayTarget} ${unit}`);
   }
 
-  parts.push(`Goal: ${ctx.goals.primaryGoal.replace("_", " ")}`);
+  parts.push(`Primary Goal: ${formatGoalLabel(ctx.goals.primaryGoal)}`);
+  if (ctx.goals.secondaryFocus) {
+    parts.push(`Secondary Focus: ${formatSecondaryFocusLabel(ctx.goals.secondaryFocus)} (modifier — support this emphasis while serving the primary goal)`);
+  }
 
   if (ctx.training.trainingDaysOfWeek.length > 0) {
     parts.push(`Training Days: ${ctx.training.trainingDaysOfWeek.join(", ")}`);
@@ -219,7 +251,10 @@ function buildWorkoutContextBlock(ctx: GenerationContext): string {
     : Math.round(ctx.measurements.weightKg * 2.205);
   parts.push(`Current Weight: ${displayWeight} ${unit}`);
 
-  parts.push(`Goal: ${ctx.goals.primaryGoal.replace("_", " ")}`);
+  parts.push(`Primary Goal: ${formatGoalLabel(ctx.goals.primaryGoal)}`);
+  if (ctx.goals.secondaryFocus) {
+    parts.push(`Secondary Focus: ${formatSecondaryFocusLabel(ctx.goals.secondaryFocus)} (modifier — shape training emphasis while serving the primary goal)`);
+  }
   parts.push(`Experience: ${ctx.training.experience}`);
 
   if (ctx.training.sessionDurationMinutes) {

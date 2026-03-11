@@ -818,6 +818,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "goalType is required" });
       }
 
+      // Normalize legacy goal types to new taxonomy
+      const GOAL_TYPE_MAP: Record<string, string> = {
+        performance: "athletic_performance",
+        maintenance: "general_fitness",
+        energy: "general_fitness",
+        mobility: "general_fitness",
+        endurance: "general_fitness",
+        strength: "muscle_gain",
+      };
+      const normalizedGoalType: string = GOAL_TYPE_MAP[goalType] || goalType;
+
       const aiCalls = await storage.getAiCallCountToday(userId);
       if (aiCalls >= 10) {
         return res.status(429).json({ message: "Daily AI call limit reached (10/day). Try again tomorrow." });
@@ -830,16 +841,19 @@ export async function registerRoutes(
 
       const GOAL_TITLE_PREFIXES: Record<string, string[]> = {
         weight_loss: ["Lean Start", "Cut Phase", "Slim Down"],
-        muscle_gain: ["Strength Sprint", "Build Phase", "Gain Mode"],
+        muscle_gain: ["Build Phase", "Gain Mode", "Mass Drive"],
+        body_recomposition: ["Recomp Phase", "Transform Mode", "Shape Shift"],
+        general_fitness: ["Fresh Start", "New Chapter", "Kickoff"],
+        athletic_performance: ["Peak Performance", "Level Up", "Go Mode"],
+        // legacy fallbacks
         performance: ["Peak Performance", "Level Up", "Go Mode"],
         maintenance: ["Steady State", "Stay Strong", "Balance"],
         energy: ["Energy Boost", "Power Up", "Recharge"],
-        general_fitness: ["Fresh Start", "New Chapter", "Kickoff"],
         mobility: ["Flex Flow", "Move Better", "Limber Up"],
         endurance: ["Long Game", "Mile Maker", "Stay Going"],
         strength: ["Iron Path", "Power Phase", "Lift Off"],
       };
-      const prefixes = GOAL_TITLE_PREFIXES[goalType] || GOAL_TITLE_PREFIXES["general_fitness"];
+      const prefixes = GOAL_TITLE_PREFIXES[normalizedGoalType] || GOAL_TITLE_PREFIXES["general_fitness"];
       const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
       const goalTitle = prefix;
 
@@ -922,7 +936,7 @@ export async function registerRoutes(
       constraintPromptBlock += adaptive.promptBlock;
 
       const goalPlan = await storage.createGoalPlanFull(userId, {
-        goalType,
+        goalType: normalizedGoalType,
         planType: resolvedPlanType,
         startDate: validStartDate,
         endDate: validStartDate ? (() => {
@@ -950,7 +964,8 @@ export async function registerRoutes(
           const parsedMealForCtx = needsMeal && mealPreferences ? (() => { const mp = { ...mealPreferences }; if (mp.goal === "fat_loss") mp.goal = "weight_loss"; return preferencesSchema.safeParse(mp); })() : null;
 
           const wellnessCtx = buildWellnessContext({
-            goalType: goalType,
+            goalType: normalizedGoalType,
+            secondaryFocus: (userProfile as any).secondaryFocus ?? undefined,
             startDate: validStartDate,
             endDate: validStartDate ? (() => { const d = new Date(validStartDate + "T00:00:00"); d.setDate(d.getDate() + 6); return d.toISOString().split("T")[0]; })() : undefined,
             mealPrefs: parsedMealForCtx?.success ? parsedMealForCtx.data : undefined,
@@ -1904,7 +1919,7 @@ export async function registerRoutes(
           const result = await generateSingleDayMeals({
             date,
             mealsPerDay: mealsPerDay as 2 | 3,
-            goal: profile.primaryGoal || "maintenance",
+            goal: profile.primaryGoal || "general_fitness",
             dietStyles: [],
             foodsToAvoid: (profile.foodsToAvoid as string[]) || [],
             allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
@@ -2004,7 +2019,7 @@ export async function registerRoutes(
           const dailyWConstraint = (adaptive.promptBlock || "") + dailyWorkoutCtx.workoutPromptBlock;
           const result = await generateSingleDayWorkout({
             date,
-            goal: profile.primaryGoal || "maintenance",
+            goal: profile.primaryGoal || "general_fitness",
             location: profile.workoutLocationDefault || "gym",
             trainingMode: "both",
             focusAreas: ["full_body"],
@@ -2074,7 +2089,7 @@ export async function registerRoutes(
           const result = await generateSingleDayMeals({
             date,
             mealsPerDay: mealsPerDay as 2 | 3,
-            goal: profile.primaryGoal || "maintenance",
+            goal: profile.primaryGoal || "general_fitness",
             dietStyles: [],
             foodsToAvoid: (profile.foodsToAvoid as string[]) || [],
             allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
@@ -2132,7 +2147,7 @@ export async function registerRoutes(
           const regenWorkoutCtx = buildUserContextForGeneration(profile);
           const result = await generateSingleDayWorkout({
             date,
-            goal: profile.primaryGoal || "maintenance",
+            goal: profile.primaryGoal || "general_fitness",
             location: profile.workoutLocationDefault || "gym",
             trainingMode: "both",
             focusAreas: ["full_body"],

@@ -28,22 +28,28 @@ type GoalPlanDetail = GoalPlan & { mealPlan: MealPlan | null; workoutPlan: Worko
 const GOAL_LABELS: Record<string, string> = {
   weight_loss: "Weight Loss",
   muscle_gain: "Muscle Gain",
-  performance: "Performance",
-  maintenance: "Maintenance",
-  energy: "Energy & Focus",
+  body_recomposition: "Body Recomposition",
   general_fitness: "General Fitness",
-  mobility: "Mobility",
-  endurance: "Endurance",
-  strength: "Strength",
+  athletic_performance: "Athletic Performance",
+  // legacy
+  performance: "Athletic Performance",
+  maintenance: "General Fitness",
+  energy: "General Fitness",
+  mobility: "General Fitness",
+  endurance: "General Fitness",
+  strength: "Muscle Gain",
 };
 
 const GOAL_ICONS: Record<string, typeof Flame> = {
   weight_loss: Flame,
   muscle_gain: Dumbbell,
+  body_recomposition: Target,
+  general_fitness: Target,
+  athletic_performance: Trophy,
+  // legacy
   performance: Trophy,
   maintenance: Heart,
   energy: Zap,
-  general_fitness: Target,
   mobility: Heart,
   endurance: Zap,
   strength: Dumbbell,
