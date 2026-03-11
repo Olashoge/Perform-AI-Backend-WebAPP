@@ -68,7 +68,7 @@ function generateExerciseKey(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
-function MealCard({ slot, meal, dayDate, mealPlanId, feedbackState, onFeedback, completed, onToggleCompletion }: {
+function MealCard({ slot, meal, dayDate, mealPlanId, feedbackState, onFeedback, completed, onToggleCompletion, onSwap, swapping }: {
   slot: string;
   meal: any;
   dayDate: string;
@@ -77,6 +77,8 @@ function MealCard({ slot, meal, dayDate, mealPlanId, feedbackState, onFeedback, 
   onFeedback: (fingerprint: string, mealName: string, cuisineTag: string, feedback: "like" | "dislike" | "neutral", ingredients: string[]) => void;
   completed: boolean;
   onToggleCompletion: (input: any) => void;
+  onSwap?: () => void;
+  swapping?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const fingerprint = generateMealFingerprint(meal.name, meal.cuisineTag || "", meal.ingredients);
@@ -129,6 +131,18 @@ function MealCard({ slot, meal, dayDate, mealPlanId, feedbackState, onFeedback, 
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {onSwap && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
+                disabled={swapping}
+                onClick={(e) => { e.stopPropagation(); onSwap(); }}
+                data-testid={`button-swap-${slot}`}
+              >
+                {swapping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -352,6 +366,24 @@ export default function GoalDetail() {
     },
     onError: () => {
       toast({ title: "Failed to regenerate workout session", variant: "destructive" });
+    },
+  });
+
+  const [swappingSlot, setSwappingSlot] = useState<string | null>(null);
+  const swapMealMutation = useMutation({
+    mutationFn: async ({ dayIndex, mealType }: { dayIndex: number; mealType: string }) => {
+      setSwappingSlot(mealType);
+      const res = await apiRequest("POST", `/api/goal-plans/${id}/swap-meal`, { dayIndex, mealType });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Meal swapped successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/goal-plans", id] });
+      setSwappingSlot(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to swap meal", variant: "destructive" });
+      setSwappingSlot(null);
     },
   });
 
@@ -585,6 +617,8 @@ export default function GoalDetail() {
                         onFeedback={handleMealFeedback}
                         completed={dayDate ? isCompleted(dayDate, "meal", "meal_plan", mealPlan.id, slot) : false}
                         onToggleCompletion={toggle}
+                        onSwap={() => swapMealMutation.mutate({ dayIndex: selectedMealDay, mealType: slot })}
+                        swapping={swapMealMutation.isPending && swappingSlot === slot}
                       />
                     ))}
                   </div>

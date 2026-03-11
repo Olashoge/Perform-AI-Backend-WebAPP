@@ -1,0 +1,54 @@
+We have two remaining backend/data issues in the wellness-plan system.
+
+Current status:
+- Wellness Plan detail page works
+- Reschedule is now working and dates update correctly in the plan and calendars
+- However meal/workout regen and swap still fail with "Not found"
+- The date picker still blocks previously occupied dates even after a plan is rescheduled
+
+ISSUES TO FIX
+
+1. MEAL / WORKOUT REGEN AND SWAP RETURN "NOT FOUND"
+Observed errors:
+- Swap Failed: Not found
+- Regen Failed: Not found
+
+This suggests the frontend is calling routes or IDs that no longer match the wellness-owned nested plan structure.
+
+Task:
+Audit the current backend routes for:
+- meal day regenerate
+- meal swap
+- workout session regenerate
+- workout swap
+
+Requirements:
+- Confirm the correct supported endpoints for wellness-owned child content
+- Confirm the correct identifiers required by those endpoints
+- If old standalone routes were removed, make sure the new wellness-compatible routes exist and work
+- Ensure all these actions work against nested meal/workout data owned by the parent wellness/goal plan
+- Return updated parent plan data after mutation if appropriate
+
+2. DATE PICKER AVAILABILITY IS STALE AFTER RESCHEDULE
+After a plan is rescheduled, old dates are still blocked in the plan creation date picker even though those dates are now free.
+
+Task:
+Audit the backend source used for "unavailable dates" or "dates with existing plans".
+
+Requirements:
+- Ensure unavailable dates are recomputed from the current active scheduled plans only
+- Ensure old dates are released after reschedule
+- Ensure new dates are marked unavailable after reschedule
+- Verify the date availability source is not leaving stale records behind
+
+3. RETURN SUMMARY
+At the end provide:
+- exact endpoints now supported for:
+  - meal regenerate
+  - meal swap
+  - workout regenerate
+  - workout swap
+- request params / body shape required
+- whether old routes were still being referenced conceptually
+- how unavailable dates are calculated
+- files changed

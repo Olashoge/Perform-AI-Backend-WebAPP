@@ -135,6 +135,7 @@ export default function GoalWizard() {
   const { data: availabilityData } = useQuery<{ mealDates: string[], workoutDates: string[], allDates: string[] }>({
     queryKey: ["/api/availability"],
     enabled: !!user,
+    staleTime: 0,
   });
 
   const { data: profileData, isLoading: profileLoading } = useQuery<UserProfile | null>({

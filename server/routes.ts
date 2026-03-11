@@ -4,7 +4,7 @@ import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
 import { signupSchema, loginSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput, type WorkoutSession } from "@shared/schema";
-import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout, generateDayMeals, generateWorkoutSession } from "./openai";
+import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout, generateDayMeals, generateWorkoutSession, generateSwapMeal } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import { buildWellnessContext } from "./wellness-context";
@@ -1416,6 +1416,129 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/goal-plans/:id/swap-meal", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const goalPlan = await storage.getGoalPlan(req.params.id as string);
+      if (!goalPlan || goalPlan.userId !== userId || goalPlan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      if (!goalPlan.mealPlanId) {
+        return res.status(400).json({ message: "No meal plan associated with this wellness plan" });
+      }
+      const { dayIndex, mealType } = req.body;
+      if (dayIndex === undefined || typeof dayIndex !== "number" || dayIndex < 0 || dayIndex > 6) {
+        return res.status(400).json({ message: "dayIndex is required (0-6)" });
+      }
+      if (!mealType || typeof mealType !== "string") {
+        return res.status(400).json({ message: "mealType is required (e.g. breakfast, lunch, dinner, snack)" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) {
+        return res.status(429).json({ message: "AI generation limit reached (10/day)" });
+      }
+
+      const mealPlan = await storage.getMealPlan(goalPlan.mealPlanId);
+      if (!mealPlan || !mealPlan.planJson) {
+        return res.status(400).json({ message: "Meal plan data not found" });
+      }
+
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const planJson = mealPlan.planJson as PlanOutput;
+      const day = planJson.days[dayIndex];
+      if (!day) return res.status(400).json({ message: "Day not found in plan" });
+
+      const existingMeal = (day.meals as any)?.[mealType];
+      if (!existingMeal) return res.status(400).json({ message: `No ${mealType} meal found on day ${dayIndex}` });
+
+      const prefs = (mealPlan.preferencesJson || {}) as Preferences;
+      const prefCtx = await storage.getUserPreferenceContext(userId);
+      const newMeal = await generateSwapMeal(prefs, mealType, dayIndex, existingMeal.name, prefCtx);
+
+      const updatedMeals = { ...day.meals, [mealType]: newMeal };
+      const updatedDay = { ...day, meals: updatedMeals };
+      const updatedDays = [...planJson.days];
+      updatedDays[dayIndex] = updatedDay;
+
+      const updatedGrocery = rebuildGroceryList(updatedDays);
+      const updatedPlanJson = { ...planJson, days: updatedDays, groceryList: updatedGrocery };
+      await storage.updateMealPlanJson(goalPlan.mealPlanId!, updatedPlanJson);
+      await storage.logAction(userId, "ai_call_swap_meal", { goalPlanId: goalPlan.id, mealPlanId: goalPlan.mealPlanId, dayIndex, mealType });
+      log(`Wellness meal swap day ${dayIndex} ${mealType} for goal ${goalPlan.id}`, "openai");
+
+      const updatedGoalPlan = await storage.getGoalPlan(goalPlan.id);
+      const updatedMealPlan = goalPlan.mealPlanId ? await storage.getMealPlan(goalPlan.mealPlanId) : null;
+      const updatedWorkoutPlan = goalPlan.workoutPlanId ? await storage.getWorkoutPlan(goalPlan.workoutPlanId) : null;
+      res.json({ ...updatedGoalPlan, mealPlan: updatedMealPlan, workoutPlan: updatedWorkoutPlan });
+    } catch (err) {
+      log(`Swap meal error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to swap meal" });
+    }
+  });
+
+  app.post("/api/goal-plans/:id/swap-workout", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const goalPlan = await storage.getGoalPlan(req.params.id as string);
+      if (!goalPlan || goalPlan.userId !== userId || goalPlan.deletedAt) {
+        return res.status(404).json({ message: "Goal plan not found" });
+      }
+      if (!goalPlan.workoutPlanId) {
+        return res.status(400).json({ message: "No workout plan associated with this wellness plan" });
+      }
+      const { dayIndex } = req.body;
+      if (dayIndex === undefined || typeof dayIndex !== "number" || dayIndex < 0 || dayIndex > 6) {
+        return res.status(400).json({ message: "dayIndex is required (0-6)" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) {
+        return res.status(429).json({ message: "AI generation limit reached (10/day)" });
+      }
+
+      const workoutPlan = await storage.getWorkoutPlan(goalPlan.workoutPlanId);
+      if (!workoutPlan || !workoutPlan.planJson) {
+        return res.status(400).json({ message: "Workout plan data not found" });
+      }
+
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const planJson = workoutPlan.planJson as WorkoutPlanOutput;
+      const currentDay = planJson.days[dayIndex];
+      if (!currentDay || !currentDay.isWorkoutDay || !currentDay.session) {
+        return res.status(400).json({ message: "Selected day is not a workout day" });
+      }
+
+      const prefs = (workoutPlan.preferencesJson || {}) as any;
+      const exercisePrefs = await storage.getExercisePreferences(userId);
+      const exerciseContext = {
+        avoidedExercises: exercisePrefs.filter((p: any) => p.status === "avoided" || p.preference === "avoid").map((p: any) => p.exerciseName),
+        dislikedExercises: exercisePrefs.filter((p: any) => p.status === "disliked" || p.preference === "dislike").map((p: any) => p.exerciseName),
+      };
+
+      const newSession = await generateWorkoutSession(prefs, dayIndex, currentDay.session, exerciseContext);
+
+      const updatedDays = [...planJson.days];
+      updatedDays[dayIndex] = { ...currentDay, session: newSession };
+      const updatedPlanJson = { ...planJson, days: updatedDays };
+      await storage.updateWorkoutPlanStatus(goalPlan.workoutPlanId!, "ready", updatedPlanJson);
+      await storage.logAction(userId, "ai_call_swap_workout", { goalPlanId: goalPlan.id, workoutPlanId: goalPlan.workoutPlanId, dayIndex });
+      log(`Wellness workout swap day ${dayIndex} for goal ${goalPlan.id}`, "openai");
+
+      const updatedGoalPlan = await storage.getGoalPlan(goalPlan.id);
+      const updatedMealPlan = goalPlan.mealPlanId ? await storage.getMealPlan(goalPlan.mealPlanId) : null;
+      const updatedWorkoutPlan2 = goalPlan.workoutPlanId ? await storage.getWorkoutPlan(goalPlan.workoutPlanId) : null;
+      res.json({ ...updatedGoalPlan, mealPlan: updatedMealPlan, workoutPlan: updatedWorkoutPlan2 });
+    } catch (err) {
+      log(`Swap workout error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to swap workout" });
+    }
+  });
+
   app.post("/api/performance/apply-recovery-week", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2774,6 +2897,274 @@ export async function registerRoutes(
       log(`Day data error: ${err?.message || err}`, "error");
       return res.status(500).json({ message: "Failed to load day data" });
     }
+  });
+
+  app.get("/api/plan/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const mealPlan = await storage.getMealPlan(req.params.id);
+      if (!mealPlan || mealPlan.userId !== userId || mealPlan.deletedAt) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      const goalPlans = await storage.getGoalPlansByUser(userId);
+      const parent = goalPlans.find(g => g.mealPlanId === mealPlan.id);
+      if (parent) {
+        return res.json({ ...mealPlan, goalPlanId: parent.id });
+      }
+      return res.json(mealPlan);
+    } catch { return res.status(500).json({ message: "Failed to load plan" }); }
+  });
+
+  app.get("/api/workout/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const workoutPlan = await storage.getWorkoutPlan(req.params.id);
+      if (!workoutPlan || workoutPlan.userId !== userId || workoutPlan.deletedAt) {
+        return res.status(404).json({ message: "Workout plan not found" });
+      }
+      const goalPlans = await storage.getGoalPlansByUser(userId);
+      const parent = goalPlans.find(g => g.workoutPlanId === workoutPlan.id);
+      if (parent) {
+        return res.json({ ...workoutPlan, goalPlanId: parent.id });
+      }
+      return res.json(workoutPlan);
+    } catch { return res.status(500).json({ message: "Failed to load workout plan" }); }
+  });
+
+  app.get("/api/plan/:id/grocery", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const mealPlan = await storage.getMealPlan(req.params.id);
+      if (!mealPlan || mealPlan.userId !== userId || mealPlan.deletedAt || !mealPlan.planJson) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      const planJson = mealPlan.planJson as PlanOutput;
+      return res.json(planJson.groceryList || { sections: [] });
+    } catch { return res.status(500).json({ message: "Failed to load grocery list" }); }
+  });
+
+  app.post("/api/plan/:id/swap", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const mealPlan = await storage.getMealPlan(req.params.id);
+      if (!mealPlan || mealPlan.userId !== userId || mealPlan.deletedAt) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      const goalPlans = await storage.getGoalPlansByUser(userId);
+      const parent = goalPlans.find(g => g.mealPlanId === mealPlan.id);
+      if (!parent) return res.status(404).json({ message: "Parent wellness plan not found" });
+
+      const { dayIndex, mealType } = req.body;
+      if (dayIndex === undefined || typeof dayIndex !== "number" || dayIndex < 0 || dayIndex > 6) {
+        return res.status(400).json({ message: "dayIndex is required (0-6)" });
+      }
+      if (!mealType || typeof mealType !== "string") {
+        return res.status(400).json({ message: "mealType is required" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) return res.status(429).json({ message: "AI generation limit reached (10/day)" });
+
+      const planJson = mealPlan.planJson as PlanOutput;
+      const day = planJson.days[dayIndex];
+      if (!day) return res.status(400).json({ message: "Day not found" });
+      const existingMeal = (day.meals as any)?.[mealType];
+      if (!existingMeal) return res.status(400).json({ message: `No ${mealType} meal on day ${dayIndex}` });
+
+      const prefs = (mealPlan.preferencesJson || {}) as Preferences;
+      const prefCtx = await storage.getUserPreferenceContext(userId);
+      const newMeal = await generateSwapMeal(prefs, mealType, dayIndex, existingMeal.name, prefCtx);
+
+      const updatedDays = [...planJson.days];
+      updatedDays[dayIndex] = { ...day, meals: { ...day.meals, [mealType]: newMeal } };
+      const updatedGrocery = rebuildGroceryList(updatedDays);
+      await storage.updateMealPlanJson(mealPlan.id, { ...planJson, days: updatedDays, groceryList: updatedGrocery });
+      await storage.logAction(userId, "ai_call_swap_meal", { goalPlanId: parent.id, mealPlanId: mealPlan.id, dayIndex, mealType });
+
+      const updated = await storage.getMealPlan(mealPlan.id);
+      return res.json(updated);
+    } catch (err) {
+      log(`Legacy swap meal error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to swap meal" });
+    }
+  });
+
+  app.post("/api/plan/:id/regenerate-day", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const mealPlan = await storage.getMealPlan(req.params.id);
+      if (!mealPlan || mealPlan.userId !== userId || mealPlan.deletedAt) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      const goalPlans = await storage.getGoalPlansByUser(userId);
+      const parent = goalPlans.find(g => g.mealPlanId === mealPlan.id);
+      if (!parent) return res.status(404).json({ message: "Parent wellness plan not found" });
+
+      const { dayIndex } = req.body;
+      if (dayIndex === undefined || typeof dayIndex !== "number" || dayIndex < 0 || dayIndex > 6) {
+        return res.status(400).json({ message: "dayIndex is required (0-6)" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) return res.status(429).json({ message: "AI generation limit reached (10/day)" });
+
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const prefs = (mealPlan.preferencesJson || {}) as Preferences;
+      const prefCtx = await storage.getUserPreferenceContext(userId);
+      const newDay = await generateDayMeals(prefs, dayIndex, prefCtx);
+
+      const planJson = mealPlan.planJson as PlanOutput;
+      const updatedDays = [...planJson.days];
+      updatedDays[dayIndex] = newDay;
+      const updatedGrocery = rebuildGroceryList(updatedDays);
+      await storage.updateMealPlanJson(mealPlan.id, { ...planJson, days: updatedDays, groceryList: updatedGrocery });
+      await storage.logAction(userId, "ai_call_regenerate_meal_day", { goalPlanId: parent.id, mealPlanId: mealPlan.id, dayIndex });
+
+      const updated = await storage.getMealPlan(mealPlan.id);
+      return res.json(updated);
+    } catch (err) {
+      log(`Legacy regen meal day error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to regenerate meal day" });
+    }
+  });
+
+  app.post("/api/workout/:id/swap", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const workoutPlan = await storage.getWorkoutPlan(req.params.id);
+      if (!workoutPlan || workoutPlan.userId !== userId || workoutPlan.deletedAt) {
+        return res.status(404).json({ message: "Workout plan not found" });
+      }
+      const goalPlans = await storage.getGoalPlansByUser(userId);
+      const parent = goalPlans.find(g => g.workoutPlanId === workoutPlan.id);
+      if (!parent) return res.status(404).json({ message: "Parent wellness plan not found" });
+
+      const { dayIndex } = req.body;
+      if (dayIndex === undefined || typeof dayIndex !== "number" || dayIndex < 0 || dayIndex > 6) {
+        return res.status(400).json({ message: "dayIndex is required (0-6)" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) return res.status(429).json({ message: "AI generation limit reached (10/day)" });
+
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const planJson = workoutPlan.planJson as WorkoutPlanOutput;
+      const currentDay = planJson.days[dayIndex];
+      if (!currentDay || !currentDay.isWorkoutDay || !currentDay.session) {
+        return res.status(400).json({ message: "Selected day is not a workout day" });
+      }
+
+      const prefs = (workoutPlan.preferencesJson || {}) as any;
+      const exercisePrefs = await storage.getExercisePreferences(userId);
+      const exerciseContext = {
+        avoidedExercises: exercisePrefs.filter((p: any) => p.status === "avoided" || p.preference === "avoid").map((p: any) => p.exerciseName),
+        dislikedExercises: exercisePrefs.filter((p: any) => p.status === "disliked" || p.preference === "dislike").map((p: any) => p.exerciseName),
+      };
+
+      const newSession = await generateWorkoutSession(prefs, dayIndex, currentDay.session, exerciseContext);
+      const updatedDays = [...planJson.days];
+      updatedDays[dayIndex] = { ...currentDay, session: newSession };
+      await storage.updateWorkoutPlanStatus(workoutPlan.id, "ready", { ...planJson, days: updatedDays });
+      await storage.logAction(userId, "ai_call_swap_workout", { goalPlanId: parent.id, workoutPlanId: workoutPlan.id, dayIndex });
+
+      const updated = await storage.getWorkoutPlan(workoutPlan.id);
+      return res.json(updated);
+    } catch (err) {
+      log(`Legacy swap workout error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to swap workout" });
+    }
+  });
+
+  app.post("/api/workout/:id/regenerate-session", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const workoutPlan = await storage.getWorkoutPlan(req.params.id);
+      if (!workoutPlan || workoutPlan.userId !== userId || workoutPlan.deletedAt) {
+        return res.status(404).json({ message: "Workout plan not found" });
+      }
+      const goalPlans = await storage.getGoalPlansByUser(userId);
+      const parent = goalPlans.find(g => g.workoutPlanId === workoutPlan.id);
+      if (!parent) return res.status(404).json({ message: "Parent wellness plan not found" });
+
+      const { dayIndex } = req.body;
+      if (dayIndex === undefined || typeof dayIndex !== "number" || dayIndex < 0 || dayIndex > 6) {
+        return res.status(400).json({ message: "dayIndex is required (0-6)" });
+      }
+
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      if (aiCalls >= 10) return res.status(429).json({ message: "AI generation limit reached (10/day)" });
+
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) return res.status(400).json({ message: "Profile required", profileRequired: true });
+
+      const planJson = workoutPlan.planJson as WorkoutPlanOutput;
+      const currentDay = planJson.days[dayIndex];
+      if (!currentDay || !currentDay.isWorkoutDay || !currentDay.session) {
+        return res.status(400).json({ message: "Selected day is not a workout day" });
+      }
+
+      const prefs = (workoutPlan.preferencesJson || {}) as any;
+      const exercisePrefs = await storage.getExercisePreferences(userId);
+      const exerciseContext = {
+        avoidedExercises: exercisePrefs.filter((p: any) => p.status === "avoided" || p.preference === "avoid").map((p: any) => p.exerciseName),
+        dislikedExercises: exercisePrefs.filter((p: any) => p.status === "disliked" || p.preference === "dislike").map((p: any) => p.exerciseName),
+      };
+
+      const newSession = await generateWorkoutSession(prefs, dayIndex, currentDay.session, exerciseContext);
+      const updatedDays = [...planJson.days];
+      updatedDays[dayIndex] = { ...currentDay, session: newSession };
+      await storage.updateWorkoutPlanStatus(workoutPlan.id, "ready", { ...planJson, days: updatedDays });
+      await storage.logAction(userId, "ai_call_regenerate_workout_session", { goalPlanId: parent.id, workoutPlanId: workoutPlan.id, dayIndex });
+
+      const updated = await storage.getWorkoutPlan(workoutPlan.id);
+      return res.json(updated);
+    } catch (err) {
+      log(`Legacy regen workout session error: ${err}`, "plan");
+      return res.status(500).json({ message: "Failed to regenerate workout session" });
+    }
+  });
+
+  app.post("/api/plan/:id/grocery/regenerate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const mealPlan = await storage.getMealPlan(req.params.id);
+      if (!mealPlan || mealPlan.userId !== userId || mealPlan.deletedAt || !mealPlan.planJson) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      const planJson = mealPlan.planJson as PlanOutput;
+      const updatedGrocery = rebuildGroceryList(planJson.days);
+      const updatedPlanJson = { ...planJson, groceryList: updatedGrocery };
+      await storage.updateMealPlanJson(mealPlan.id, updatedPlanJson);
+      return res.json(updatedGrocery);
+    } catch { return res.status(500).json({ message: "Failed to regenerate grocery list" }); }
+  });
+
+  app.get("/api/plans", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const plans = await storage.getMealPlansByUser(userId);
+      return res.json(plans);
+    } catch { return res.status(500).json({ message: "Failed to load plans" }); }
+  });
+
+  app.get("/api/workouts", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const plans = await storage.getWorkoutPlansByUser(userId);
+      return res.json(plans);
+    } catch { return res.status(500).json({ message: "Failed to load workout plans" }); }
+  });
+
+  app.get("/api/allowance/current", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const aiCalls = await storage.getAiCallCountToday(userId);
+      return res.json({ used: aiCalls, limit: 10, remaining: Math.max(0, 10 - aiCalls) });
+    } catch { return res.status(500).json({ message: "Failed to load allowance" }); }
   });
 
   app.use("/api/{*path}", (_req: Request, res: Response) => {
