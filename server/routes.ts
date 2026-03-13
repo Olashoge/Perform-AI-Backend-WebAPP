@@ -112,6 +112,7 @@ export async function registerRoutes(
   ensureJwtSecrets();
   log("Mounted auth routes: /api/auth/token-login, /api/auth/refresh, /api/auth/token-logout", "auth");
 
+  // ACTIVE — user registration, session-based signup
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
       const parsed = signupSchema.safeParse(req.body);
@@ -141,6 +142,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — session-based login for web client
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
       const parsed = loginSchema.safeParse(req.body);
@@ -172,12 +174,14 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — session logout for web client
   app.post("/api/auth/logout", (req: Request, res: Response) => {
     req.session.destroy(() => {
       res.json({ ok: true });
     });
   });
 
+  // ACTIVE — returns current authenticated user; supports both Bearer token and session
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     let userId: string | undefined;
 
@@ -204,6 +208,7 @@ export async function registerRoutes(
     return res.json({ id: user.id, email: user.email, firstName: user.firstName ?? null });
   });
 
+  // ACTIVE — update account name/email
   app.patch("/api/account", requireAuth, async (req: Request, res: Response) => {
     if (!req.userId) return res.status(401).json({ message: "Not authenticated" });
     try {
@@ -230,6 +235,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — password change for authenticated user
   app.post("/api/account/change-password", requireAuth, async (req: Request, res: Response) => {
     if (!req.userId) return res.status(401).json({ message: "Not authenticated" });
     try {
@@ -252,6 +258,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — JWT-based login for iOS app; issues access + refresh tokens
   app.post("/api/auth/token-login", async (req: Request, res: Response) => {
     try {
       const parsed = loginSchema.safeParse(req.body);
@@ -293,6 +300,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — JWT refresh token rotation for iOS app
   app.post("/api/auth/refresh", async (req: Request, res: Response) => {
     try {
       const rawToken = req.body?.refreshToken;
@@ -342,6 +350,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — JWT logout; revokes refresh token for iOS app
   app.post("/api/auth/token-logout", async (req: Request, res: Response) => {
     try {
       const rawToken = req.body?.refreshToken;
@@ -363,6 +372,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — hard-delete user account and all associated data
   app.delete("/api/me", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -395,6 +405,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch user Performance Blueprint / profile
   app.get("/api/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const profile = await storage.getUserProfile(req.userId!);
@@ -404,6 +415,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — create user Performance Blueprint (first-time setup)
   app.post("/api/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertUserProfileSchema.safeParse(req.body);
@@ -422,6 +434,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — upsert user Performance Blueprint (create or update)
   app.put("/api/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertUserProfileSchema.safeParse(req.body);
@@ -440,6 +453,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — record like/dislike feedback for a meal; triggers ingredient preference derivation
   app.post("/api/feedback/meal", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = mealFeedbackSchema.safeParse(req.body);
@@ -484,6 +498,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch all meal and ingredient preferences for the user
   app.get("/api/preferences", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -502,6 +517,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — delete a saved meal feedback record
   app.delete("/api/preferences/meal/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -516,6 +532,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — delete a saved ingredient preference record
   app.delete("/api/preferences/ingredient/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -530,6 +547,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch meal feedback map (fingerprint→reaction) for a given plan
   app.get("/api/feedback/plan/:planId", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -545,6 +563,7 @@ export async function registerRoutes(
     }
   });
 
+  // DEPRECATED — legacy web calendar aggregation for standalone meal plans; superseded by /api/week-data
   app.get("/api/calendar/all", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -595,6 +614,7 @@ export async function registerRoutes(
     }
   });
 
+  // DEPRECATED — legacy occupied-date check for standalone meal plans; superseded by /api/availability
   app.get("/api/calendar/occupied-dates", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -621,6 +641,7 @@ export async function registerRoutes(
     }
   });
 
+  // DEPRECATED — client-side conflict helper for legacy individual plans; server now enforces conflicts in POST /api/goal-plans/:id/schedule
   app.get("/api/goal-plans/conflicts", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -655,6 +676,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — returns occupied date ranges for meal and workout plans; used by iOS scheduling UI
   app.get("/api/availability", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -706,6 +728,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — record like/dislike feedback for a workout session
   app.post("/api/feedback/workout", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = workoutFeedbackSchema.safeParse(req.body);
@@ -721,6 +744,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch workout feedback map (sessionKey→reaction) for a given plan
   app.get("/api/feedback/workout/:planId", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -736,6 +760,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch liked/disliked/avoided exercise preferences
   app.get("/api/preferences/exercise", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -750,6 +775,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — upsert an exercise preference (liked/disliked/avoided)
   app.post("/api/preferences/exercise", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = exercisePreferenceSchema.safeParse(req.body);
@@ -766,6 +792,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — delete an exercise preference by record ID
   app.delete("/api/preferences/exercise/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -780,6 +807,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — delete an exercise preference by exercise key
   app.delete("/api/preferences/exercise/key/:key", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -794,6 +822,7 @@ export async function registerRoutes(
     }
   });
 
+  // DEPRECATED — bare Wellness Plan creation without AI generation; superseded by POST /api/goal-plans/generate
   app.post("/api/goal-plans", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = goalPlanCreateSchema.safeParse(req.body);
@@ -809,6 +838,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — primary Wellness Plan AI generation flow; creates goal_plan + meal plan + workout plan
   app.post("/api/goal-plans/generate", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1156,6 +1186,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — poll Wellness Plan generation progress (TRAINING → NUTRITION → SCHEDULING → FINALIZING)
   app.get("/api/goal-plans/:id/generation-status", requireAuth, async (req: Request, res: Response) => {
     try {
       const goalPlan = await storage.getGoalPlan(req.params.id as string);
@@ -1186,6 +1217,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — list all Wellness Plans for the authenticated user
   app.get("/api/goal-plans", requireAuth, async (req: Request, res: Response) => {
     try {
       const plans = await storage.getGoalPlansByUser(req.userId!);
@@ -1195,6 +1227,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch a single Wellness Plan with embedded meal/workout plan details
   app.get("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getGoalPlan(req.params.id as string);
@@ -1215,6 +1248,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — update Wellness Plan fields including startDate/endDate rescheduling; enforces conflict check on date changes
   app.patch("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getGoalPlan(req.params.id as string);
@@ -1222,24 +1256,41 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Goal plan not found" });
       }
       const { startDate } = req.body;
-      const updates: any = {};
+      let updated: typeof plan | undefined;
+
       if (startDate !== undefined) {
-        updates.startDate = startDate;
         if (startDate) {
-          const d = new Date(startDate + "T00:00:00");
-          d.setDate(d.getDate() + 6);
-          updates.endDate = d.toISOString().split("T")[0];
+          // Server-side conflict check when rescheduling to a new date
+          const endDate = (() => {
+            const d = new Date(startDate + "T00:00:00");
+            d.setDate(d.getDate() + 6);
+            return d.toISOString().split("T")[0];
+          })();
+          const allPlans = await storage.getGoalPlansByUser(req.userId!);
+          for (const other of allPlans) {
+            if (other.id === plan.id) continue;
+            if (!other.startDate || !other.endDate) continue;
+            if (startDate <= other.endDate && endDate >= other.startDate) {
+              return res.status(409).json({
+                message: "Requested schedule overlaps with an existing scheduled wellness plan.",
+                code: "PLAN_SCHEDULE_CONFLICT",
+                conflictingPlanId: other.id,
+                conflictingStartDate: other.startDate,
+                conflictingEndDate: other.endDate,
+              });
+            }
+          }
+          // Atomically write new dates to goal_plan + child plans
+          updated = await storage.scheduleGoalPlan(plan.id, startDate, endDate, plan.mealPlanId ?? null, plan.workoutPlanId ?? null);
         } else {
-          updates.endDate = null;
+          // startDate is null — clear the schedule atomically
+          updated = await storage.unscheduleGoalPlan(plan.id, plan.mealPlanId ?? null, plan.workoutPlanId ?? null);
         }
-        if (plan.mealPlanId) {
-          await storage.updatePlanStartDate(plan.mealPlanId, startDate || null);
-        }
-        if (plan.workoutPlanId) {
-          await storage.updateWorkoutStartDate(plan.workoutPlanId, startDate || null);
-        }
+      } else {
+        // No date change — apply other field updates normally
+        updated = await storage.updateGoalPlan(plan.id, {});
       }
-      const updated = await storage.updateGoalPlan(plan.id, updates);
+
       const [embeddedMealPlan, embeddedWorkoutPlan] = await Promise.all([
         updated?.mealPlanId ? storage.getMealPlan(updated.mealPlanId) : Promise.resolve(null),
         updated?.workoutPlanId ? storage.getWorkoutPlan(updated.workoutPlanId) : Promise.resolve(null),
@@ -1254,6 +1305,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — soft-delete a Wellness Plan and its child meal/workout plans
   app.delete("/api/goal-plans/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getGoalPlan(req.params.id as string);
@@ -1273,6 +1325,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — schedule a Wellness Plan to a specific week; enforces server-side conflict check (409 on overlap) and writes atomically
   app.post("/api/goal-plans/:id/schedule", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getGoalPlan(req.params.id as string);
@@ -1288,13 +1341,26 @@ export async function registerRoutes(
         d.setDate(d.getDate() + 6);
         return d.toISOString().split("T")[0];
       })();
-      if (plan.mealPlanId) {
-        await storage.updatePlanStartDate(plan.mealPlanId, startDate);
+
+      // Server-side conflict check: reject if any other scheduled Wellness Plan overlaps this date range
+      const allPlans = await storage.getGoalPlansByUser(req.userId!);
+      for (const other of allPlans) {
+        if (other.id === plan.id) continue; // exclude self
+        if (!other.startDate || !other.endDate) continue; // skip unscheduled
+        // Overlap condition: requested range intersects existing range
+        if (startDate <= other.endDate && endDate >= other.startDate) {
+          return res.status(409).json({
+            message: "Requested schedule overlaps with an existing scheduled wellness plan.",
+            code: "PLAN_SCHEDULE_CONFLICT",
+            conflictingPlanId: other.id,
+            conflictingStartDate: other.startDate,
+            conflictingEndDate: other.endDate,
+          });
+        }
       }
-      if (plan.workoutPlanId) {
-        await storage.updateWorkoutStartDate(plan.workoutPlanId, startDate);
-      }
-      const updated = await storage.updateGoalPlan(plan.id, { startDate, endDate });
+
+      // Atomically update goal_plan + child meal/workout plan start dates in a single transaction
+      const updated = await storage.scheduleGoalPlan(plan.id, startDate, endDate, plan.mealPlanId ?? null, plan.workoutPlanId ?? null);
       const [embeddedMealPlan, embeddedWorkoutPlan] = await Promise.all([
         updated?.mealPlanId ? storage.getMealPlan(updated.mealPlanId) : Promise.resolve(null),
         updated?.workoutPlanId ? storage.getWorkoutPlan(updated.workoutPlanId) : Promise.resolve(null),
@@ -1309,19 +1375,15 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — remove a Wellness Plan from the schedule; clears dates atomically on goal_plan and child plans
   app.post("/api/goal-plans/:id/unschedule", requireAuth, async (req: Request, res: Response) => {
     try {
       const plan = await storage.getGoalPlan(req.params.id as string);
       if (!plan || plan.userId !== req.userId || plan.deletedAt) {
         return res.status(404).json({ message: "Goal plan not found" });
       }
-      if (plan.mealPlanId) {
-        await storage.updatePlanStartDate(plan.mealPlanId, null);
-      }
-      if (plan.workoutPlanId) {
-        await storage.updateWorkoutStartDate(plan.workoutPlanId, null);
-      }
-      const updated = await storage.updateGoalPlan(plan.id, { startDate: null, endDate: null });
+      // Atomically clear goal_plan + child meal/workout plan start dates in a single transaction
+      const updated = await storage.unscheduleGoalPlan(plan.id, plan.mealPlanId ?? null, plan.workoutPlanId ?? null);
       return res.json({
         ...updated,
         mealPlan: null,
@@ -1332,6 +1394,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — generate an AI-powered recovery week Wellness Plan when performance signals show decline
   app.post("/api/performance/apply-recovery-week", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1668,6 +1731,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch pending ingredient avoid proposals derived from meal dislikes
   app.get("/api/ingredient-proposals", requireAuth, async (req: Request, res: Response) => {
     try {
       const proposals = await storage.getPendingProposals(req.userId!);
@@ -1677,6 +1741,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — accept or decline an ingredient avoid proposal; accepted entries become permanent avoid preferences
   app.post("/api/ingredient-proposals/:id/resolve", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = ingredientProposalResolveSchema.safeParse(req.body);
@@ -1701,6 +1766,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — submit weekly check-in; triggers performance summary computation and adaptive plan bias update
   app.post("/api/check-ins", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = weeklyCheckInSchema.safeParse(req.body);
@@ -1741,6 +1807,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — list weekly check-ins, optionally filtered by goalPlanId
   app.get("/api/check-ins", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1752,6 +1819,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch the most recent performance summary for the user
   app.get("/api/performance/latest", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1762,6 +1830,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — list performance summaries, optionally filtered by date range
   app.get("/api/performance", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1778,6 +1847,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — manually trigger weekly adaptation signal computation; auto-runs on check-in as well
   app.post("/api/weekly-adaptation/compute", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1814,6 +1884,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch the most recent weekly adaptation record
   app.get("/api/weekly-adaptation/latest", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1824,6 +1895,7 @@ export async function registerRoutes(
     }
   });
 
+  // DEPRECATED — legacy occupied-date query for standalone workout plans; superseded by /api/availability
   app.get("/api/calendar/workout-occupied-dates", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1846,6 +1918,7 @@ export async function registerRoutes(
     }
   });
 
+  // DEPRECATED — legacy workout calendar day list for standalone plans; superseded by /api/week-data
   app.get("/api/calendar/workouts", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1878,6 +1951,7 @@ export async function registerRoutes(
   });
 
   // ── Daily Meal Planning ──
+  // ACTIVE — generate a daily meal plan for a specific date (single-day, AI-powered)
   app.post("/api/daily-meal", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1953,6 +2027,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch daily meal record for a given date
   app.get("/api/daily-meal/:date", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1964,6 +2039,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — list daily meal records for a date range
   app.get("/api/daily-meals", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -1977,6 +2053,7 @@ export async function registerRoutes(
   });
 
   // ── Daily Workout Planning ──
+  // ACTIVE — generate a daily workout for a specific date (single-day, AI-powered)
   app.post("/api/daily-workout", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2045,6 +2122,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — fetch daily workout record for a given date
   app.get("/api/daily-workout/:date", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2056,6 +2134,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — list daily workout records for a date range
   app.get("/api/daily-workouts", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2069,6 +2148,7 @@ export async function registerRoutes(
   });
 
   // ── Daily Plan Regeneration ──
+  // ACTIVE — regenerate a failed or existing daily meal plan for the given date
   app.post("/api/daily-meal/:date/regenerate", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2124,6 +2204,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — regenerate a failed or existing daily workout for the given date
   app.post("/api/daily-workout/:date/regenerate", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2175,6 +2256,7 @@ export async function registerRoutes(
   });
 
   // ── Daily Coverage Check ──
+  // ACTIVE — returns which dates in a range have ready daily meal or workout plans
   app.get("/api/daily-coverage", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2198,6 +2280,7 @@ export async function registerRoutes(
   });
 
   // ── Activity Completions ──
+  // ACTIVE — fetch activity completion records by date range or source plan
   app.get("/api/completions", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2216,6 +2299,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — toggle meal or workout item completion status
   app.post("/api/completions/toggle", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2232,6 +2316,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — compute adherence score (meals + workouts completed vs scheduled) for a date range
   app.get("/api/completions/adherence", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2325,6 +2410,7 @@ export async function registerRoutes(
   });
 
   // ── Mobile Aggregation Routes ──
+  // Note: computeWeekScore and computeStreakDays are internal helpers, not routes
 
   async function computeWeekScore(
     userId: string,
@@ -2419,6 +2505,7 @@ export async function registerRoutes(
     return streak;
   }
 
+  // ACTIVE — weekly performance summary (scores, adherence, performance state) for the current or a given week
   app.get("/api/weekly-summary", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2500,6 +2587,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — primary iOS aggregation endpoint; returns full week with meals, workouts, daily plans, and completions
   app.get("/api/week-data", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2617,6 +2705,7 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — primary iOS single-day endpoint; returns meals, workout, daily plans, and completions for one date
   app.get("/api/day-data/:date", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2694,6 +2783,7 @@ export async function registerRoutes(
     }
   });
 
+  // DEPRECATED — legacy direct meal plan access by ID; callers should use GET /api/goal-plans/:id instead
   app.get("/api/plan/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2710,6 +2800,7 @@ export async function registerRoutes(
     } catch { return res.status(500).json({ message: "Failed to load plan" }); }
   });
 
+  // DEPRECATED — legacy direct workout plan access by ID; callers should use GET /api/goal-plans/:id instead
   app.get("/api/workout/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2726,6 +2817,7 @@ export async function registerRoutes(
     } catch { return res.status(500).json({ message: "Failed to load workout plan" }); }
   });
 
+  // ACTIVE — fetch grocery list for a meal plan; no goal-plan equivalent for raw grocery access
   app.get("/api/plan/:id/grocery", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2738,6 +2830,7 @@ export async function registerRoutes(
     } catch { return res.status(500).json({ message: "Failed to load grocery list" }); }
   });
 
+  // DEPRECATED — legacy list of all standalone meal plans; superseded by GET /api/goal-plans
   app.get("/api/plans", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -2746,6 +2839,7 @@ export async function registerRoutes(
     } catch { return res.status(500).json({ message: "Failed to load plans" }); }
   });
 
+  // DEPRECATED — legacy list of all standalone workout plans; superseded by GET /api/goal-plans
   app.get("/api/workouts", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
