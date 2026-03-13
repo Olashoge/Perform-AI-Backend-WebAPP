@@ -97,6 +97,9 @@ export interface IStorage {
   updateRefreshTokenLastUsed(id: string): Promise<void>;
   updateUser(userId: string, data: { firstName?: string; email?: string; passwordHash?: string }): Promise<User | undefined>;
   deleteUser(userId: string): Promise<void>;
+  // Transaction-scoped scheduling operations for Wellness Plan schedule integrity
+  scheduleGoalPlan(planId: string, startDate: string, endDate: string, mealPlanId: string | null, workoutPlanId: string | null): Promise<GoalPlan | undefined>;
+  unscheduleGoalPlan(planId: string, mealPlanId: string | null, workoutPlanId: string | null): Promise<GoalPlan | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1049,6 +1052,49 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(userProfiles).where(eq(userProfiles.userId, userId));
       await tx.execute(sql`DELETE FROM user_sessions WHERE sess::jsonb->>'userId' = ${userId}`);
       await tx.delete(users).where(eq(users.id, userId));
+    });
+  }
+
+  // Atomically write all schedule fields for a Wellness Plan and its child plans.
+  // Either all three records update or none do (transaction rollback on failure).
+  async scheduleGoalPlan(planId: string, startDate: string, endDate: string, mealPlanId: string | null, workoutPlanId: string | null): Promise<GoalPlan | undefined> {
+    return db.transaction(async (tx) => {
+      if (mealPlanId) {
+        await tx.update(mealPlans)
+          .set({ planStartDate: startDate })
+          .where(eq(mealPlans.id, mealPlanId));
+      }
+      if (workoutPlanId) {
+        await tx.update(workoutPlans)
+          .set({ planStartDate: startDate })
+          .where(eq(workoutPlans.id, workoutPlanId));
+      }
+      const [updated] = await tx.update(goalPlans)
+        .set({ startDate, endDate, updatedAt: new Date() })
+        .where(eq(goalPlans.id, planId))
+        .returning();
+      return updated;
+    });
+  }
+
+  // Atomically clear all schedule fields for a Wellness Plan and its child plans.
+  async unscheduleGoalPlan(planId: string, mealPlanId: string | null, workoutPlanId: string | null): Promise<GoalPlan | undefined> {
+    return db.transaction(async (tx) => {
+      if (mealPlanId) {
+        await tx.update(mealPlans)
+          .set({ planStartDate: null })
+          .where(eq(mealPlans.id, mealPlanId));
+      }
+      if (workoutPlanId) {
+        await tx.update(workoutPlans)
+          .set({ planStartDate: null })
+          .where(eq(workoutPlans.id, workoutPlanId));
+      }
+      const [updated] = await tx.update(goalPlans)
+        .set({ startDate: null, endDate: null, updatedAt: new Date() })
+        .where(eq(goalPlans.id, planId))
+        .returning();
+      return updated;
     });
   }
 }
