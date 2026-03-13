@@ -563,7 +563,7 @@ export async function registerRoutes(
     }
   });
 
-  // DEPRECATED — legacy web calendar aggregation for standalone meal plans; superseded by /api/week-data
+  // ACTIVE — web calendar meal aggregation used by plan-calendar.tsx
   app.get("/api/calendar/all", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
@@ -611,68 +611,6 @@ export async function registerRoutes(
     } catch (err) {
       log(`Calendar all error: ${err}`, "plan");
       return res.status(500).json({ message: "Failed to load calendar data" });
-    }
-  });
-
-  // DEPRECATED — legacy occupied-date check for standalone meal plans; superseded by /api/availability
-  app.get("/api/calendar/occupied-dates", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const excludePlanId = req.query.excludePlanId as string | undefined;
-      const scheduledPlans = await storage.getScheduledPlans(userId);
-
-      const occupiedDates = new Set<string>();
-      for (const plan of scheduledPlans) {
-        if (excludePlanId && plan.id === excludePlanId) continue;
-        const planJson = plan.planJson as PlanOutput;
-        const startDate = plan.planStartDate!;
-
-        for (let i = 0; i < planJson.days.length; i++) {
-          const date = new Date(startDate + "T00:00:00");
-          date.setDate(date.getDate() + i);
-          occupiedDates.add(date.toISOString().slice(0, 10));
-        }
-      }
-
-      return res.json({ occupiedDates: Array.from(occupiedDates) });
-    } catch (err) {
-      log(`Occupied dates error: ${err}`, "plan");
-      return res.status(500).json({ message: "Failed to load occupied dates" });
-    }
-  });
-
-  // DEPRECATED — client-side conflict helper for legacy individual plans; server now enforces conflicts in POST /api/goal-plans/:id/schedule
-  app.get("/api/goal-plans/conflicts", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const occupiedDates = new Set<string>();
-
-      const mealPlans = await storage.getScheduledPlans(userId);
-      for (const plan of mealPlans) {
-        const planJson = plan.planJson as PlanOutput;
-        const startDate = plan.planStartDate!;
-        for (let i = 0; i < planJson.days.length; i++) {
-          const date = new Date(startDate + "T00:00:00");
-          date.setDate(date.getDate() + i);
-          occupiedDates.add(date.toISOString().slice(0, 10));
-        }
-      }
-
-      const workoutPlans = await storage.getScheduledWorkoutPlans(userId);
-      for (const plan of workoutPlans) {
-        if (!plan.planStartDate || !plan.planJson) continue;
-        const planJson = plan.planJson as WorkoutPlanOutput;
-        for (let i = 0; i < planJson.days.length; i++) {
-          const date = new Date(plan.planStartDate + "T00:00:00");
-          date.setDate(date.getDate() + i);
-          occupiedDates.add(date.toISOString().slice(0, 10));
-        }
-      }
-
-      return res.json({ occupiedDates: Array.from(occupiedDates) });
-    } catch (err) {
-      log(`Goal conflicts error: ${err}`, "plan");
-      return res.status(500).json({ message: "Failed to load conflicts" });
     }
   });
 
@@ -1895,30 +1833,7 @@ export async function registerRoutes(
     }
   });
 
-  // DEPRECATED — legacy occupied-date query for standalone workout plans; superseded by /api/availability
-  app.get("/api/calendar/workout-occupied-dates", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const excludePlanId = req.query.excludePlanId as string | undefined;
-      const plans = await storage.getScheduledWorkoutPlans(userId);
-      const occupiedDates = new Set<string>();
-      for (const plan of plans) {
-        if (excludePlanId && plan.id === excludePlanId) continue;
-        if (!plan.planStartDate || !plan.planJson) continue;
-        const planJson = plan.planJson as WorkoutPlanOutput;
-        for (let i = 0; i < planJson.days.length; i++) {
-          const date = new Date(plan.planStartDate + "T00:00:00");
-          date.setDate(date.getDate() + i);
-          occupiedDates.add(date.toISOString().slice(0, 10));
-        }
-      }
-      return res.json({ occupiedDates: Array.from(occupiedDates) });
-    } catch (err) {
-      return res.status(500).json({ message: "Failed to load occupied dates" });
-    }
-  });
-
-  // DEPRECATED — legacy workout calendar day list for standalone plans; superseded by /api/week-data
+  // ACTIVE — web calendar workout day list used by plan-calendar.tsx
   app.get("/api/calendar/workouts", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
