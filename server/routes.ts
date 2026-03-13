@@ -2783,40 +2783,6 @@ export async function registerRoutes(
     }
   });
 
-  // DEPRECATED — legacy direct meal plan access by ID; callers should use GET /api/goal-plans/:id instead
-  app.get("/api/plan/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const mealPlan = await storage.getMealPlan(req.params.id);
-      if (!mealPlan || mealPlan.userId !== userId || mealPlan.deletedAt) {
-        return res.status(404).json({ message: "Plan not found" });
-      }
-      const goalPlans = await storage.getGoalPlansByUser(userId);
-      const parent = goalPlans.find(g => g.mealPlanId === mealPlan.id);
-      if (parent) {
-        return res.json({ ...mealPlan, goalPlanId: parent.id });
-      }
-      return res.json(mealPlan);
-    } catch { return res.status(500).json({ message: "Failed to load plan" }); }
-  });
-
-  // DEPRECATED — legacy direct workout plan access by ID; callers should use GET /api/goal-plans/:id instead
-  app.get("/api/workout/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const workoutPlan = await storage.getWorkoutPlan(req.params.id);
-      if (!workoutPlan || workoutPlan.userId !== userId || workoutPlan.deletedAt) {
-        return res.status(404).json({ message: "Workout plan not found" });
-      }
-      const goalPlans = await storage.getGoalPlansByUser(userId);
-      const parent = goalPlans.find(g => g.workoutPlanId === workoutPlan.id);
-      if (parent) {
-        return res.json({ ...workoutPlan, goalPlanId: parent.id });
-      }
-      return res.json(workoutPlan);
-    } catch { return res.status(500).json({ message: "Failed to load workout plan" }); }
-  });
-
   // ACTIVE — fetch grocery list for a meal plan; no goal-plan equivalent for raw grocery access
   app.get("/api/plan/:id/grocery", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -2828,24 +2794,6 @@ export async function registerRoutes(
       const planJson = mealPlan.planJson as PlanOutput;
       return res.json(planJson.groceryList || { sections: [] });
     } catch { return res.status(500).json({ message: "Failed to load grocery list" }); }
-  });
-
-  // DEPRECATED — legacy list of all standalone meal plans; superseded by GET /api/goal-plans
-  app.get("/api/plans", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const plans = await storage.getMealPlansByUser(userId);
-      return res.json(plans);
-    } catch { return res.status(500).json({ message: "Failed to load plans" }); }
-  });
-
-  // DEPRECATED — legacy list of all standalone workout plans; superseded by GET /api/goal-plans
-  app.get("/api/workouts", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const plans = await storage.getWorkoutPlansByUser(userId);
-      return res.json(plans);
-    } catch { return res.status(500).json({ message: "Failed to load workout plans" }); }
   });
 
   app.use("/api/{*path}", (_req: Request, res: Response) => {
