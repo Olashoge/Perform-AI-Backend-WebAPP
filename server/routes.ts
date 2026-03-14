@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, updateAccountSchema, changePasswordSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, goalGenerateInputSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput } from "@shared/schema";
+import { signupSchema, loginSchema, updateAccountSchema, changePasswordSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, goalGenerateInputSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput, type GoalPlanOverview, type GoalPlanOverviewIdentity, type GoalPlanOverviewWeeklyStructure, type GoalPlanOverviewNutrition, type GoalPlanOverviewTraining } from "@shared/schema";
 import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
@@ -90,9 +90,9 @@ function buildGoalPlanOverview(
   plan: { title?: string | null; status?: string | null; goalType?: string | null; planType?: string | null; pace?: string | null; startDate?: string | null; endDate?: string | null },
   mealPlan: { planJson?: unknown } | null,
   workoutPlan: { planJson?: unknown } | null,
-) {
+): GoalPlanOverview {
   // identity — always present
-  const identity = {
+  const identity: GoalPlanOverviewIdentity = {
     title: plan.title ?? "",
     status: plan.status ?? "",
     goalType: plan.goalType ?? null,
@@ -103,8 +103,8 @@ function buildGoalPlanOverview(
   };
 
   // weeklyStructure + training — sourced exclusively from workoutPlan.planJson.days
-  let weeklyStructure: { totalDays: number; workoutDays: number; restDays: number; workoutPattern: boolean[] } | null = null;
-  let training: { frequencyPerWeek: number | null; focusModes: string[]; avgDurationMinutes: number | null } | null = null;
+  let weeklyStructure: GoalPlanOverviewWeeklyStructure | null = null;
+  let training: GoalPlanOverviewTraining | null = null;
 
   const workoutPlanJson = workoutPlan?.planJson as Record<string, any> | null | undefined;
   const workoutDays: any[] = Array.isArray(workoutPlanJson?.days) ? workoutPlanJson.days : [];
@@ -150,7 +150,7 @@ function buildGoalPlanOverview(
   }
 
   // nutrition — sourced exclusively from mealPlan.planJson.nutritionNotes
-  let nutrition: { calories: string | null; protein_g: string | null; carbs_g: string | null; fat_g: string | null; howThisSupportsGoal: string[] } | null = null;
+  let nutrition: GoalPlanOverviewNutrition | null = null;
 
   const mealPlanJson = mealPlan?.planJson as Record<string, any> | null | undefined;
   const nutritionNotes = mealPlanJson?.nutritionNotes;

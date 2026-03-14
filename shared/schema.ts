@@ -713,3 +713,52 @@ export interface AdaptiveSnapshot {
     computedAt: string;
   };
 }
+
+// ——— Normalized Wellness Plan Overview Contract ———
+// Response-layer computed object returned by GET /api/goal-plans/:id.
+// Sourced from top-level goal plan metadata plus embedded child plan JSON.
+// Not persisted; not tied to globalInputs / nutritionInputs / trainingInputs.
+
+export const goalPlanOverviewIdentitySchema = z.object({
+  title: z.string(),
+  status: z.string(),
+  goalType: z.string().nullable(),
+  planType: z.enum(["meal", "workout", "both"]).nullable(),
+  pace: z.string().nullable(),
+  startDate: z.string().nullable(),
+  endDate: z.string().nullable(),
+});
+
+export const goalPlanOverviewWeeklyStructureSchema = z.object({
+  totalDays: z.number(),
+  workoutDays: z.number(),
+  restDays: z.number(),
+  workoutPattern: z.array(z.boolean()),
+});
+
+export const goalPlanOverviewNutritionSchema = z.object({
+  calories: z.string().nullable(),
+  protein_g: z.string().nullable(),
+  carbs_g: z.string().nullable(),
+  fat_g: z.string().nullable(),
+  howThisSupportsGoal: z.array(z.string()),
+});
+
+export const goalPlanOverviewTrainingSchema = z.object({
+  frequencyPerWeek: z.number().nullable(),
+  focusModes: z.array(z.string()),
+  avgDurationMinutes: z.number().nullable(),
+});
+
+export const goalPlanOverviewSchema = z.object({
+  identity: goalPlanOverviewIdentitySchema,
+  weeklyStructure: goalPlanOverviewWeeklyStructureSchema.nullable(),
+  nutrition: goalPlanOverviewNutritionSchema.nullable(),
+  training: goalPlanOverviewTrainingSchema.nullable(),
+});
+
+export type GoalPlanOverviewIdentity = z.infer<typeof goalPlanOverviewIdentitySchema>;
+export type GoalPlanOverviewWeeklyStructure = z.infer<typeof goalPlanOverviewWeeklyStructureSchema>;
+export type GoalPlanOverviewNutrition = z.infer<typeof goalPlanOverviewNutritionSchema>;
+export type GoalPlanOverviewTraining = z.infer<typeof goalPlanOverviewTrainingSchema>;
+export type GoalPlanOverview = z.infer<typeof goalPlanOverviewSchema>;
