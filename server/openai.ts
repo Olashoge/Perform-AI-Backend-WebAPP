@@ -154,6 +154,31 @@ function buildPersonalizationBlock(prefs: Preferences): string {
   return block;
 }
 
+function buildPrepStyleBlock(prepStyle: string): string {
+  switch (prepStyle) {
+    case "batch_2day":
+      return `\nPREP STYLE — BATCH COOKING (2-DAY):
+- Design meals that cook once and reheat well across 2 consecutive days.
+- Favour ingredients with good fridge life: grains, legumes, roasted vegetables, braised or baked proteins.
+- In recipe steps, note when a batch should be refrigerated for the next day (e.g., "Refrigerate remaining portions for Day X").
+- Avoid highly perishable or time-sensitive dishes (fresh-dressed salads, fragile sauces) as batch items.
+- The batchPrepPlan output should reflect a practical 2-day cook session.`;
+    case "batch_3to4day":
+      return `\nPREP STYLE — BATCH COOKING (3–4 DAY):
+- Design the full week around batch-cook logic: cook once, eat across 3–4 days.
+- Strongly prefer dishes with excellent fridge life: stews, curries, grain bowls, roasted or slow-cooked proteins, cooked legumes.
+- Deliberately reuse the same grain base or protein across multiple meals to minimise separate prep sessions.
+- Steps should state yield and storage duration (e.g., "Makes 4 servings — refrigerate for up to 4 days").
+- The batchPrepPlan output should outline a comprehensive cook session covering most of the week.`;
+    case "cook_daily":
+    default:
+      return `\nPREP STYLE — COOK DAILY:
+- Every meal is designed for fresh, same-day preparation — do not plan cross-day leftovers.
+- Favour quick-cooking techniques: sauté, stir-fry, quick roast, simple assembly.
+- Each day's meals should be independently achievable in one cooking session without advance prep.`;
+  }
+}
+
 function buildPlanPrompt(prefs: Preferences, prefCtx?: UserPreferenceContext): string {
   const mealSlots = getMealSlotsForPrefs(prefs);
   const slotsLabel = mealSlots.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ");
@@ -173,6 +198,7 @@ Authenticity Mode: ${prefs.authenticityMode || "mixed"}
 Meals Per Day: ${prefs.mealsPerDay || 3} — ${mealsNote}
 Allergies & Intolerances: ${prefs.allergies || "None"}
 ${buildPersonalizationBlock(prefs)}
+${buildPrepStyleBlock(prefs.prepStyle)}${prefs.mealNotes?.trim() ? `\n\nADDITIONAL MEAL NOTES (user-provided — apply as soft guidance where safe and relevant; do not override hard safety constraints):\n${prefs.mealNotes.trim()}` : ""}
 
 INGREDIENT GUIDELINES:
 - Use ingredients readily available at US grocery stores.
@@ -398,7 +424,7 @@ Workout Days: ${prefs.daysOfWeek.join(", ")} (Day indices: ${workoutDayIndices.j
 Session Length: ${prefs.sessionLength} minutes
 Experience Level: ${prefs.experienceLevel}
 Limitations/Injuries: ${prefs.limitations || "None"}
-${exerciseContext && (exerciseContext.avoidedExercises.length > 0 || exerciseContext.dislikedExercises.length > 0) ? `
+${prefs.workoutNotes?.trim() ? `Additional Workout Notes (user-provided — apply as soft guidance where relevant; do not override safety constraints): ${prefs.workoutNotes.trim()}\n` : ""}${exerciseContext && (exerciseContext.avoidedExercises.length > 0 || exerciseContext.dislikedExercises.length > 0) ? `
 EXERCISE PREFERENCES:
 ${exerciseContext.avoidedExercises.length > 0 ? `- AVOIDED exercises (NEVER include these): ${exerciseContext.avoidedExercises.join(", ")}` : ""}
 ${exerciseContext.dislikedExercises.length > 0 ? `- Disliked exercises (deprioritize, use only if necessary): ${exerciseContext.dislikedExercises.join(", ")}` : ""}
