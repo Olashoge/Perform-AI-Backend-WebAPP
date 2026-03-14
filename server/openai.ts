@@ -183,7 +183,6 @@ Return a JSON object with this exact structure:
 {
   "title": "string - catchy plan title",
   "summary": "string - 2-3 sentences summarizing the plan",
-  "preferencesEcho": { copy of the preferences above as an object },
   "days": [
     {
       "dayIndex": 1-7,
@@ -434,7 +433,6 @@ Return a JSON object with this exact structure:
 {
   "title": "string - catchy workout plan title",
   "summary": "string - 2-3 sentences summarizing the plan approach",
-  "preferencesEcho": { copy of preferences },
   "days": [
     {
       "dayIndex": 1-7,
