@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
-import { signupSchema, loginSchema, updateAccountSchema, changePasswordSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput } from "@shared/schema";
+import { signupSchema, loginSchema, updateAccountSchema, changePasswordSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, goalGenerateInputSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput } from "@shared/schema";
 import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
@@ -865,11 +865,12 @@ export async function registerRoutes(
   app.post("/api/goal-plans/generate", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
-      const { goalType, planType, startDate, pace, globalInputs, mealPreferences, workoutPreferences } = req.body;
 
-      if (!goalType) {
-        return res.status(400).json({ message: "goalType is required" });
+      const bodyParsed = goalGenerateInputSchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return res.status(400).json({ message: "Invalid request body", errors: bodyParsed.error.flatten().fieldErrors });
       }
+      const { goalType, planType, startDate, pace, globalInputs, mealPreferences, workoutPreferences } = bodyParsed.data;
 
       // Normalize legacy goal types to new taxonomy
       const GOAL_TYPE_MAP: Record<string, string> = {
@@ -988,6 +989,27 @@ export async function registerRoutes(
       const adaptive = await computeAdaptiveForUser(userId, pace);
       constraintPromptBlock += adaptive.promptBlock;
 
+      // Validate preferences before writing to storage (Task 2 hardening)
+      let validatedMealPrefs: Preferences | undefined;
+      if (needsMeal && mealPreferences) {
+        const mp = { ...mealPreferences } as any;
+        if (mp.goal === "fat_loss") mp.goal = "weight_loss";
+        const parsed = preferencesSchema.safeParse(mp);
+        if (!parsed.success) {
+          return res.status(400).json({ message: "Invalid meal preferences", errors: parsed.error.flatten().fieldErrors });
+        }
+        validatedMealPrefs = parsed.data;
+      }
+
+      let validatedWorkoutPrefs: ReturnType<typeof workoutPreferencesSchema.parse> | undefined;
+      if (needsWorkout && workoutPreferences) {
+        const parsed = workoutPreferencesSchema.safeParse(workoutPreferences);
+        if (!parsed.success) {
+          return res.status(400).json({ message: "Invalid workout preferences", errors: parsed.error.flatten().fieldErrors });
+        }
+        validatedWorkoutPrefs = parsed.data;
+      }
+
       const goalPlan = await storage.createGoalPlanFull(userId, {
         goalType: normalizedGoalType,
         planType: resolvedPlanType,
@@ -999,9 +1021,9 @@ export async function registerRoutes(
         })() : undefined,
         pace: pace || undefined,
         title: goalTitle,
-        globalInputs: globalInputs || undefined,
-        nutritionInputs: needsMeal ? mealPreferences : undefined,
-        trainingInputs: needsWorkout ? workoutPreferences : undefined,
+        globalInputs: { ...(globalInputs || {}), type: "standard" },
+        nutritionInputs: needsMeal ? (validatedMealPrefs ?? null) : undefined,
+        trainingInputs: needsWorkout ? (validatedWorkoutPrefs ?? null) : undefined,
         status: "generating",
         progress: initialProgress,
         profileSnapshot: userProfile || undefined,
@@ -1578,6 +1600,20 @@ export async function registerRoutes(
       constraintPromptBlock += adaptive.promptBlock;
       constraintPromptBlock += "\n\n[RECOVERY WEEK MODE] This is a recovery/deload week. Reduce intensity and volume. Prioritize mobility, flexibility, and recovery exercises. Keep meals simple with fewer ingredients and shorter prep times.";
 
+      // Validate recovery preferences before writing to storage (Task 2 hardening)
+      if (needsWorkout) {
+        const parsed = workoutPreferencesSchema.safeParse(recoveryWorkoutPrefs);
+        if (!parsed.success) {
+          return res.status(500).json({ message: "Internal error: invalid recovery workout preferences" });
+        }
+      }
+      if (needsMeal) {
+        const parsed = preferencesSchema.safeParse(recoveryMealPrefs);
+        if (!parsed.success) {
+          return res.status(500).json({ message: "Internal error: invalid recovery meal preferences" });
+        }
+      }
+
       const initialProgress = {
         stage: needsWorkout ? "TRAINING" : (needsMeal ? "NUTRITION" : "FINALIZING"),
         stageStatuses: {
@@ -1596,6 +1632,7 @@ export async function registerRoutes(
         title: goalTitle,
         globalInputs: {
           ...(sourceGoalPlan.globalInputs as any || {}),
+          type: "recovery_week",
           adjustmentApplied: {
             type: "recovery_week_v1",
             appliedAt: new Date().toISOString(),
