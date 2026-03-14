@@ -86,6 +86,91 @@ function requireAuth(req: Request, res: Response, next: Function) {
   return res.status(401).json({ success: false, code: "AUTH_REQUIRED", message: "Your session expired. Please log in again." });
 }
 
+function buildGoalPlanOverview(
+  plan: { title?: string | null; status?: string | null; goalType?: string | null; planType?: string | null; pace?: string | null; startDate?: string | null; endDate?: string | null },
+  mealPlan: { planJson?: unknown } | null,
+  workoutPlan: { planJson?: unknown } | null,
+) {
+  // identity — always present
+  const identity = {
+    title: plan.title ?? "",
+    status: plan.status ?? "",
+    goalType: plan.goalType ?? null,
+    planType: (plan.planType ?? null) as "meal" | "workout" | "both" | null,
+    pace: plan.pace ?? null,
+    startDate: plan.startDate ?? null,
+    endDate: plan.endDate ?? null,
+  };
+
+  // weeklyStructure + training — sourced exclusively from workoutPlan.planJson.days
+  let weeklyStructure: { totalDays: number; workoutDays: number; restDays: number; workoutPattern: boolean[] } | null = null;
+  let training: { frequencyPerWeek: number | null; focusModes: string[]; avgDurationMinutes: number | null } | null = null;
+
+  const workoutPlanJson = workoutPlan?.planJson as Record<string, any> | null | undefined;
+  const workoutDays: any[] = Array.isArray(workoutPlanJson?.days) ? workoutPlanJson.days : [];
+
+  if (workoutPlan && workoutDays.length > 0) {
+    const totalDays = workoutDays.length;
+    const workoutPattern = workoutDays.map((d: any) => d.isWorkoutDay === true);
+    const workoutDayCount = workoutPattern.filter(Boolean).length;
+
+    weeklyStructure = {
+      totalDays,
+      workoutDays: workoutDayCount,
+      restDays: totalDays - workoutDayCount,
+      workoutPattern,
+    };
+
+    const activeSessions = workoutDays
+      .filter((d: any) => d.isWorkoutDay === true && d.session != null)
+      .map((d: any) => d.session);
+
+    const focusModesOrdered: string[] = [];
+    const seenModes = new Set<string>();
+    for (const s of activeSessions) {
+      if (typeof s.mode === "string" && s.mode.trim() !== "" && !seenModes.has(s.mode)) {
+        seenModes.add(s.mode);
+        focusModesOrdered.push(s.mode);
+      }
+    }
+
+    const validDurations = activeSessions
+      .map((s: any) => typeof s.durationMinutes === "number" ? s.durationMinutes : null)
+      .filter((d): d is number => d !== null && d > 0);
+
+    const avgDurationMinutes = validDurations.length > 0
+      ? Math.round(validDurations.reduce((a, b) => a + b, 0) / validDurations.length)
+      : null;
+
+    training = {
+      frequencyPerWeek: workoutDayCount,
+      focusModes: focusModesOrdered,
+      avgDurationMinutes,
+    };
+  }
+
+  // nutrition — sourced exclusively from mealPlan.planJson.nutritionNotes
+  let nutrition: { calories: string | null; protein_g: string | null; carbs_g: string | null; fat_g: string | null; howThisSupportsGoal: string[] } | null = null;
+
+  const mealPlanJson = mealPlan?.planJson as Record<string, any> | null | undefined;
+  const nutritionNotes = mealPlanJson?.nutritionNotes;
+
+  if (mealPlan && nutritionNotes != null && typeof nutritionNotes === "object") {
+    const macros = nutritionNotes.dailyMacroTargetsRange;
+    nutrition = {
+      calories: typeof macros?.calories === "string" ? macros.calories : null,
+      protein_g: typeof macros?.protein_g === "string" ? macros.protein_g : null,
+      carbs_g: typeof macros?.carbs_g === "string" ? macros.carbs_g : null,
+      fat_g: typeof macros?.fat_g === "string" ? macros.fat_g : null,
+      howThisSupportsGoal: Array.isArray(nutritionNotes.howThisSupportsGoal)
+        ? (nutritionNotes.howThisSupportsGoal as unknown[]).filter((s): s is string => typeof s === "string")
+        : [],
+    };
+  }
+
+  return { identity, weeklyStructure, nutrition, training };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -1180,6 +1265,7 @@ export async function registerRoutes(
         ...plan,
         mealPlan: embeddedMealPlan || null,
         workoutPlan: embeddedWorkoutPlan || null,
+        overview: buildGoalPlanOverview(plan, embeddedMealPlan || null, embeddedWorkoutPlan || null),
       });
     } catch (err) {
       return res.status(500).json({ message: "Failed to load goal plan" });
