@@ -260,7 +260,6 @@ export const daySchema = z.object({
 export const planOutputSchema = z.object({
   title: z.string(),
   summary: z.string(),
-  preferencesEcho: z.record(z.any()),
   days: z.array(daySchema).length(7),
   groceryList: z.object({
     sections: z.array(grocerySectionSchema),
@@ -320,7 +319,6 @@ export const workoutDaySchema = z.object({
 export const workoutPlanOutputSchema = z.object({
   title: z.string(),
   summary: z.string(),
-  preferencesEcho: z.record(z.any()),
   days: z.array(workoutDaySchema).length(7),
   progressionNotes: z.array(z.string()).optional(),
 });
