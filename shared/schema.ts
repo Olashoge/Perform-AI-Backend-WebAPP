@@ -211,6 +211,7 @@ export const preferencesSchema = z.object({
   workoutDays: z.array(z.enum(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"])).optional(),
   spiceLevel: z.enum(["none", "mild", "medium", "hot"]).default("medium"),
   authenticityMode: z.enum(["traditional", "weeknight", "mixed"]).default("mixed"),
+  mealNotes: z.string().optional(),
 }).refine((data) => {
   if (data.mealsPerDay === 2 && data.mealSlots) {
     return data.mealSlots.length === 2;
@@ -285,6 +286,7 @@ export const workoutPreferencesSchema = z.object({
   experienceLevel: z.enum(["beginner", "intermediate", "advanced"]),
   limitations: z.string().optional(),
   equipmentAvailable: z.array(z.string()).optional(),
+  workoutNotes: z.string().optional(),
 });
 
 export const workoutExerciseSchema = z.object({
