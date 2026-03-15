@@ -1148,6 +1148,13 @@ export async function registerRoutes(
               );
             }
 
+            // Always rebuild grocery list from final ingredients — ensures non-empty sections
+            // even if the AI returned empty sections, and keeps list consistent after post-validation fixes
+            if (!finalMealJson.groceryList?.sections?.length) {
+              finalMealJson = { ...finalMealJson, groceryList: rebuildGroceryList(finalMealJson) };
+              log(`Goal gen: rebuilt grocery list from ingredients (AI returned empty sections)`, "plan");
+            }
+
             await storage.updatePlanStatus(pendingMeal.id, "ready", finalMealJson);
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingMeal.id, type: "meal" });
             log(`Goal gen: meal plan ${pendingMeal.id} ready`, "openai");
@@ -1283,11 +1290,19 @@ export async function registerRoutes(
         plan.mealPlanId ? storage.getMealPlan(plan.mealPlanId) : Promise.resolve(null),
         plan.workoutPlanId ? storage.getWorkoutPlan(plan.workoutPlanId) : Promise.resolve(null),
       ]);
+      // Derive canonical planType from child plan presence when DB value is null (legacy plans)
+      const derivedPlanType = plan.planType ?? (
+        plan.mealPlanId && plan.workoutPlanId ? "both" :
+        plan.mealPlanId ? "meal" :
+        plan.workoutPlanId ? "workout" : null
+      );
+      const planForOverview = derivedPlanType !== plan.planType ? { ...plan, planType: derivedPlanType } : plan;
       return res.json({
         ...plan,
+        planType: derivedPlanType,
         mealPlan: embeddedMealPlan || null,
         workoutPlan: embeddedWorkoutPlan || null,
-        overview: buildGoalPlanOverview(plan, embeddedMealPlan || null, embeddedWorkoutPlan || null),
+        overview: buildGoalPlanOverview(planForOverview, embeddedMealPlan || null, embeddedWorkoutPlan || null),
       });
     } catch (err) {
       return res.status(500).json({ message: "Failed to load goal plan" });
