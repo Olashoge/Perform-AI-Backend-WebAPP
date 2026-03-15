@@ -894,18 +894,18 @@ export async function registerRoutes(
       const needsMeal = resolvedPlanType === "both" || resolvedPlanType === "meal";
 
       const GOAL_TITLE_PREFIXES: Record<string, string[]> = {
-        weight_loss: ["Lean Start", "Cut Phase", "Slim Down"],
-        muscle_gain: ["Build Phase", "Gain Mode", "Mass Drive"],
-        body_recomposition: ["Recomp Phase", "Transform Mode", "Shape Shift"],
-        general_fitness: ["Fresh Start", "New Chapter", "Kickoff"],
-        athletic_performance: ["Peak Performance", "Level Up", "Go Mode"],
+        weight_loss: ["Fat Loss Reset", "Lean Body Foundation", "Weight Loss Foundation"],
+        muscle_gain: ["Muscle Gain Foundation", "Lean Strength Build", "Size & Strength Plan"],
+        body_recomposition: ["Body Recomposition Plan", "Fat Loss & Muscle Build", "Recomp Foundation"],
+        general_fitness: ["General Fitness Plan", "Active Lifestyle Foundation", "Fitness Foundation"],
+        athletic_performance: ["Athletic Performance Plan", "Performance Foundation", "Speed & Power Build"],
         // legacy fallbacks
-        performance: ["Peak Performance", "Level Up", "Go Mode"],
-        maintenance: ["Steady State", "Stay Strong", "Balance"],
-        energy: ["Energy Boost", "Power Up", "Recharge"],
-        mobility: ["Flex Flow", "Move Better", "Limber Up"],
-        endurance: ["Long Game", "Mile Maker", "Stay Going"],
-        strength: ["Iron Path", "Power Phase", "Lift Off"],
+        performance: ["Athletic Performance Plan", "Performance Foundation", "Speed & Power Build"],
+        maintenance: ["Maintenance Week", "Steady Progress Plan", "Stay Strong Plan"],
+        energy: ["Energy & Vitality Plan", "Daily Energy Foundation", "Energy Reset Week"],
+        mobility: ["Mobility & Flexibility Plan", "Move Better Foundation", "Mobility Focus Week"],
+        endurance: ["Endurance Build Plan", "Cardio Foundation", "Endurance Focus Week"],
+        strength: ["Strength Foundation", "Lean Strength Week", "Power & Strength Build"],
       };
       const prefixes = GOAL_TITLE_PREFIXES[normalizedGoalType] || GOAL_TITLE_PREFIXES["general_fitness"];
       const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
@@ -1998,7 +1998,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Profile required", profileRequired: true });
       }
 
-      const { date, mealsPerDay } = req.body;
+      const { date, mealsPerDay, dietStyles: formDietStyles, cookingTime: formCookingTime, budgetMode: formBudgetMode } = req.body;
       if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ message: "Valid date (YYYY-MM-DD) is required" });
       }
@@ -2032,10 +2032,12 @@ export async function registerRoutes(
             date,
             mealsPerDay: mealsPerDay as 2 | 3,
             goal: profile.primaryGoal || "general_fitness",
-            dietStyles: [],
+            dietStyles: Array.isArray(formDietStyles) && formDietStyles.length > 0 ? formDietStyles : undefined,
             foodsToAvoid: (profile.foodsToAvoid as string[]) || [],
             allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
             spiceLevel: profile.spicePreference || "medium",
+            cookingTime: typeof formCookingTime === "string" ? formCookingTime : undefined,
+            budgetMode: typeof formBudgetMode === "string" ? formBudgetMode : undefined,
             age: profile.age || undefined,
             currentWeight: profile.weightKg ? Number(profile.weightKg) : undefined,
             targetWeight: profile.targetWeightKg ? Number(profile.targetWeightKg) : undefined,
@@ -2100,7 +2102,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Profile required", profileRequired: true });
       }
 
-      const { date } = req.body;
+      const { date, trainingMode: formTrainingMode, focusAreas: formFocusAreas } = req.body;
       if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ message: "Valid date (YYYY-MM-DD) is required" });
       }
@@ -2137,8 +2139,8 @@ export async function registerRoutes(
             goal: profile.primaryGoal || "general_fitness",
             secondaryFocus: (profile as any).secondaryFocus ?? null,
             location: profile.workoutLocationDefault || "gym",
-            trainingMode: "both",
-            focusAreas: ["full_body"],
+            trainingMode: typeof formTrainingMode === "string" ? formTrainingMode : "both",
+            focusAreas: Array.isArray(formFocusAreas) && formFocusAreas.length > 0 ? formFocusAreas : ["full_body"],
             sessionLength: profile.sessionDurationMinutes || 45,
             experienceLevel: profile.trainingExperience || "intermediate",
             healthConstraints: (profile.healthConstraints as string[]) || [],
@@ -2204,12 +2206,13 @@ export async function registerRoutes(
       (async () => {
         try {
           const prefCtx = await storage.getUserPreferenceContext(userId);
+          const adaptive = await computeAdaptiveForUser(userId);
           const regenMealCtx = buildUserContextForGeneration(profile);
+          const regenMealConstraint = (adaptive.promptBlock || "") + regenMealCtx.mealPromptBlock;
           const result = await generateSingleDayMeals({
             date,
             mealsPerDay: mealsPerDay as 2 | 3,
             goal: profile.primaryGoal || "general_fitness",
-            dietStyles: [],
             foodsToAvoid: (profile.foodsToAvoid as string[]) || [],
             allergiesIntolerances: (profile.allergiesIntolerances as string[]) || [],
             spiceLevel: profile.spicePreference || "medium",
@@ -2217,7 +2220,7 @@ export async function registerRoutes(
             currentWeight: profile.weightKg ? Number(profile.weightKg) : undefined,
             targetWeight: profile.targetWeightKg ? Number(profile.targetWeightKg) : undefined,
             weightUnit: profile.unitSystem === "metric" ? "kg" : "lb",
-            constraintBlock: regenMealCtx.mealPromptBlock || undefined,
+            constraintBlock: regenMealConstraint || undefined,
           }, prefCtx);
 
           const groceryItems: any[] = [];
@@ -2264,7 +2267,9 @@ export async function registerRoutes(
             dislikedExercises: exercisePrefs.filter((p: any) => p.status === "disliked" || p.preference === "dislike").map((p: any) => p.exerciseName),
           };
 
+          const adaptive = await computeAdaptiveForUser(userId);
           const regenWorkoutCtx = buildUserContextForGeneration(profile);
+          const regenWorkoutConstraint = (adaptive.promptBlock || "") + regenWorkoutCtx.workoutPromptBlock;
           const result = await generateSingleDayWorkout({
             date,
             goal: profile.primaryGoal || "general_fitness",
@@ -2275,7 +2280,7 @@ export async function registerRoutes(
             sessionLength: profile.sessionDurationMinutes || 45,
             experienceLevel: profile.trainingExperience || "intermediate",
             healthConstraints: (profile.healthConstraints as string[]) || [],
-            constraintBlock: regenWorkoutCtx.workoutPromptBlock || undefined,
+            constraintBlock: regenWorkoutConstraint || undefined,
           }, exerciseContext, regenWorkoutCtx.profileExtras);
 
           const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -2819,6 +2824,26 @@ export async function registerRoutes(
       log(`Day data error: ${err?.message || err}`, "error");
       return res.status(500).json({ message: "Failed to load day data" });
     }
+  });
+
+  // ACTIVE — fetch grocery list for a Wellness Plan via its goal plan ID
+  app.get("/api/goal-plans/:id/grocery", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const goalPlan = await storage.getGoalPlan(req.params.id);
+      if (!goalPlan || goalPlan.userId !== userId || goalPlan.deletedAt) {
+        return res.status(404).json({ message: "Wellness plan not found" });
+      }
+      if (!goalPlan.mealPlanId) {
+        return res.json({ sections: [] });
+      }
+      const mealPlan = await storage.getMealPlan(goalPlan.mealPlanId);
+      if (!mealPlan || !mealPlan.planJson) {
+        return res.json({ sections: [] });
+      }
+      const planJson = mealPlan.planJson as PlanOutput;
+      return res.json(planJson.groceryList || { sections: [] });
+    } catch { return res.status(500).json({ message: "Failed to load grocery list" }); }
   });
 
   // ACTIVE — fetch grocery list for a meal plan; no goal-plan equivalent for raw grocery access
