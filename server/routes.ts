@@ -4,7 +4,7 @@ import session from "express-session";
 import { storage } from "./storage";
 import { hash, compare } from "bcryptjs";
 import { signupSchema, loginSchema, updateAccountSchema, changePasswordSchema, preferencesSchema, mealFeedbackSchema, workoutPreferencesSchema, workoutFeedbackSchema, goalPlanCreateSchema, goalGenerateInputSchema, weeklyCheckInSchema, ingredientProposalResolveSchema, exercisePreferenceSchema, insertUserProfileSchema, toggleCompletionSchema, type PlanOutput, type Preferences, type WorkoutPlanOutput, type GoalPlanOverview, type GoalPlanOverviewIdentity, type GoalPlanOverviewWeeklyStructure, type GoalPlanOverviewNutrition, type GoalPlanOverviewTraining } from "@shared/schema";
-import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout } from "./openai";
+import { generateFullPlan, generateWorkoutPlan, generateSingleDayMeals, generateSingleDayWorkout, rebuildGroceryList } from "./openai";
 import { generateMealFingerprint, extractKeyIngredients, normalizeItemKey } from "./meal-utils";
 import { log } from "./index";
 import { buildWellnessContext } from "./wellness-context";
@@ -1243,7 +1243,7 @@ export async function registerRoutes(
         goalPlanId: goalPlan.id,
         status: goalPlan.status || "generating",
         progress: goalPlan.progress || null,
-        planType: goalPlan.planType || "both",
+        planType: goalPlan.planType ?? null,
       };
 
       if (goalPlan.mealPlanId) {
@@ -2824,6 +2824,52 @@ export async function registerRoutes(
       log(`Day data error: ${err?.message || err}`, "error");
       return res.status(500).json({ message: "Failed to load day data" });
     }
+  });
+
+  // ACTIVE — toggle owned/have status for a grocery item on a Wellness Plan
+  app.post("/api/goal-plans/:id/grocery/owned", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const goalPlan = await storage.getGoalPlan(req.params.id);
+      if (!goalPlan || goalPlan.userId !== userId || goalPlan.deletedAt) {
+        return res.status(404).json({ message: "Wellness plan not found" });
+      }
+      if (!goalPlan.mealPlanId) {
+        return res.status(400).json({ message: "This wellness plan has no meal plan" });
+      }
+      const { itemKey, isOwned } = req.body;
+      if (typeof itemKey !== "string" || !itemKey.trim()) {
+        return res.status(400).json({ message: "itemKey (string) is required" });
+      }
+      if (typeof isOwned !== "boolean") {
+        return res.status(400).json({ message: "isOwned (boolean) is required" });
+      }
+      const result = await storage.upsertOwnedGroceryItem(userId, goalPlan.mealPlanId, itemKey, isOwned);
+      return res.json(result);
+    } catch { return res.status(500).json({ message: "Failed to update grocery item" }); }
+  });
+
+  // ACTIVE — rebuild grocery list for a Wellness Plan from stored meal plan ingredients
+  app.post("/api/goal-plans/:id/grocery/regenerate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const goalPlan = await storage.getGoalPlan(req.params.id);
+      if (!goalPlan || goalPlan.userId !== userId || goalPlan.deletedAt) {
+        return res.status(404).json({ message: "Wellness plan not found" });
+      }
+      if (!goalPlan.mealPlanId) {
+        return res.status(400).json({ message: "This wellness plan has no meal plan" });
+      }
+      const mealPlan = await storage.getMealPlan(goalPlan.mealPlanId);
+      if (!mealPlan || !mealPlan.planJson) {
+        return res.status(404).json({ message: "Meal plan data not found" });
+      }
+      const planJson = mealPlan.planJson as PlanOutput;
+      const newGroceryList = rebuildGroceryList(planJson);
+      const updatedPlanJson = { ...planJson, groceryList: newGroceryList };
+      await storage.updateMealPlanJson(mealPlan.id, updatedPlanJson);
+      return res.json(newGroceryList);
+    } catch { return res.status(500).json({ message: "Failed to rebuild grocery list" }); }
   });
 
   // ACTIVE — fetch grocery list for a Wellness Plan via its goal plan ID
