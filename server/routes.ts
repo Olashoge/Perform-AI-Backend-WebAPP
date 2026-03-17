@@ -2540,38 +2540,109 @@ export async function registerRoutes(
     return { scheduledMeals, scheduledWorkouts, completedMeals, completedWorkouts, mealPct, workoutPct, score };
   }
 
-  // AUDIT NOTE (2026-03-17): Current definition — raw-completion-only, no schedule-awareness.
-  // A day qualifies if activity_completions rows exist AND all are completed=true.
-  // A day with zero completion rows breaks the streak for any past day (i > 0).
-  // i === 0 skip handles "end-of-week day not yet fully lived" gracefully.
-  //
-  // KNOWN GAP: A day with no wellness plan and no daily plan generates no completion rows.
-  // That empty day breaks the streak even though the user had nothing scheduled.
-  //
-  // PROPOSED REPLACEMENT: query plan tables (scheduled meal/workout plans + daily meals/workouts)
-  // to determine whether a day had trackable items. Days with no trackable items = neutral
-  // (no increment, no break). Only days with trackable items where not all are completed break the
-  // streak. See audit findings in backend-audit-day-streak-logic for full scope.
+  // Schedule-aware streak: a day qualifies only if it had trackable scheduled/generated items
+  // AND all of those items were completed. Days with no trackable items are neutral — they
+  // neither increment nor break the streak. Future days (past the week-end that hasn't arrived)
+  // are also neutral. Uses 5 batch queries over the 30-day window instead of up to 30 serial
+  // per-day queries.
   async function computeStreakDays(userId: string, endDate: string): Promise<number> {
     const end = new Date(endDate + "T00:00:00");
+    const windowStart = new Date(end);
+    windowStart.setDate(end.getDate() - 29); // 30-day lookback window
+    const windowStartStr = windowStart.toISOString().split("T")[0];
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    // Batch fetch all required data for the window in parallel
+    const [allMealPlans, allWorkoutPlans, dailyMeals, dailyWorkouts, completions] = await Promise.all([
+      storage.getScheduledPlans(userId),
+      storage.getScheduledWorkoutPlans(userId),
+      storage.getDailyMealsByDateRange(userId, windowStartStr, endDate),
+      storage.getDailyWorkoutsByDateRange(userId, windowStartStr, endDate),
+      storage.getCompletionsByDateRange(userId, windowStartStr, endDate),
+    ]);
+
+    // Build per-date trackable item count using the same plan-coverage semantics as computeWeekScore
+    const trackableMap = new Map<string, number>(); // date → expected item count
+
+    // Wellness meal plans: each meal slot on a matching day is one trackable item
+    for (const mp of allMealPlans) {
+      if (!mp.planStartDate || mp.deletedAt) continue;
+      const plan = mp.planJson as any;
+      if (!plan?.days) continue;
+      for (let d = 0; d < plan.days.length; d++) {
+        const dayDate = new Date(mp.planStartDate + "T00:00:00");
+        dayDate.setDate(dayDate.getDate() + d);
+        const ds = dayDate.toISOString().split("T")[0];
+        if (ds < windowStartStr || ds > endDate) continue;
+        const dayMeals = plan.days[d]?.meals;
+        if (dayMeals) {
+          trackableMap.set(ds, (trackableMap.get(ds) ?? 0) + Object.keys(dayMeals).length);
+        }
+      }
+    }
+
+    // Wellness workout plans: each workout day is one trackable item
+    for (const wp of allWorkoutPlans) {
+      if (!wp.planStartDate || wp.deletedAt) continue;
+      const plan = wp.planJson as any;
+      if (!plan?.days) continue;
+      for (let d = 0; d < plan.days.length; d++) {
+        const day = plan.days[d];
+        if (!day || day.isWorkoutDay === false) continue;
+        const dayDate = new Date(wp.planStartDate + "T00:00:00");
+        dayDate.setDate(dayDate.getDate() + d);
+        const ds = dayDate.toISOString().split("T")[0];
+        if (ds < windowStartStr || ds > endDate) continue;
+        trackableMap.set(ds, (trackableMap.get(ds) ?? 0) + 1);
+      }
+    }
+
+    // Ready daily meals: each meal slot is one trackable item (same as computeWeekScore)
+    for (const dm of dailyMeals) {
+      if (dm.status !== "ready" || !dm.planJson) continue;
+      const meals = (dm.planJson as any)?.meals;
+      if (meals) {
+        trackableMap.set(dm.date, (trackableMap.get(dm.date) ?? 0) + Object.keys(meals).length);
+      }
+    }
+
+    // Ready daily workouts: count as one trackable item each
+    for (const dw of dailyWorkouts) {
+      if (dw.status !== "ready" || !dw.planJson) continue;
+      trackableMap.set(dw.date, (trackableMap.get(dw.date) ?? 0) + 1);
+    }
+
+    // Build per-date completed item count
+    const completedMap = new Map<string, number>(); // date → completed item count
+    for (const c of completions) {
+      if (c.completed) {
+        completedMap.set(c.date, (completedMap.get(c.date) ?? 0) + 1);
+      }
+    }
+
+    // Walk backward from endDate applying schedule-aware rules
     let streak = 0;
     for (let i = 0; i < 30; i++) {
       const checkDate = new Date(end);
       checkDate.setDate(end.getDate() - i);
       const ds = checkDate.toISOString().split("T")[0];
-      const dayCompletions = await storage.getCompletionsByDateRange(userId, ds, ds);
-      const hasScheduled = dayCompletions.length > 0;
-      if (!hasScheduled) {
-        if (i === 0) continue;
-        break;
-      }
-      const allCompleted = dayCompletions.every(c => c.completed);
-      if (allCompleted) {
+
+      // Future days are neutral — the week end may not have arrived yet
+      if (ds > todayStr) continue;
+
+      const trackableCount = trackableMap.get(ds) ?? 0;
+      // No trackable items: neutral day — does not increment or break the streak
+      if (trackableCount === 0) continue;
+
+      const completedCount = completedMap.get(ds) ?? 0;
+      if (completedCount >= trackableCount) {
         streak++;
       } else {
+        // Qualifying day with incomplete items — missed day breaks streak
         break;
       }
     }
+
     return streak;
   }
 
