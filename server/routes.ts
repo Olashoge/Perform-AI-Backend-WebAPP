@@ -2107,6 +2107,57 @@ export async function registerRoutes(
     }
   });
 
+  // ACTIVE — lean summary list of all daily meals for the authenticated user; suitable for a management index page
+  app.get("/api/daily-meals/summary", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const summary = await storage.getDailyMealsSummary(userId);
+      return res.json(summary);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load daily meals summary" });
+    }
+  });
+
+  // ACTIVE — delete a daily meal record for a specific date
+  app.delete("/api/daily-meal/:date", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { date } = req.params;
+      const existing = await storage.getDailyMealByDate(userId, date);
+      if (!existing) return res.status(404).json({ message: "No daily meal found for this date" });
+      await storage.deleteDailyMealByDate(userId, date);
+      return res.json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to delete daily meal" });
+    }
+  });
+
+  // ACTIVE — reschedule a daily meal to a new date without regenerating its content
+  app.patch("/api/daily-meal/:date/reschedule", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { date } = req.params;
+      const { newDate } = req.body;
+      if (!newDate || typeof newDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+        return res.status(400).json({ message: "Valid newDate (YYYY-MM-DD) is required" });
+      }
+      const targetDate = new Date(newDate + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (targetDate < today) {
+        return res.status(400).json({ message: "Cannot reschedule to a past date" });
+      }
+      const existing = await storage.getDailyMealByDate(userId, date);
+      if (!existing) return res.status(404).json({ message: "No daily meal found for this date" });
+      const conflict = await storage.getDailyMealByDate(userId, newDate);
+      if (conflict) return res.status(409).json({ message: "A daily meal already exists for the target date" });
+      const updated = await storage.rescheduleDailyMeal(userId, date, newDate);
+      return res.json(updated);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to reschedule daily meal" });
+    }
+  });
+
   // ── Daily Workout Planning ──
   // ACTIVE — generate a daily workout for a specific date (single-day, AI-powered)
   app.post("/api/daily-workout", requireAuth, async (req: Request, res: Response) => {
@@ -2199,6 +2250,57 @@ export async function registerRoutes(
       return res.json(workouts);
     } catch (err) {
       return res.status(500).json({ message: "Failed to load daily workouts" });
+    }
+  });
+
+  // ACTIVE — lean summary list of all daily workouts for the authenticated user; suitable for a management index page
+  app.get("/api/daily-workouts/summary", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const summary = await storage.getDailyWorkoutsSummary(userId);
+      return res.json(summary);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to load daily workouts summary" });
+    }
+  });
+
+  // ACTIVE — delete a daily workout record for a specific date
+  app.delete("/api/daily-workout/:date", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { date } = req.params;
+      const existing = await storage.getDailyWorkoutByDate(userId, date);
+      if (!existing) return res.status(404).json({ message: "No daily workout found for this date" });
+      await storage.deleteDailyWorkoutByDate(userId, date);
+      return res.json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to delete daily workout" });
+    }
+  });
+
+  // ACTIVE — reschedule a daily workout to a new date without regenerating its content
+  app.patch("/api/daily-workout/:date/reschedule", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { date } = req.params;
+      const { newDate } = req.body;
+      if (!newDate || typeof newDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+        return res.status(400).json({ message: "Valid newDate (YYYY-MM-DD) is required" });
+      }
+      const targetDate = new Date(newDate + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (targetDate < today) {
+        return res.status(400).json({ message: "Cannot reschedule to a past date" });
+      }
+      const existing = await storage.getDailyWorkoutByDate(userId, date);
+      if (!existing) return res.status(404).json({ message: "No daily workout found for this date" });
+      const conflict = await storage.getDailyWorkoutByDate(userId, newDate);
+      if (conflict) return res.status(409).json({ message: "A daily workout already exists for the target date" });
+      const updated = await storage.rescheduleDailyWorkout(userId, date, newDate);
+      return res.json(updated);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to reschedule daily workout" });
     }
   });
 

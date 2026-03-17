@@ -84,6 +84,12 @@ export interface IStorage {
   getDailyWorkoutByDate(userId: string, date: string): Promise<DailyWorkout | undefined>;
   getDailyWorkoutsByDateRange(userId: string, startDate: string, endDate: string): Promise<DailyWorkout[]>;
   updateDailyWorkoutStatus(id: string, status: string, planJson?: any, title?: string): Promise<DailyWorkout | undefined>;
+  deleteDailyMealByDate(userId: string, date: string): Promise<void>;
+  deleteDailyWorkoutByDate(userId: string, date: string): Promise<void>;
+  rescheduleDailyMeal(userId: string, oldDate: string, newDate: string): Promise<DailyMeal | undefined>;
+  rescheduleDailyWorkout(userId: string, oldDate: string, newDate: string): Promise<DailyWorkout | undefined>;
+  getDailyMealsSummary(userId: string): Promise<{ id: string; date: string; status: string; generatedTitle: string | null; mealsPerDay: number; createdAt: Date; updatedAt: Date }[]>;
+  getDailyWorkoutsSummary(userId: string): Promise<{ id: string; date: string; status: string; generatedTitle: string | null; createdAt: Date; updatedAt: Date }[]>;
   upsertActivityCompletion(userId: string, date: string, itemType: string, sourceType: string, sourceId: string, itemKey: string, completed: boolean): Promise<ActivityCompletion>;
   getCompletionsByDateRange(userId: string, startDate: string, endDate: string): Promise<ActivityCompletion[]>;
   getCompletionsBySource(userId: string, sourceType: string, sourceId: string): Promise<ActivityCompletion[]>;
@@ -894,6 +900,57 @@ export class DatabaseStorage implements IStorage {
     if (title !== undefined) updates.generatedTitle = title;
     const [workout] = await db.update(dailyWorkouts).set(updates).where(eq(dailyWorkouts.id, id)).returning();
     return workout;
+  }
+
+  async deleteDailyMealByDate(userId: string, date: string): Promise<void> {
+    await db.delete(dailyMeals).where(and(eq(dailyMeals.userId, userId), eq(dailyMeals.date, date)));
+  }
+
+  async deleteDailyWorkoutByDate(userId: string, date: string): Promise<void> {
+    await db.delete(dailyWorkouts).where(and(eq(dailyWorkouts.userId, userId), eq(dailyWorkouts.date, date)));
+  }
+
+  async rescheduleDailyMeal(userId: string, oldDate: string, newDate: string): Promise<DailyMeal | undefined> {
+    const [meal] = await db.update(dailyMeals)
+      .set({ date: newDate, updatedAt: new Date() })
+      .where(and(eq(dailyMeals.userId, userId), eq(dailyMeals.date, oldDate)))
+      .returning();
+    return meal;
+  }
+
+  async rescheduleDailyWorkout(userId: string, oldDate: string, newDate: string): Promise<DailyWorkout | undefined> {
+    const [workout] = await db.update(dailyWorkouts)
+      .set({ date: newDate, updatedAt: new Date() })
+      .where(and(eq(dailyWorkouts.userId, userId), eq(dailyWorkouts.date, oldDate)))
+      .returning();
+    return workout;
+  }
+
+  async getDailyMealsSummary(userId: string): Promise<{ id: string; date: string; status: string; generatedTitle: string | null; mealsPerDay: number; createdAt: Date; updatedAt: Date }[]> {
+    return db.select({
+      id: dailyMeals.id,
+      date: dailyMeals.date,
+      status: dailyMeals.status,
+      generatedTitle: dailyMeals.generatedTitle,
+      mealsPerDay: dailyMeals.mealsPerDay,
+      createdAt: dailyMeals.createdAt,
+      updatedAt: dailyMeals.updatedAt,
+    }).from(dailyMeals)
+      .where(eq(dailyMeals.userId, userId))
+      .orderBy(desc(dailyMeals.date));
+  }
+
+  async getDailyWorkoutsSummary(userId: string): Promise<{ id: string; date: string; status: string; generatedTitle: string | null; createdAt: Date; updatedAt: Date }[]> {
+    return db.select({
+      id: dailyWorkouts.id,
+      date: dailyWorkouts.date,
+      status: dailyWorkouts.status,
+      generatedTitle: dailyWorkouts.generatedTitle,
+      createdAt: dailyWorkouts.createdAt,
+      updatedAt: dailyWorkouts.updatedAt,
+    }).from(dailyWorkouts)
+      .where(eq(dailyWorkouts.userId, userId))
+      .orderBy(desc(dailyWorkouts.date));
   }
 
   async upsertActivityCompletion(userId: string, date: string, itemType: string, sourceType: string, sourceId: string, itemKey: string, completed: boolean): Promise<ActivityCompletion> {
