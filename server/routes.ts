@@ -2540,6 +2540,18 @@ export async function registerRoutes(
     return { scheduledMeals, scheduledWorkouts, completedMeals, completedWorkouts, mealPct, workoutPct, score };
   }
 
+  // AUDIT NOTE (2026-03-17): Current definition — raw-completion-only, no schedule-awareness.
+  // A day qualifies if activity_completions rows exist AND all are completed=true.
+  // A day with zero completion rows breaks the streak for any past day (i > 0).
+  // i === 0 skip handles "end-of-week day not yet fully lived" gracefully.
+  //
+  // KNOWN GAP: A day with no wellness plan and no daily plan generates no completion rows.
+  // That empty day breaks the streak even though the user had nothing scheduled.
+  //
+  // PROPOSED REPLACEMENT: query plan tables (scheduled meal/workout plans + daily meals/workouts)
+  // to determine whether a day had trackable items. Days with no trackable items = neutral
+  // (no increment, no break). Only days with trackable items where not all are completed break the
+  // streak. See audit findings in backend-audit-day-streak-logic for full scope.
   async function computeStreakDays(userId: string, endDate: string): Promise<number> {
     const end = new Date(endDate + "T00:00:00");
     let streak = 0;
