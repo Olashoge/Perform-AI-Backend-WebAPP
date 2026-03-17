@@ -2813,6 +2813,20 @@ export async function registerRoutes(
         const dm = dailyMeals.find(m => m.date === dateStr && m.status === "ready");
         const dailyMealObj = dm ? { id: String(dm.id), planJson: dm.planJson, generatedTitle: (dm as any).generatedTitle || null } : null;
 
+        // Gap-fill meal slots from the daily meal for days not covered by a wellness plan
+        // Mirrors the same priority logic already present in /api/day-data/:date
+        if (dm && dm.planJson) {
+          const dmMeals = (dm.planJson as any)?.meals;
+          if (dmMeals) {
+            for (const [slot, meal] of Object.entries(dmMeals)) {
+              if (!meals[slot]) {
+                meals[slot] = meal;
+                allMealSlots.add(slot);
+              }
+            }
+          }
+        }
+
         const dw = dailyWorkouts.find(w => w.date === dateStr && w.status === "ready");
         const dailyWorkoutObj = dw ? { id: String(dw.id), planJson: dw.planJson, generatedTitle: (dw as any).generatedTitle || null } : null;
 
