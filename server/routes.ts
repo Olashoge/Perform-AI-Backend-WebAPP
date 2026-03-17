@@ -2627,8 +2627,8 @@ export async function registerRoutes(
       checkDate.setDate(end.getDate() - i);
       const ds = checkDate.toISOString().split("T")[0];
 
-      // Future days are neutral — the week end may not have arrived yet
-      if (ds > todayStr) continue;
+      // Future days and today are neutral — today is still in progress
+      if (ds >= todayStr) continue;
 
       const trackableCount = trackableMap.get(ds) ?? 0;
       // No trackable items: neutral day — does not increment or break the streak
