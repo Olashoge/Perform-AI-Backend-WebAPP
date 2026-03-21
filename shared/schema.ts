@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, uniqueIndex, real, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, uniqueIndex, index, real, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -762,3 +762,216 @@ export type GoalPlanOverviewWeeklyStructure = z.infer<typeof goalPlanOverviewWee
 export type GoalPlanOverviewNutrition = z.infer<typeof goalPlanOverviewNutritionSchema>;
 export type GoalPlanOverviewTraining = z.infer<typeof goalPlanOverviewTrainingSchema>;
 export type GoalPlanOverview = z.infer<typeof goalPlanOverviewSchema>;
+
+// ─── Persistent Object Memory — Phase 1 ──────────────────────────────────────
+
+export const exercises = pgTable("exercises", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  canonicalName: text("canonical_name").notNull(),
+  displayName: text("display_name").notNull(),
+  normalizedCanonicalName: text("normalized_canonical_name").notNull(),
+  category: text("category").notNull(),
+  movementPattern: text("movement_pattern"),
+  primaryMuscleGroups: jsonb("primary_muscle_groups").notNull().default([]),
+  secondaryMuscleGroups: jsonb("secondary_muscle_groups").notNull().default([]),
+  equipmentType: text("equipment_type"),
+  trainingModes: jsonb("training_modes").notNull().default([]),
+  isBilateral: boolean("is_bilateral").notNull().default(false),
+  isUnilateral: boolean("is_unilateral").notNull().default(false),
+  repTrackingMode: text("rep_tracking_mode").notNull().default("reps"),
+  difficultyLevel: text("difficulty_level"),
+  instructionsShort: text("instructions_short"),
+  createdBySource: text("created_by_source").notNull().default("curated"),
+  reviewStatus: text("review_status").notNull().default("approved"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("exercises_normalized_canonical_name_idx").on(table.normalizedCanonicalName),
+  index("exercises_category_idx").on(table.category),
+  index("exercises_movement_pattern_idx").on(table.movementPattern),
+  index("exercises_equipment_type_idx").on(table.equipmentType),
+  index("exercises_review_status_idx").on(table.reviewStatus),
+]);
+
+export const exerciseAliases = pgTable("exercise_aliases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  exerciseId: varchar("exercise_id").notNull().references(() => exercises.id),
+  aliasText: text("alias_text").notNull(),
+  normalizedAliasText: text("normalized_alias_text").notNull(),
+  source: text("source").notNull().default("curated"),
+  confidence: real("confidence"),
+  isPreferred: boolean("is_preferred").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("exercise_aliases_exercise_id_idx").on(table.exerciseId),
+  index("exercise_aliases_normalized_alias_text_idx").on(table.normalizedAliasText),
+  index("exercise_aliases_source_idx").on(table.source),
+]);
+
+export const workoutSessions = pgTable("workout_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id"),
+  scheduledDate: varchar("scheduled_date", { length: 10 }).notNull(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  status: text("status").notNull().default("planned"),
+  sessionTitle: text("session_title"),
+  trainingMode: text("training_mode"),
+  focusAreas: jsonb("focus_areas").notNull().default([]),
+  plannedDurationMinutes: integer("planned_duration_minutes"),
+  actualDurationMinutes: integer("actual_duration_minutes"),
+  notes: text("notes"),
+  planContextSnapshot: jsonb("plan_context_snapshot"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("workout_sessions_user_date_idx").on(table.userId, table.scheduledDate),
+  index("workout_sessions_user_status_idx").on(table.userId, table.status),
+  index("workout_sessions_source_idx").on(table.sourceType, table.sourceId),
+  index("workout_sessions_scheduled_date_idx").on(table.scheduledDate),
+]);
+
+export const workoutSessionExercises = pgTable("workout_session_exercises", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workoutSessionId: varchar("workout_session_id").notNull().references(() => workoutSessions.id),
+  exerciseId: varchar("exercise_id").notNull().references(() => exercises.id),
+  exerciseAliasUsed: text("exercise_alias_used"),
+  sequenceOrder: integer("sequence_order").notNull(),
+  blockType: text("block_type"),
+  prescribedSets: integer("prescribed_sets"),
+  prescribedReps: integer("prescribed_reps"),
+  prescribedRepRange: text("prescribed_rep_range"),
+  prescribedLoadText: text("prescribed_load_text"),
+  prescribedDurationSeconds: integer("prescribed_duration_seconds"),
+  prescribedDistance: real("prescribed_distance"),
+  restSeconds: integer("rest_seconds"),
+  tempoText: text("tempo_text"),
+  rpeTarget: real("rpe_target"),
+  performedSets: jsonb("performed_sets"),
+  completionStatus: text("completion_status"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("workout_session_exercises_session_order_idx").on(table.workoutSessionId, table.sequenceOrder),
+  index("workout_session_exercises_session_id_idx").on(table.workoutSessionId),
+  index("workout_session_exercises_exercise_id_idx").on(table.exerciseId),
+  index("workout_session_exercises_exercise_created_idx").on(table.exerciseId, table.createdAt),
+]);
+
+export const exercisePerformanceHistory = pgTable("exercise_performance_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  exerciseId: varchar("exercise_id").notNull().references(() => exercises.id),
+  workoutSessionId: varchar("workout_session_id").references(() => workoutSessions.id),
+  workoutSessionExerciseId: varchar("workout_session_exercise_id").references(() => workoutSessionExercises.id),
+  performedDate: varchar("performed_date", { length: 10 }).notNull(),
+  setCount: integer("set_count"),
+  repSummary: text("rep_summary"),
+  bestWeight: real("best_weight"),
+  totalVolume: real("total_volume"),
+  bestDurationSeconds: integer("best_duration_seconds"),
+  bestDistance: real("best_distance"),
+  rpeObserved: real("rpe_observed"),
+  performanceNotes: text("performance_notes"),
+  progressionSignal: text("progression_signal"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("exercise_perf_history_user_exercise_date_idx").on(table.userId, table.exerciseId, table.performedDate),
+  index("exercise_perf_history_session_exercise_id_idx").on(table.workoutSessionExerciseId),
+  index("exercise_perf_history_progression_signal_idx").on(table.progressionSignal),
+]);
+
+export const meals = pgTable("meals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  canonicalName: text("canonical_name").notNull(),
+  displayName: text("display_name").notNull(),
+  normalizedCanonicalName: text("normalized_canonical_name").notNull(),
+  mealType: text("meal_type"),
+  cuisineType: text("cuisine_type"),
+  dietStyles: jsonb("diet_styles").notNull().default([]),
+  proteinGrams: real("protein_grams"),
+  carbsGrams: real("carbs_grams"),
+  fatGrams: real("fat_grams"),
+  calories: real("calories"),
+  ingredientFingerprint: text("ingredient_fingerprint"),
+  ingredientSummary: jsonb("ingredient_summary").notNull().default([]),
+  prepStyle: text("prep_style"),
+  estimatedPrepMinutes: integer("estimated_prep_minutes"),
+  spiceLevel: text("spice_level"),
+  budgetMode: text("budget_mode"),
+  createdBySource: text("created_by_source").notNull().default("ai_generated"),
+  reviewStatus: text("review_status").notNull().default("provisional"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("meals_meal_type_idx").on(table.mealType),
+  index("meals_cuisine_type_idx").on(table.cuisineType),
+  index("meals_review_status_idx").on(table.reviewStatus),
+  index("meals_ingredient_fingerprint_idx").on(table.ingredientFingerprint),
+]);
+
+export const mealAliases = pgTable("meal_aliases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  mealId: varchar("meal_id").notNull().references(() => meals.id),
+  aliasText: text("alias_text").notNull(),
+  normalizedAliasText: text("normalized_alias_text").notNull(),
+  source: text("source").notNull().default("ai_inferred"),
+  confidence: real("confidence"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("meal_aliases_meal_id_idx").on(table.mealId),
+  index("meal_aliases_normalized_alias_text_idx").on(table.normalizedAliasText),
+]);
+
+export const mealInstances = pgTable("meal_instances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  mealId: varchar("meal_id").notNull().references(() => meals.id),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id"),
+  scheduledDate: varchar("scheduled_date", { length: 10 }).notNull(),
+  mealSlot: text("meal_slot"),
+  status: text("status").notNull().default("planned"),
+  displayNameAtTime: text("display_name_at_time"),
+  macroSnapshot: jsonb("macro_snapshot"),
+  ingredientSnapshot: jsonb("ingredient_snapshot"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("meal_instances_user_date_idx").on(table.userId, table.scheduledDate),
+  index("meal_instances_user_meal_date_idx").on(table.userId, table.mealId, table.scheduledDate),
+  index("meal_instances_source_idx").on(table.sourceType, table.sourceId),
+  index("meal_instances_meal_slot_idx").on(table.mealSlot),
+]);
+
+export const mealHistory = pgTable("meal_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  mealId: varchar("meal_id").notNull().references(() => meals.id),
+  mealInstanceId: varchar("meal_instance_id").references(() => mealInstances.id),
+  usedDate: varchar("used_date", { length: 10 }).notNull(),
+  interactionType: text("interaction_type").notNull(),
+  feedbackScore: real("feedback_score"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("meal_history_user_meal_date_idx").on(table.userId, table.mealId, table.usedDate),
+  index("meal_history_interaction_type_idx").on(table.interactionType),
+  index("meal_history_meal_instance_id_idx").on(table.mealInstanceId),
+]);
+
+export type ExerciseRecord = typeof exercises.$inferSelect;
+export type ExerciseAliasRecord = typeof exerciseAliases.$inferSelect;
+export type WorkoutSessionRecord = typeof workoutSessions.$inferSelect;
+export type WorkoutSessionExerciseRecord = typeof workoutSessionExercises.$inferSelect;
+export type ExercisePerformanceHistoryRecord = typeof exercisePerformanceHistory.$inferSelect;
+export type MealRecord = typeof meals.$inferSelect;
+export type MealAliasRecord = typeof mealAliases.$inferSelect;
+export type MealInstanceRecord = typeof mealInstances.$inferSelect;
+export type MealHistoryRecord = typeof mealHistory.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
