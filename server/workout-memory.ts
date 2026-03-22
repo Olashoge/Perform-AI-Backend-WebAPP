@@ -292,9 +292,12 @@ export async function createWorkoutSessionFromGeneration(
 ): Promise<WorkoutSessionRecord> {
   const { userId, sourceType, sourceId, scheduledDate, generatedWorkoutJson } = params;
 
+  console.log(`[workout-memory] createWorkoutSessionFromGeneration called: sourceType=${params.sourceType} sourceId=${params.sourceId} userId=${params.userId}`);
+
   // ── 1. Idempotency check ──────────────────────────────────────────────────
   const existing = await storage.getWorkoutSessionBySource(sourceType, sourceId);
   if (existing) {
+    console.log(`[workout-memory] session already exists for ${params.sourceType}/${params.sourceId}, skipping`);
     return existing;
   }
 
@@ -351,6 +354,7 @@ export async function createWorkoutSessionFromGeneration(
     }
   }
 
+  console.log(`[workout-memory] session created successfully: ${session.id}`);
   return session;
 }
 
