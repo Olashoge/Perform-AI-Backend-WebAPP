@@ -1889,4 +1889,133 @@ export const exercises: any[] = [
       { aliasText: "Cable Rope Pressdown", normalizedAliasText: "cable rope pressdown", source: "curated", isPreferred: false },
     ],
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PART C — LOWER BODY, CORE, FULL BODY & CARDIO (exercises 81–160)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── QUADS ────────────────────────────────────────────────────────────────
+
+  {
+    canonicalName: "Barbell Back Squat",
+    displayName: "Barbell Back Squat",
+    normalizedCanonicalName: "barbell back squat",
+    category: "strength",
+    movementPattern: "squat",
+    primaryMuscleGroups: ["quadriceps"],
+    secondaryMuscleGroups: ["gluteus maximus", "hamstrings", "core", "erector spinae"],
+    equipmentType: "barbell",
+    trainingModes: ["strength", "hypertrophy"],
+    isBilateral: true,
+    isUnilateral: false,
+    repTrackingMode: "reps",
+    difficultyLevel: "intermediate",
+    createdBySource: "curated",
+    reviewStatus: "approved",
+    aliases: [
+      { aliasText: "Back Squat", normalizedAliasText: "back squat", source: "curated", isPreferred: true },
+      { aliasText: "Squat", normalizedAliasText: "squat", source: "curated", isPreferred: false },
+      { aliasText: "BB Squat", normalizedAliasText: "bb squat", source: "curated", isPreferred: false },
+    ],
+  },
+
+  // ─── HAMSTRINGS ───────────────────────────────────────────────────────────
+
+  {
+    canonicalName: "Lying Leg Curl",
+    displayName: "Lying Leg Curl",
+    normalizedCanonicalName: "lying leg curl",
+    category: "strength",
+    movementPattern: "pull",
+    primaryMuscleGroups: ["hamstrings"],
+    secondaryMuscleGroups: ["gastrocnemius"],
+    equipmentType: "machine",
+    trainingModes: ["hypertrophy"],
+    isBilateral: true,
+    isUnilateral: false,
+    repTrackingMode: "reps",
+    difficultyLevel: "beginner",
+    createdBySource: "curated",
+    reviewStatus: "approved",
+    aliases: [
+      { aliasText: "Machine Leg Curl", normalizedAliasText: "machine leg curl", source: "curated", isPreferred: true },
+      { aliasText: "Prone Leg Curl", normalizedAliasText: "prone leg curl", source: "curated", isPreferred: false },
+      { aliasText: "Hamstring Curl Machine", normalizedAliasText: "hamstring curl machine", source: "curated", isPreferred: false },
+    ],
+  },
+
+  // ─── GLUTES ───────────────────────────────────────────────────────────────
+
+  {
+    canonicalName: "Barbell Hip Thrust",
+    displayName: "Barbell Hip Thrust",
+    normalizedCanonicalName: "barbell hip thrust",
+    category: "strength",
+    movementPattern: "hinge",
+    primaryMuscleGroups: ["gluteus maximus"],
+    secondaryMuscleGroups: ["hamstrings", "core", "quadriceps"],
+    equipmentType: "barbell",
+    trainingModes: ["strength", "hypertrophy"],
+    isBilateral: true,
+    isUnilateral: false,
+    repTrackingMode: "reps",
+    difficultyLevel: "intermediate",
+    createdBySource: "curated",
+    reviewStatus: "approved",
+    aliases: [
+      { aliasText: "Hip Thrust", normalizedAliasText: "hip thrust", source: "curated", isPreferred: true },
+      { aliasText: "BB Hip Thrust", normalizedAliasText: "bb hip thrust", source: "curated", isPreferred: false },
+      { aliasText: "Barbell Glute Bridge", normalizedAliasText: "barbell glute bridge", source: "curated", isPreferred: false },
+    ],
+  },
+
+  // ─── CORE ─────────────────────────────────────────────────────────────────
+
+  {
+    canonicalName: "Plank",
+    displayName: "Plank",
+    normalizedCanonicalName: "plank",
+    category: "strength",
+    movementPattern: "carry",
+    primaryMuscleGroups: ["core", "transverse abdominis"],
+    secondaryMuscleGroups: ["anterior deltoid", "gluteus maximus"],
+    equipmentType: "bodyweight",
+    trainingModes: ["strength"],
+    isBilateral: true,
+    isUnilateral: false,
+    repTrackingMode: "duration",
+    difficultyLevel: "beginner",
+    createdBySource: "curated",
+    reviewStatus: "approved",
+    aliases: [
+      { aliasText: "Front Plank", normalizedAliasText: "front plank", source: "curated", isPreferred: false },
+      { aliasText: "Forearm Plank", normalizedAliasText: "forearm plank", source: "curated", isPreferred: false },
+      { aliasText: "Prone Plank", normalizedAliasText: "prone plank", source: "curated", isPreferred: false },
+    ],
+  },
+
+  // ─── CARDIO ───────────────────────────────────────────────────────────────
+
+  {
+    canonicalName: "Treadmill Running",
+    displayName: "Treadmill Running",
+    normalizedCanonicalName: "treadmill running",
+    category: "cardio",
+    movementPattern: "carry",
+    primaryMuscleGroups: ["quadriceps", "hamstrings", "gluteus maximus"],
+    secondaryMuscleGroups: ["core", "calves"],
+    equipmentType: "machine",
+    trainingModes: ["cardio"],
+    isBilateral: true,
+    isUnilateral: false,
+    repTrackingMode: "duration",
+    difficultyLevel: "beginner",
+    createdBySource: "curated",
+    reviewStatus: "approved",
+    aliases: [
+      { aliasText: "Running", normalizedAliasText: "running", source: "curated", isPreferred: true },
+      { aliasText: "Treadmill Run", normalizedAliasText: "treadmill run", source: "curated", isPreferred: false },
+      { aliasText: "Indoor Running", normalizedAliasText: "indoor running", source: "curated", isPreferred: false },
+    ],
+  },
 ];
