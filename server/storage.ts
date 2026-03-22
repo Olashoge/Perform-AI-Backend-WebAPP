@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull, lt, lte, sql } from "drizzle-orm";
 import { db, pool } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, weeklyAdaptations, refreshTokens, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion, type WeeklyAdaptation, type RefreshToken } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, weeklyAdaptations, refreshTokens, exercises, exerciseAliases, workoutSessions, workoutSessionExercises, exercisePerformanceHistory, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion, type WeeklyAdaptation, type RefreshToken, type ExerciseRecord, type WorkoutSessionRecord, type WorkoutSessionExerciseRecord, type ExercisePerformanceHistoryRecord } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -106,6 +106,53 @@ export interface IStorage {
   // Transaction-scoped scheduling operations for Wellness Plan schedule integrity
   scheduleGoalPlan(planId: string, startDate: string, endDate: string, mealPlanId: string | null, workoutPlanId: string | null): Promise<GoalPlan | undefined>;
   unscheduleGoalPlan(planId: string, mealPlanId: string | null, workoutPlanId: string | null): Promise<GoalPlan | undefined>;
+
+  // ── Workout Memory (persistent object memory) ──────────────────────────────
+  getWorkoutSessionBySource(sourceType: string, sourceId: string): Promise<WorkoutSessionRecord | undefined>;
+  createWorkoutSession(data: {
+    userId: string;
+    sourceType: string;
+    sourceId?: string | null;
+    scheduledDate: string;
+    sessionTitle?: string | null;
+    trainingMode?: string | null;
+    plannedDurationMinutes?: number | null;
+    status?: string;
+  }): Promise<WorkoutSessionRecord>;
+  createWorkoutSessionExercise(data: {
+    workoutSessionId: string;
+    exerciseId: string;
+    exerciseAliasUsed?: string | null;
+    sequenceOrder: number;
+    blockType?: string | null;
+    prescribedSets?: number | null;
+    prescribedReps?: number | null;
+    prescribedRepRange?: string | null;
+    prescribedLoadText?: string | null;
+    prescribedDurationSeconds?: number | null;
+    restSeconds?: number | null;
+    completionStatus?: string | null;
+  }): Promise<WorkoutSessionExerciseRecord>;
+  getExerciseByNormalizedName(normalizedName: string): Promise<ExerciseRecord | undefined>;
+  getExerciseByAliasNormalizedText(normalizedAliasText: string): Promise<ExerciseRecord | undefined>;
+  createExercise(data: {
+    canonicalName: string;
+    displayName: string;
+    normalizedCanonicalName: string;
+    category?: string;
+    movementPattern?: string | null;
+    primaryMuscleGroups?: any;
+    secondaryMuscleGroups?: any;
+    equipmentType?: string | null;
+    trainingModes?: any;
+    isBilateral?: boolean;
+    isUnilateral?: boolean;
+    repTrackingMode?: string;
+    difficultyLevel?: string | null;
+    reviewStatus?: string;
+    createdBySource?: string;
+  }): Promise<ExerciseRecord>;
+  getRecentExerciseHistory(userId: string, exerciseId: string, limit: number): Promise<ExercisePerformanceHistoryRecord[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1110,6 +1157,141 @@ export class DatabaseStorage implements IStorage {
       await tx.execute(sql`DELETE FROM user_sessions WHERE sess::jsonb->>'userId' = ${userId}`);
       await tx.delete(users).where(eq(users.id, userId));
     });
+  }
+
+  // ── Workout Memory (persistent object memory) ──────────────────────────────
+
+  async getWorkoutSessionBySource(sourceType: string, sourceId: string): Promise<WorkoutSessionRecord | undefined> {
+    const [session] = await db
+      .select()
+      .from(workoutSessions)
+      .where(and(eq(workoutSessions.sourceType, sourceType), eq(workoutSessions.sourceId, sourceId)))
+      .limit(1);
+    return session;
+  }
+
+  async createWorkoutSession(data: {
+    userId: string;
+    sourceType: string;
+    sourceId?: string | null;
+    scheduledDate: string;
+    sessionTitle?: string | null;
+    trainingMode?: string | null;
+    plannedDurationMinutes?: number | null;
+    status?: string;
+  }): Promise<WorkoutSessionRecord> {
+    const [session] = await db.insert(workoutSessions).values({
+      userId: data.userId,
+      sourceType: data.sourceType,
+      sourceId: data.sourceId ?? null,
+      scheduledDate: data.scheduledDate,
+      sessionTitle: data.sessionTitle ?? null,
+      trainingMode: data.trainingMode ?? null,
+      plannedDurationMinutes: data.plannedDurationMinutes ?? null,
+      status: data.status ?? "planned",
+    }).returning();
+    return session;
+  }
+
+  async createWorkoutSessionExercise(data: {
+    workoutSessionId: string;
+    exerciseId: string;
+    exerciseAliasUsed?: string | null;
+    sequenceOrder: number;
+    blockType?: string | null;
+    prescribedSets?: number | null;
+    prescribedReps?: number | null;
+    prescribedRepRange?: string | null;
+    prescribedLoadText?: string | null;
+    prescribedDurationSeconds?: number | null;
+    restSeconds?: number | null;
+    completionStatus?: string | null;
+  }): Promise<WorkoutSessionExerciseRecord> {
+    const [exercise] = await db.insert(workoutSessionExercises).values({
+      workoutSessionId: data.workoutSessionId,
+      exerciseId: data.exerciseId,
+      exerciseAliasUsed: data.exerciseAliasUsed ?? null,
+      sequenceOrder: data.sequenceOrder,
+      blockType: data.blockType ?? null,
+      prescribedSets: data.prescribedSets ?? null,
+      prescribedReps: data.prescribedReps ?? null,
+      prescribedRepRange: data.prescribedRepRange ?? null,
+      prescribedLoadText: data.prescribedLoadText ?? null,
+      prescribedDurationSeconds: data.prescribedDurationSeconds ?? null,
+      restSeconds: data.restSeconds ?? null,
+      completionStatus: data.completionStatus ?? null,
+    }).returning();
+    return exercise;
+  }
+
+  async getExerciseByNormalizedName(normalizedName: string): Promise<ExerciseRecord | undefined> {
+    const [exercise] = await db
+      .select()
+      .from(exercises)
+      .where(eq(exercises.normalizedCanonicalName, normalizedName))
+      .limit(1);
+    return exercise;
+  }
+
+  async getExerciseByAliasNormalizedText(normalizedAliasText: string): Promise<ExerciseRecord | undefined> {
+    const [row] = await db
+      .select({ exercise: exercises })
+      .from(exerciseAliases)
+      .innerJoin(exercises, eq(exerciseAliases.exerciseId, exercises.id))
+      .where(eq(exerciseAliases.normalizedAliasText, normalizedAliasText))
+      .limit(1);
+    return row?.exercise;
+  }
+
+  async createExercise(data: {
+    canonicalName: string;
+    displayName: string;
+    normalizedCanonicalName: string;
+    category?: string;
+    movementPattern?: string | null;
+    primaryMuscleGroups?: any;
+    secondaryMuscleGroups?: any;
+    equipmentType?: string | null;
+    trainingModes?: any;
+    isBilateral?: boolean;
+    isUnilateral?: boolean;
+    repTrackingMode?: string;
+    difficultyLevel?: string | null;
+    reviewStatus?: string;
+    createdBySource?: string;
+  }): Promise<ExerciseRecord> {
+    const [exercise] = await db.insert(exercises).values({
+      canonicalName: data.canonicalName,
+      displayName: data.displayName,
+      normalizedCanonicalName: data.normalizedCanonicalName,
+      category: data.category ?? "strength",
+      movementPattern: data.movementPattern ?? null,
+      primaryMuscleGroups: data.primaryMuscleGroups ?? [],
+      secondaryMuscleGroups: data.secondaryMuscleGroups ?? [],
+      equipmentType: data.equipmentType ?? null,
+      trainingModes: data.trainingModes ?? [],
+      isBilateral: data.isBilateral ?? false,
+      isUnilateral: data.isUnilateral ?? false,
+      repTrackingMode: data.repTrackingMode ?? "reps",
+      difficultyLevel: data.difficultyLevel ?? null,
+      reviewStatus: data.reviewStatus ?? "provisional",
+      createdBySource: data.createdBySource ?? "ai_proposed",
+    }).returning();
+    return exercise;
+  }
+
+  async getRecentExerciseHistory(userId: string, exerciseId: string, limit: number): Promise<ExercisePerformanceHistoryRecord[]> {
+    return db
+      .select()
+      .from(exercisePerformanceHistory)
+      .where(
+        and(
+          eq(exercisePerformanceHistory.userId, userId),
+          eq(exercisePerformanceHistory.exerciseId, exerciseId),
+        ),
+      )
+      .orderBy(desc(exercisePerformanceHistory.performedDate))
+      .limit(limit);
   }
 
   // Atomically write all schedule fields for a Wellness Plan and its child plans.
