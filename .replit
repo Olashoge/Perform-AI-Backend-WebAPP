@@ -44,3 +44,6 @@ waitForPort = 5000
 [userenv.shared]
 JWT_ACCESS_TTL = "15m"
 JWT_REFRESH_TTL = "30d"
+
+[agent]
+integrations = ["javascript_database:1.0.0"]
