@@ -964,6 +964,27 @@ export const mealHistory = pgTable("meal_history", {
   index("meal_history_meal_instance_id_idx").on(table.mealInstanceId),
 ]);
 
+export const unmatchedExerciseCandidates = pgTable("unmatched_exercise_candidates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  scheduledDate: varchar("scheduled_date", { length: 10 }).notNull(),
+  blockType: text("block_type").notNull(),
+  rawName: text("raw_name").notNull(),
+  normalizedName: text("normalized_name").notNull(),
+  occurrenceCount: integer("occurrence_count").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("unmatched_exercise_candidates_normalized_name_idx").on(table.normalizedName),
+  index("unmatched_exercise_candidates_user_id_idx").on(table.userId),
+  index("unmatched_exercise_candidates_source_idx").on(table.sourceType, table.sourceId),
+  index("unmatched_exercise_candidates_block_type_idx").on(table.blockType),
+  index("unmatched_exercise_candidates_created_at_idx").on(table.createdAt),
+]);
+
+export type UnmatchedExerciseCandidateRecord = typeof unmatchedExerciseCandidates.$inferSelect;
 export type ExerciseRecord = typeof exercises.$inferSelect;
 export type ExerciseAliasRecord = typeof exerciseAliases.$inferSelect;
 export type WorkoutSessionRecord = typeof workoutSessions.$inferSelect;
