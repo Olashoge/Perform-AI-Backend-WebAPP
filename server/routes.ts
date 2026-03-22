@@ -16,6 +16,7 @@ import { computePerformanceState, type PerformanceStateInput } from "./performan
 import { computeAdaptiveModifiers, buildAdaptivePromptBlock, computeWeeklyAdaptation } from "./adaptive";
 import type { AdaptiveSnapshot, AdaptiveInputs } from "./adaptive";
 import { buildUserContextForGeneration, type ContextOverrides } from "./context-builder";
+import { createWorkoutSessionFromGeneration } from "./workout-memory";
 import connectPgSimple from "connect-pg-simple";
 import { ensureJwtSecrets, generateAccessToken, generateRefreshToken, verifyAccessToken, hashRefreshToken, getRefreshTokenExpiry } from "./jwt";
 
@@ -1093,6 +1094,18 @@ export async function registerRoutes(
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingWorkout.id, type: "workout" });
             log(`Goal gen: workout plan ${pendingWorkout.id} ready`, "openai");
 
+            try {
+              await createWorkoutSessionFromGeneration({
+                userId,
+                sourceType: "workout_plan",
+                sourceId: pendingWorkout.id,
+                scheduledDate: (pendingWorkout.planStartDate || validStartDate) ?? new Date().toISOString().split("T")[0],
+                generatedWorkoutJson: finalWorkoutResult,
+              });
+            } catch (err) {
+              console.error("[workout-memory] failed to create session from wellness workout:", err);
+            }
+
             const progressAfterTraining = {
               stage: needsMeal ? "NUTRITION" : "SCHEDULING",
               stageStatuses: {
@@ -1729,6 +1742,18 @@ export async function registerRoutes(
             await storage.logAction(userId, "ai_call_generate_plan", { planId: pendingWorkout.id, type: "workout", recovery: true });
             log(`Recovery gen: workout plan ${pendingWorkout.id} ready`, "openai");
 
+            try {
+              await createWorkoutSessionFromGeneration({
+                userId,
+                sourceType: "workout_plan",
+                sourceId: pendingWorkout.id,
+                scheduledDate: (pendingWorkout.planStartDate || targetStartStr) ?? new Date().toISOString().split("T")[0],
+                generatedWorkoutJson: result,
+              });
+            } catch (err) {
+              console.error("[workout-memory] failed to create session from wellness workout:", err);
+            }
+
             await storage.updateGoalPlan(goalPlan.id, {
               progress: {
                 stage: needsMeal ? "NUTRITION" : "SCHEDULING",
@@ -2217,6 +2242,17 @@ export async function registerRoutes(
           const title = `Daily Workout — ${dateLabel}`;
           await storage.updateDailyWorkoutStatus(record.id, "ready", result, title);
           log(`Daily workout generated for ${date} (user ${userId})`, "openai");
+          try {
+            await createWorkoutSessionFromGeneration({
+              userId,
+              sourceType: "daily_workout",
+              sourceId: record.id,
+              scheduledDate: date,
+              generatedWorkoutJson: result,
+            });
+          } catch (err) {
+            console.error("[workout-memory] failed to create session from daily workout:", err);
+          }
         } catch (err) {
           log(`Daily workout generation failed for ${date}: ${err instanceof Error ? err.message : String(err)}`, "openai");
           await storage.updateDailyWorkoutStatus(record.id, "failed");
@@ -2404,6 +2440,17 @@ export async function registerRoutes(
           const title = `Daily Workout — ${dateLabel}`;
           await storage.updateDailyWorkoutStatus(existing.id, "ready", result, title);
           log(`Daily workout regenerated for ${date} (user ${userId})`, "openai");
+          try {
+            await createWorkoutSessionFromGeneration({
+              userId,
+              sourceType: "daily_workout",
+              sourceId: existing.id,
+              scheduledDate: date,
+              generatedWorkoutJson: result,
+            });
+          } catch (err) {
+            console.error("[workout-memory] failed to create session from daily workout:", err);
+          }
         } catch (err) {
           log(`Daily workout regeneration failed for ${date}: ${err instanceof Error ? err.message : String(err)}`, "openai");
           await storage.updateDailyWorkoutStatus(existing.id, "failed");
