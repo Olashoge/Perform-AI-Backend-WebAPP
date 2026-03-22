@@ -6,7 +6,8 @@
  * workouts live here.
  *
  * Phase 1 contract:
- *  - Exact-match only (canonical name → alias → provisional row)
+ *  - Exact-match only (canonical name → alias)
+ *  - Unmatched exercises are logged to unmatched_exercise_candidates for review
  *  - Memory writes are best-effort: errors are logged but never bubble up to
  *    the client response.
  *  - Sessions are idempotent on (sourceType, sourceId).
@@ -29,8 +30,9 @@ export interface CreateWorkoutSessionParams {
 
 // Internal representation of a single exercise entry extracted from the AI JSON
 interface ExtractedExercise {
+  rawName: string;
   name: string;
-  blockType: "warmup" | "main" | "cooldown";
+  blockType: "warmup" | "main" | "cooldown" | "finisher" | "accessory";
   sequenceOrder: number;
   prescribedSets: number | null;
   prescribedReps: number | null;
@@ -48,6 +50,45 @@ interface ExtractedExercise {
  */
 export function normalizeExerciseName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+// ─── Function 1b: extractExerciseName ─────────────────────────────────────────
+
+/**
+ * Extract the clean exercise name from a raw AI-generated string by stripping
+ * prescription details (sets, reps, duration, etc.).
+ *
+ * Examples:
+ *   "Jump rope - 2 minutes steady pace"  → "Jump rope"
+ *   "Bodyweight squats - 2 sets of 15"   → "Bodyweight squats"
+ *   "Pull-ups (Assisted if needed)"      → "Pull-ups"
+ *   "Push-ups"                           → "Push-ups"
+ */
+export function extractExerciseName(rawString: string): string {
+  let name = rawString.trim();
+
+  // Strip parenthetical text like "(assisted if needed)"
+  name = name.replace(/\s*\(.*?\)\s*$/, "").trim();
+
+  // Strip everything after " - " (space-dash-space), but not hyphens within words
+  const dashIdx = name.indexOf(" - ");
+  if (dashIdx !== -1) {
+    name = name.substring(0, dashIdx);
+  }
+
+  // Strip everything after " x " (rep scheme like "3 x 10")
+  const xIdx = name.search(/ x /i);
+  if (xIdx !== -1) {
+    name = name.substring(0, xIdx);
+  }
+
+  // Strip everything after " for " (duration like "Plank for 30 seconds")
+  const forIdx = name.search(/ for /i);
+  if (forIdx !== -1) {
+    name = name.substring(0, forIdx);
+  }
+
+  return name.trim();
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -149,13 +190,15 @@ function extractExercises(generatedWorkoutJson: any): {
   const extracted: ExtractedExercise[] = [];
   let seq = 0;
 
-  // Warmup — string array
-  if (Array.isArray(session.warmup)) {
-    for (const item of session.warmup) {
+  // Helper: push a string-array block (warmup, cooldown, finisher)
+  const pushStringBlock = (items: any[], blockType: ExtractedExercise["blockType"]) => {
+    for (const item of items) {
       if (typeof item === "string" && item.trim()) {
+        const rawName = item.trim();
         extracted.push({
-          name: item.trim(),
-          blockType: "warmup",
+          rawName,
+          name: extractExerciseName(rawName),
+          blockType,
           sequenceOrder: seq++,
           prescribedSets: null,
           prescribedReps: null,
@@ -166,16 +209,18 @@ function extractExercises(generatedWorkoutJson: any): {
         });
       }
     }
-  }
+  };
 
-  // Main — WorkoutExercise array (objects with name, sets, reps, time, etc.)
-  if (Array.isArray(session.main)) {
-    for (const ex of session.main) {
+  // Helper: push an object-array block (main, accessory)
+  const pushObjectBlock = (items: any[], blockType: ExtractedExercise["blockType"]) => {
+    for (const ex of items) {
       if (!ex?.name) continue;
+      const rawName = String(ex.name).trim();
       const { prescribedReps, prescribedRepRange } = parseReps(ex.reps);
       extracted.push({
-        name: String(ex.name).trim(),
-        blockType: "main",
+        rawName,
+        name: extractExerciseName(rawName),
+        blockType,
         sequenceOrder: seq++,
         prescribedSets: ex.sets != null ? Number(ex.sets) || null : null,
         prescribedReps,
@@ -185,44 +230,31 @@ function extractExercises(generatedWorkoutJson: any): {
         restSeconds: ex.restSeconds != null ? Number(ex.restSeconds) || null : null,
       });
     }
+  };
+
+  // Warmup — string array
+  if (Array.isArray(session.warmup)) {
+    pushStringBlock(session.warmup, "warmup");
   }
 
-  // Finisher — optional string array, treated as main block
+  // Main — WorkoutExercise array (objects with name, sets, reps, time, etc.)
+  if (Array.isArray(session.main)) {
+    pushObjectBlock(session.main, "main");
+  }
+
+  // Accessory — object array (same shape as main)
+  if (Array.isArray(session.accessory)) {
+    pushObjectBlock(session.accessory, "accessory");
+  }
+
+  // Finisher — string array, preserves "finisher" blockType
   if (Array.isArray(session.finisher)) {
-    for (const item of session.finisher) {
-      if (typeof item === "string" && item.trim()) {
-        extracted.push({
-          name: item.trim(),
-          blockType: "main",
-          sequenceOrder: seq++,
-          prescribedSets: null,
-          prescribedReps: null,
-          prescribedRepRange: null,
-          prescribedLoadText: null,
-          prescribedDurationSeconds: null,
-          restSeconds: null,
-        });
-      }
-    }
+    pushStringBlock(session.finisher, "finisher");
   }
 
   // Cooldown — string array
   if (Array.isArray(session.cooldown)) {
-    for (const item of session.cooldown) {
-      if (typeof item === "string" && item.trim()) {
-        extracted.push({
-          name: item.trim(),
-          blockType: "cooldown",
-          sequenceOrder: seq++,
-          prescribedSets: null,
-          prescribedReps: null,
-          prescribedRepRange: null,
-          prescribedLoadText: null,
-          prescribedDurationSeconds: null,
-          restSeconds: null,
-        });
-      }
-    }
+    pushStringBlock(session.cooldown, "cooldown");
   }
 
   return { sessionTitle, trainingMode, plannedDurationMinutes, exercises: extracted };
@@ -235,12 +267,11 @@ function extractExercises(generatedWorkoutJson: any): {
  *
  * Step 1: exact match on exercises.normalizedCanonicalName
  * Step 2: exact match on exercise_aliases.normalizedAliasText → canonical exercise
- * Step 3: create a provisional exercise row (reviewStatus: 'provisional',
- *         createdBySource: 'ai_proposed')
  *
- * A false positive match is worse than a provisional row — exact match only.
+ * Returns null if no canonical match is found. Callers pass clean (not
+ * normalized) names — normalization is handled internally.
  */
-export async function resolveExercise(exerciseName: string): Promise<ExerciseRecord> {
+export async function resolveExercise(exerciseName: string): Promise<ExerciseRecord | null> {
   const normalized = normalizeExerciseName(exerciseName);
 
   // Step 1 — canonical name exact match
@@ -251,29 +282,8 @@ export async function resolveExercise(exerciseName: string): Promise<ExerciseRec
   const byAlias = await storage.getExerciseByAliasNormalizedText(normalized);
   if (byAlias) return byAlias;
 
-  // Step 3 — create provisional exercise row
-  try {
-    return await storage.createExercise({
-      canonicalName: exerciseName,
-      displayName: exerciseName,
-      normalizedCanonicalName: normalized,
-      category: "strength",
-      reviewStatus: "provisional",
-      createdBySource: "ai_proposed",
-      primaryMuscleGroups: [],
-      secondaryMuscleGroups: [],
-      trainingModes: [],
-      isBilateral: false,
-      isUnilateral: false,
-      repTrackingMode: "reps",
-    });
-  } catch (insertErr: any) {
-    // Race condition: another concurrent request already inserted this exercise.
-    // Re-query to return the existing row.
-    const retried = await storage.getExerciseByNormalizedName(normalized);
-    if (retried) return retried;
-    throw insertErr;
-  }
+  // No match found — caller is responsible for logging to unmatched_exercise_candidates
+  return null;
 }
 
 // ─── Function 3: createWorkoutSessionFromGeneration ──────────────────────────
@@ -292,12 +302,9 @@ export async function createWorkoutSessionFromGeneration(
 ): Promise<WorkoutSessionRecord> {
   const { userId, sourceType, sourceId, scheduledDate, generatedWorkoutJson } = params;
 
-  console.log(`[workout-memory] createWorkoutSessionFromGeneration called: sourceType=${params.sourceType} sourceId=${params.sourceId} userId=${params.userId}`);
-
   // ── 1. Idempotency check ──────────────────────────────────────────────────
   const existing = await storage.getWorkoutSessionBySource(sourceType, sourceId);
   if (existing) {
-    console.log(`[workout-memory] session already exists for ${params.sourceType}/${params.sourceId}, skipping`);
     return existing;
   }
 
@@ -319,7 +326,7 @@ export async function createWorkoutSessionFromGeneration(
 
   // ── 4. Resolve each exercise and create workout_session_exercises rows ────
   for (const ex of exercises) {
-    let exerciseRecord: ExerciseRecord;
+    let exerciseRecord: ExerciseRecord | null;
     try {
       exerciseRecord = await resolveExercise(ex.name);
     } catch (resolveErr) {
@@ -330,11 +337,33 @@ export async function createWorkoutSessionFromGeneration(
       continue; // Skip this exercise but continue with the rest
     }
 
+    // No canonical match — log to unmatched_exercise_candidates and skip
+    if (!exerciseRecord) {
+      try {
+        await storage.createUnmatchedExerciseCandidate({
+          userId,
+          sourceType,
+          sourceId,
+          scheduledDate,
+          blockType: ex.blockType,
+          rawName: ex.rawName,
+          normalizedName: normalizeExerciseName(ex.name),
+          occurrenceCount: 1,
+        });
+      } catch (unmatchedErr) {
+        console.error(
+          `[workout-memory] failed to log unmatched candidate "${ex.rawName}":`,
+          unmatchedErr,
+        );
+      }
+      continue;
+    }
+
     try {
       await storage.createWorkoutSessionExercise({
         workoutSessionId: session.id,
         exerciseId: exerciseRecord.id,
-        exerciseAliasUsed: ex.name,
+        exerciseAliasUsed: ex.rawName,
         sequenceOrder: ex.sequenceOrder,
         blockType: ex.blockType,
         prescribedSets: ex.prescribedSets,
@@ -354,7 +383,7 @@ export async function createWorkoutSessionFromGeneration(
     }
   }
 
-  console.log(`[workout-memory] session created successfully: ${session.id}`);
+  console.log(`[workout-memory] session ${session.id} created for ${params.sourceType}/${params.sourceId}`);
   return session;
 }
 
