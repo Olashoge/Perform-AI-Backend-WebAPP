@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, isNull, lt, lte, sql } from "drizzle-orm";
 import { db, pool } from "./db";
-import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, weeklyAdaptations, refreshTokens, exercises, exerciseAliases, workoutSessions, workoutSessionExercises, exercisePerformanceHistory, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion, type WeeklyAdaptation, type RefreshToken, type ExerciseRecord, type WorkoutSessionRecord, type WorkoutSessionExerciseRecord, type ExercisePerformanceHistoryRecord } from "@shared/schema";
+import { users, mealPlans, workoutPlans, auditLogs, mealFeedback, ingredientPreferences, ownedGroceryItems, goalPlans, workoutFeedback, ingredientAvoidProposals, weeklyCheckIns, exercisePreferences, userProfiles, constraintViolations, wellnessPlanSpecs, performanceSummaries, dailyMeals, dailyWorkouts, activityCompletions, weeklyAdaptations, refreshTokens, exercises, exerciseAliases, workoutSessions, workoutSessionExercises, exercisePerformanceHistory, type User, type MealPlan, type WorkoutPlan, type MealFeedbackRecord, type IngredientPreferenceRecord, type OwnedGroceryItem, type UserPreferenceContext, type GoalPlan, type WorkoutFeedbackRecord, type IngredientAvoidProposal, type WeeklyCheckIn, type ExercisePreferenceRecord, type UserProfile, type InsertUserProfile, type ConstraintViolation, type WellnessPlanSpec, type PerformanceSummary, type DailyMeal, type DailyWorkout, type ActivityCompletion, type WeeklyAdaptation, type RefreshToken, type ExerciseRecord, type WorkoutSessionRecord, type WorkoutSessionExerciseRecord, type ExercisePerformanceHistoryRecord, type UnmatchedExerciseCandidateRecord, unmatchedExerciseCandidates } from "@shared/schema";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -153,6 +153,16 @@ export interface IStorage {
     createdBySource?: string;
   }): Promise<ExerciseRecord>;
   getRecentExerciseHistory(userId: string, exerciseId: string, limit: number): Promise<ExercisePerformanceHistoryRecord[]>;
+  createUnmatchedExerciseCandidate(data: {
+    userId: string;
+    sourceType: string;
+    sourceId: string;
+    scheduledDate: string;
+    blockType: string;
+    rawName: string;
+    normalizedName: string;
+    occurrenceCount?: number;
+  }): Promise<UnmatchedExerciseCandidateRecord>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1335,6 +1345,29 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return updated;
     });
+  }
+
+  async createUnmatchedExerciseCandidate(data: {
+    userId: string;
+    sourceType: string;
+    sourceId: string;
+    scheduledDate: string;
+    blockType: string;
+    rawName: string;
+    normalizedName: string;
+    occurrenceCount?: number;
+  }): Promise<UnmatchedExerciseCandidateRecord> {
+    const [row] = await db.insert(unmatchedExerciseCandidates).values({
+      userId: data.userId,
+      sourceType: data.sourceType,
+      sourceId: data.sourceId,
+      scheduledDate: data.scheduledDate,
+      blockType: data.blockType,
+      rawName: data.rawName,
+      normalizedName: data.normalizedName,
+      occurrenceCount: data.occurrenceCount ?? 1,
+    }).returning();
+    return row;
   }
 }
 
