@@ -1,7 +1,13 @@
 import { defineConfig } from "drizzle-kit";
 
-if (!process.env.DATABASE_URL) {
+let dbUrl = process.env.DATABASE_URL;
+
+if (!dbUrl) {
   throw new Error("DATABASE_URL, ensure the database is provisioned");
+}
+
+if (dbUrl.includes("@helium") || dbUrl.includes("@helium/")) {
+  dbUrl = "postgresql://postgres@localhost:5432/heliumdb";
 }
 
 export default defineConfig({
@@ -9,6 +15,6 @@ export default defineConfig({
   schema: "./shared/schema.ts",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    url: dbUrl,
   },
 });
