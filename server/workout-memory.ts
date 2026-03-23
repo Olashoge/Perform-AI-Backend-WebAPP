@@ -59,10 +59,13 @@ export function normalizeExerciseName(name: string): string {
  * prescription details (sets, reps, duration, etc.).
  *
  * Examples:
- *   "Jump rope - 2 minutes steady pace"  → "Jump rope"
- *   "Bodyweight squats - 2 sets of 15"   → "Bodyweight squats"
- *   "Pull-ups (Assisted if needed)"      → "Pull-ups"
- *   "Push-ups"                           → "Push-ups"
+ *   "Jump rope - 2 minutes steady pace"        → "Jump rope"
+ *   "Bodyweight squats - 2 sets of 15"          → "Bodyweight squats"
+ *   "Pull-ups (Assisted if needed)"             → "Pull-ups"
+ *   "Push-ups"                                  → "Push-ups"
+ *   "10 bodyweight squats"                      → "bodyweight squats"
+ *   "5 minutes light jogging in place"          → "light jogging in place"
+ *   "10 arm circles forward and backward"       → "arm circles"
  */
 export function extractExerciseName(rawString: string): string {
   let name = rawString.trim();
@@ -87,6 +90,25 @@ export function extractExerciseName(rawString: string): string {
   if (forIdx !== -1) {
     name = name.substring(0, forIdx);
   }
+
+  // Strip leading quantity/duration prefixes:
+  //   "10 bodyweight squats" → "bodyweight squats"
+  //   "5 minutes light jogging" → "light jogging"
+  //   "2 rounds jumping jacks" → "jumping jacks"
+  //   "3 sets push-ups" → "push-ups"
+  name = name.replace(
+    /^\d+\s*(?:minutes?|mins?|seconds?|secs?|rounds?|sets?)\s+/i,
+    "",
+  );
+  // Plain leading number: "10 bodyweight squats" → "bodyweight squats"
+  name = name.replace(/^\d+\s+/, "");
+
+  // Strip common trailing directional/warmup qualifiers
+  // e.g. "arm circles forward and backward" → "arm circles"
+  name = name.replace(
+    /\s+(?:forward(?:\s+and\s+backward)?|backward(?:\s+and\s+forward)?|each\s+(?:side|direction|way|arm|leg)|per\s+(?:side|leg|arm))\s*$/i,
+    "",
+  );
 
   return name.trim();
 }
